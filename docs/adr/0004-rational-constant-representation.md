@@ -1,0 +1,3 @@
+# Exact Rational Arithmetic for Internal Constant Representation
+
+Context: During e-graph equality saturation, constant folding must evaluate arithmetic on numeric constants (e.g., 2/3 + 1/4, 3/7 × 7/3). We chose to represent all internal numeric constants as arbitrary-precision rationals (`num::BigRational`) rather than `f64`. This ensures exact cancellation and folding during simplification — expressions like `(3/7) * (7/3)` reduce to exactly `1` rather than `0.9999999999999998`. Rational-to-float conversion happens only once, during final codegen. The trade-off is a dependency on `num-rational` and marginally slower constant folding, but in practice symbolic expressions contain few numeric constants and the cost is negligible compared to e-graph saturation.

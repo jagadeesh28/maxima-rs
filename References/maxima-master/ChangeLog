@@ -1,0 +1,225 @@
+Maxima 5.50-post change log
+===========================
+
+Bug fixes for numbered bugs:
+----------------------------
+* \#2596 error in matrix exponentiation
+* \#3994 limits of some gamma_incomplete expressions
+* \#4020 various limit bugs with exp(%i*x)
+* \#4137 simplimplus bugs
+* \#4162 limit(exp(x^2+%i*x),x,inf)
+* \#4714 lurkmathml does not co-operate with ordergreat/less
+* \#4822 Antiderivative of acoth is complex where acoth is real
+* \#4830 Non-total ordering between constant & scalar and scalar
+* \#4928 expintegral_si and expintegral_ci are wrong on the imaginary axis
+* \#4931 airy_ai and airy_dai return nonsense at bigfloat precision
+* \#4933 asech is treated as an even function
+* \#4935 erfc has the wrong sign of the imaginary part on the negative imaginary axis
+* \#4938 airy_ai returns 0.0 for real x >= 92.57 while the complex path works
+* \#4946 scaled_bessel_i0, scaled_bessel_i1, scaled_bessel_i silently demote a bigfloat to a double
+* \#4954 Unguarded division by zero in three numeric iterations
+* \#4958 nroots returns a wrong root count for float or bigfloat interval endpoints
+* \#4959 rectform of a complex float raised to a power is off by thirteen orders of magnitude
+* \#4962 bfallroots fails on polynomials with multiple roots
+* \#4964 linsolve_by_lu raises a raw Lisp error on a singular float matrix
+* \#4965 recttopolar and polartorect are silent no-ops on lists
+* \#4967 cdf_lognormal and pdf_lognormal error at x = 0
+* \#4975 zn_order returns a negative order for a negative modulus
+* \#4976 integer_partitions(n,0) claims the empty list is a partition of n
+* \#4977 M^^(-n) fails for every 1x1 matrix
+* \#4978 mod(x, 0.0) raises a Lisp error while mod(x, 0) returns x
+* \#4980 acot of a bigfloat zero raises a Lisp error
+* \#4987 translate changes float values, including the sign of an atan2 result
+* \#4992 quad_* can leave temporary variable assignments in place
+* \#4994 simplify_sum no longer queries for assumptions
+* \#5048 e - e doesn't simplify to 0: like-base power terms are not merged when another term sorts between them
+* \#5049 a + b and b + a give different results when the like-base term's coefficient is a rational or a float
+* \#5051 4^n/2/2 and 4^n/4 are different expressions
+* \#5055 GREAT is not a valid ordering when a bigfloat is compared with another expression
+* \#5057 realpart/imagpart/rectform permanently add entries to the global fact database
+* \#5091 spectral_rep prints raw Lisp debug output when the spectrum cannot be found
+* \#5093 After assume(notequal(x,0)), is(log(x) > 0) returns false and sign(log(x)) signals an imaginary argument error
+* \#5115 csign(%i*j) returns neg for j declared imaginary, so abs(%i*j) can evaluate to a negative number
+* \#5120 forget(notequal(a*b,0)) deletes an assumed notequal(a,0) that the database never entailed
+* \#5159 limit() returns inf for complex-valued limits at infinity where no real infinite limit exists
+* \#5169 GREAT says a[1] > a[1]
+* \#5170 limit(a*x+b, x, inf) = 0 when answering that a=0
+* \#5171 limits of the form inf * constant
+* \#5172 assume(a>1,b>0)$ is(a*b>1) -> true
+* \#5173 assume(b <= 0)$; limit(log(b + %i*x), x, 0, plus) = log(b)
+* \#5175 asksign(log(x)) records the wrong fact
+* \#5176 forget() over-removes facts
+* \#5177 Some sub-facts are not normalized and cannot be removed via forget()
+* \#5178 inconsistent Principal Value message
+* \#5179 Duplicate facts, forget(facts()) doesn't clear, have to call forget() multiple times
+* \#5180 Integral crossing the discontinuity of log(z) along the negative real axis
+* \#5181 limit ignores the branch cut of the exponential integrals
+* \#5182 integrate(sqrt(%i*x-1),x,-1,1) wrong due to missing branch cut
+* \#5183 One-sided limits of %e^(asin(2+%i*x)/x) at x = 0 swapped
+* \#5184 limit(acos(2+%i*x),x,0,plus) is wrong
+* \#5185 integrate(1/sqrt(1-(%i*x+2)^2), x, -1, 1) wrong
+* \#5186 Definite integration doesn't see discontinuities of inverse trigonometric/hyperbolic functions
+* \#5188 assume(notequal(x^3, y^3)) -> is(notequal(x^3, y^3)) = unknown
+* \#5189 Incorrect limit of gamma_incomplete
+* \#5190 limit(1/erfc(x), x, 0, minus) recurses infinitely
+* \#5191 limit(atanh(x),x,inf) is wrong
+* \#5192 acosh and asech derivatives are incorrect
+* \#5194 sign(1/inf) & is(equal(1/inf,0)) vs. sign(2/inf) & is(equal(2/inf,0))
+* \#5195 csign(1/sqrt(x)) vs. csign(sqrt(x))
+* \#5198 limit(asin(inf)) should be infinity
+* \#5201 limits involving acosh: strange question
+* \#5202 csign(negative^(1/odd)) under domain : complex
+* \#5203 trigreduce drops terms, causing wrong answers
+* \#5216 limit(%i*x + sqrt(x), x, inf) stays noun-form
+* \#5222 (enhancement) Let a derivative defined by a DEFGRAD lambda return a final expression
+* \#5223 The sign of x has two normal forms, x/abs(x) and abs(x)/x, and their difference does not simplify
+* \#5224 limit(abs(a+%i)*x, x, inf) gives infinity
+* \#5225 abs(x)^(2/3) becomes x^(2/3) with domain : complex
+* \#5228 rectform doesn't check "real" declaration on subscripted functions
+* \#5229 Variables a and z leak into derivative of gamma_incomplete
+* \#5230 csign of asec, acsc, asech, acoth reported real when complex
+* \#5231 conjugate of acot, asinh, acosh, asech, acsch, acoth always noun-form
+* \#5233 sign of odd root raised to even power under domain : complex
+* \#5234 sign of odd root of negative number under domain : complex
+* \#5235 asksign(log(x) - log(x-y)) gives wrong answer
+* \#5236 asksign(x*atan(x)) asks if x^2 is positive, negative(!) or zero
+* \#5237 limit(atan2(x*sin(1/x), -1), x, 0, plus) gives %pi
+* \#5238 sign(signum(x) - a) says pn
+* \#5240 Risch integrator drops negative powers of exponential
+* \#5241 Risch integrator drops algebraic unit from a denominator
+* \#5242 rectform(acoth(0)) and acoth(0.0) cause division by zero error, but should be -%i*%pi/2
+* \#5244 logabs:true applies abs to a complex log argument, collapsing the antiderivative to zero
+* \#5245 integrate merges two even roots without a sign guard
+* \#5249 integrate(%e^(2*x)*tan(%e^x)^2,x) is non-real
+* \#5254 limit(gamma_incomplete(-1,x), x, 0, plus) -> minf
+* \#5255 limit(1/x+%i/sqrt(x), x, 0, plus) -> inf
+* \#5256 csign(negative^(2/odd)) -> complex
+* \#5257 Provide $num_denom and use it internally
+* \#5258 Provide $real_imag_part user-level function
+* \#5260 lurkmathml typesets t(x) incorrectly
+* \#5261 Result of integrate(1/(x+%i),x,0,1) depends on exptdispflag
+* \#5262 MEQP leaks the sign specials
+* \#5264 sign(a+b) -> pnz or error, depending on whether a or b is declared imaginary
+* \#5267 solve(x^4-5*x^2+4) vs. solve(sin(x)^4-5*sin(x)^2+4)
+* \#5268 risch gives up on nested exponential
+* \#5274 solve(tan(x) = sqrt(2)+1) -> []
+* \#5277 newcontext(foo)$ newcontext(bar)$ is(y>0)$ killcontext(foo); -> Lisp error
+* \#5278 killcontext doesn't always refuse to kill an active context
+* \#5280 csch/sech/coth don't simplify at inverse hyperbolic arguments
+* \#5281 Float atan and acot take the other side of their branch cuts from bigfloat and exact evaluation
+* \#5283 bfloat(acos(%i)), bfloat(asec(%i)), bfloat(acosh(%i)) and bfloat(asech(%i)) don't evaluate
+* \#5284 logarc doesn't handle acoth(0) and (under %piargs : false) acot(0)
+* \#5286 Float atanh/acoth at +-1.0
+* \#5301 simpsum gives a wrong 2^(a-1), drops the term, or hits a Lisp error for sums of binomial(a,2*k+b)
+* \#5310 sign() gives a wrong definite sign when SIGN-SHIFT collapses a sum to a product
+* \#5311 asksign asks about, and records an answer for, a different expression after SIGN-SHIFT
+* \#5358 inverse_erf(1.0*%i) and other complex points with abs(z) = 1 report undefined 
+* \#5359 inverse_erfc of any complex number signals a Lisp error
+* \#5360 log_gamma of a complex bigfloat with negative real part leaves log(sin(...)) unevaluated
+* \#5361 beta_incomplete_generalized(a,b,0,z) returns the negative of the integral
+* \#5362 beta_incomplete_regularized(a-n,b,z) with beta_expand:true has the wrong sign
+* \#5363 double_factorial(n) for an integer n >= factlim gives a false domain error or exhausts the stack 
+* \#5364 gamma_incomplete_generalized(a-n,z1,z2) with gamma_expand:true multiplies the z1 terms by %e^-z2
+* \#5365 gamma_incomplete_regularized(-2, 0.3) signals a Lisp division by zero
+* \#5394 integrate((1-x^2)^2.0*(1+x^2)^(-3.0),x) signals a Lisp error
+* \#5397 limit(abs((a*x^2+x^3)^(1/3)),x,0,plus) signals a Lisp error
+* \#5398 gruntz(sinh(x)/exp(x),x,inf) gives 0 instead of 1/2
+* \#5399 limit(1/acosh(x),x,1,minus) gives inf instead of infinity
+* \#5400 limit(erf((2+%i)/x),x,0,plus) gives -1 instead of 1
+* \#5401 limit(b^(-1.0*x),x,inf) gives 0 for a symbolic base b
+* \#5402 limit(sqrt(x^2+1)-x+%i*x,x,inf) gives und instead of infinity
+* \#5403 tlimit((x-1)!*x,x,0) gives 0 instead of 1
+* \#5417 max() and lmax() modify the caller's expressions and lists
+* \#5445 unevaluated nfloat forgets the user's max-digits argument
+* \#5448 ratcoef with a numeric multiple of a monomial as second argument truncates the coefficient
+* \#5449 ratcoef(taylor_series, y, 0) returns the whole series even when it depends on y
+* \#5450 lreduce, rreduce and xreduce error message shows $lreduce
+* \#5488 poistimes(0, sin(x)) gives a Lisp error instead of 0
+* \#5489 poisdiff(sin(x), x) gives a Lisp error instead of cos(x)
+* \#5490 poisexpt(sin(x), -1) never returns
+* \#5491 poissubst(w, v, cos(u-v), e, 3) gives the cos(w-u) term the wrong sign
+* \#5492 intopois(x^2.5) gives a Lisp error instead of a Poisson coefficient
+* \#5507 resultant(x^3+1, x, x) gives 1 instead of -1: wrong sign when the second polynomial has a factor c*x^k
+* \#5508 risch() and integrate() return wrong antiderivatives for some exp(rational) integrands
+* \#5520 integrate(x^3.0*(1+x^2)^2,x) signals a Lisp error; integrate(sqrt(x)*(1+x)^2.0,x) is wrong
+* \#5525 integrate takes an even float power such as cos(x)^2.0 for an odd one
+* \#5561 acot(-0.0) signals 'argument -0.0 isn't in the domain of acot'
+* \#5566 exp(%i*x/2+%i*%pi) is not simplified
+* \#5569 acsch( 1.0e-6*%i );
+* \#5580 sqrt(2*(1-y)^2*(y-1)^2) simplifies to sqrt(2)
+* \#5581 with keepfloat:true, ratsimp(1.0*%i/(1.0+1.0*%i)^2) returns 1.0 instead of 0.5
+* \#5585 With GCL 2.7.x, float log(0.0), csc(0.0), asech(0.0) etc. return infinities
+* \#5588 1-d output formatting: -1/7 has redundant parentheses: -(1/7)
+* \#5593 acot(-x) and acoth(-x) are reflected even if x can be 0
+* \#5602 rectform(sqrt(3 - erfc(%i))) fails with sign: argument cannot be non-real
+* \#5603 csign(atan(b)) is imaginary for an imaginary b, so abs(atan(b)^2) = -atan(b)^2
+* \#5605 csign(tan(b)) is pnz for an imaginary b, so abs(tan(b)^2) = tan(b)^2 < 0
+* \#5622 sign() and csign() of log(u) ignore assumptions about u when u is not a symbol
+* \#5623 integrate(sqrt(x-1)/sqrt(x+1), x) and similar returns only partially valid antiderivatives
+* \#5624 integrate asks for signs of complex coefficients, fails for imaginary ones
+* \#5628 sign(abs(abs(a)-1)+1) gives pz instead of pos
+* \#5629 sign(x^3-x^2) gives pnz although the facts imply x^3 >= x^2
+* \#5631 Wrong definite integral of sqrt(1-cos(x)) for limits in [-%pi, 0]
+* \#5632 specint drops exp(f(t)) factors next to unit_step or sum
+
+Bug fixes for unnumbered bugs:
+------------------------------
+* tlimit never asks the sign questions that limit asks
+* limits of atanh at an infinity ignore the imaginary part of the argument
+* various merror calls were missing arguments
+* limit of bessel_i at minf ignored the parity of an integer order
+* texput of a TeX control word ran it into a following letter, as in
+  \rightarrowb, producing TeX that does not compile
+* Maxima built with CCL printed a float's exponent with an explicit
+  plus sign and an upper case marker, as in 9.87E+52 where every other
+  lisp prints 9.87e52, and tex() copied the plus sign into the TeX it
+  generated
+
+Changes in the Windows installer:
+---------------------------------
+* Update MS WebView2
+* Update SBCL
+* Correct link to TCL/TK Website
+
+Other changes:
+--------------
+* New function read_struct: reads a .csv file whose first line names
+  the columns into a structure, so that data@t is the column headed t
+* read_matrix and the other numericalio text readers are about twice as
+  fast on files of plain numbers
+* Bigfloat optimizations and less memory consumption
+* load() and batch() read wxMaxima .wxmx worksheets
+* A file that is being loaded finds the files beside it, as a C
+  include directive does
+* Incremental builds no longer leave stale object files behind:
+  defsystem recompiles everything that was compiled after a file that
+  changed, not only the files whose dependency on it happened to be
+  declared in src/maxima.system.  A module whose declared dependencies
+  are known to be complete is marked :dependencies-complete and keeps
+  the narrower behaviour
+* The derivative of gamma_incomplete with respect to its first argument is built
+  by the simplifier and no longer evaluated.
+* tests/rtest_mactex.mac: the expressions of tests/rtest_tex.mac, which
+  is a LaTeX document generator whose output nothing ever checked, are
+  now paired with the string tex() returns and run as part of the test
+  suite
+* Building with CCL (Clozure Common Lisp) works again: the openmcl and
+  ccl64 rules asked the lisp to (require :defsystem), which CCL does not
+  provide, instead of loading Maxima's own lisp-utils/defsystem.lisp the
+  way the rules for every other lisp do.  ./configure now also enables
+  CCL when it finds it and no lisp was named explicitly
+* csign(imaginary^...) now gives precise results not only for integer exponents,
+  but also for exponents involving variables declared even/odd.
+* New function num_denom(x) = [num(x), denom(x)], which is more efficient
+* csign(negative^(n/odd)) returned complex for any integer n other than 1,
+  although with domain : real, the real odd root is taken. Now,
+  csign(negative^(2/odd)) is pos, csign(negative^(3/odd)) is neg and
+  csign(negative^(n/odd)) is pnz for an n only declared integer.
+* sign(negative^(odd/even)), e.g. sign(negative^(1/(2*odd))), returned pn,
+  although there is no real even root of a negative number. It now signals
+  that the argument is not real, as sign(sqrt(negative)) does.
+  So does sign(1/sqrt(xnz)) for xnz <= 0, which returned pn.
+* sign(xnz^(-1/3)) and sign(xnz^(-3)) for xnz <= 0 returned pn instead of
+  neg, as did sign((negative-1)^odd), and sign(xnz^(-2/3)) pn instead of
+  pos. With domain : complex, a non-integer rational power of a base that
+  may be negative now gets the same treatment as an even root.

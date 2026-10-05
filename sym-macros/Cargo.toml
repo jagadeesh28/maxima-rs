@@ -1,0 +1,13 @@
+[package]
+name = "sym-macros"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+sym-core = { path = "../sym-core", default-features = false, features = ["diff", "egraph", "cse", "codegen"] }
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }

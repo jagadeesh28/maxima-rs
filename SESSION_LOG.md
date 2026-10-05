@@ -1,0 +1,174 @@
+# maxima-rs — Session Log
+
+> Persistent context for continuing work across AI sessions.
+> Read this file at the start of every new session to restore full context.
+
+---
+
+## Project Summary
+
+**maxima-rs** is a compile-time symbolic mathematics and code optimization engine in Rust.
+It converts legacy Maxima algebraic knowledge into an `egg`-powered e-graph equality
+saturation engine that generates zero-overhead optimized Rust code via procedural macros.
+
+### Key Reference Files
+
+| File | Purpose |
+|------|---------|
+| [`agents.md`](file:///e:/Rust/Max/agents.md) | Full phased implementation plan (Phases 1–12) |
+| [`GLOSSARY.md`](file:///e:/Rust/Max/GLOSSARY.md) | Canonical domain vocabulary (20 terms) |
+| [`docs/adr/`](file:///e:/Rust/Max/docs/adr) | 5 Architecture Decision Records (ADR-0003 superseded by ADR-0005) |
+| [`References/maxima-master.zip`](file:///e:/Rust/Max/References/maxima-master.zip) | Maxima Common Lisp reference source |
+
+---
+
+## Session 1 — Design Grilling & Architecture Plan
+
+**Date**: 2026-10-03
+**Scope**: Full architectural design via grill-with-docs, then detailed phased plan
+
+### Settled Design Decisions (Decisions 1–19)
+- Established e-graph equality saturation architecture, AST, diff pre-pass, fast-math configurable semantics, rational constants, etc.
+
+---
+
+## Session 2 — 1:1 Maxima LISP Conversion & Ergonomic Interfaces Alignment
+
+**Date**: 2026-10-04
+**Scope**: Updated architecture based on user instructions to follow reference Maxima Lisp conversion 1:1 with source citations, multi-format parsers (Maxima + LaTeX), and ergonomic high-level APIs.
+
+### Settled Design Decisions (Session 2)
+
+| # | Decision | Choice | Round |
+|---|----------|--------|-------|
+| 20 | Rule coverage strategy | Systematic 1:1 Maxima LISP mapping with `egg` rewrite rules, each citing source file + function in doc comments and structured metadata | R1 |
+| 21 | Ergonomic input | Multi-format parsers (Maxima string, LaTeX formula) + high-level `optimize()` one-call API | R1 |
+| 22 | ADR-0003 disposition | Superseded by new ADR-0005 ("Systematic 1:1 Maxima Rule Coverage with Source Citations") | R1 |
+| 23 | LaTeX subset scope | Core scalar math for now (`\frac`, `\sqrt`, `\sin`, `\cos`, `\tan`, `\exp`, `\ln`, `^`); full math mode in phased roadmap | R2 |
+| 24 | Parser feature gating | New `parser` feature flag in `sym-core`, included in `full` bundle | R2 |
+| 25 | Maxima source coverage | Core 4 files now (`simp.lisp`, `trigi.lisp`, `combin.lisp`, `logarc.lisp`); extended set in phased plan | R2 |
+| 26 | Citation format | Structured `RuleProvenance` metadata + rustdoc comments | R2 |
+| 27 | `optimize()` API shape | Both free functions (`optimize`, `optimize_gradient`) AND fluent `Pipeline` builder | R3 |
+| 28 | Parser library | `winnow = "0.7"` for high performance and clean parser combinator errors | R3 |
+| 29 | Phase plan | Clean renumber to 12-phase roadmap in `agents.md` | R3 |
+
+### ADRs Updated
+- Added [`docs/adr/0005-systematic-maxima-rule-coverage.md`](file:///e:/Rust/Max/docs/adr/0005-systematic-maxima-rule-coverage.md)
+- Marked [`docs/adr/0003-hand-curated-rewrite-rules.md`](file:///e:/Rust/Max/docs/adr/0003-hand-curated-rewrite-rules.md) as superseded
+
+---
+
+## How to Continue
+
+When starting a new session, instruct the AI:
+
+> Read `SESSION_LOG.md` and `agents.md` from `e:\Rust\Max\` to restore context.
+> Continue from the current phase marker below.
+
+### Cargo Feature Groupings
+
+| Feature | Phases | Default | Notes |
+|---------|--------|---------|-------|
+| `core` (base) | Phase 1 | Always | `expr`, `rational` AST & arithmetic |
+| `diff` | Phase 2 | Yes | Analytical differentiation, gradient, Jacobian, Hessian |
+| `egraph` | Phases 3, 4 | Yes | E-graph equality saturation rules, FLOP cost, extraction, 1:1 Maxima citations |
+| `cse` | Phase 5 | Yes | Common subexpression elimination DAG pass |
+| `codegen` | Phase 6 | Yes | `TokenStream` emission |
+| `parser` | Phase 7 | Yes | Maxima string & LaTeX math parsers via `winnow` |
+| `pipeline` | Phase 8 | Yes | `optimize()`, `optimize_gradient()`, `Pipeline` builder |
+| `macros` | Phase 9 | Yes | `sym_fn!` and `sym_eval!` proc-macros |
+| `full` | All | Yes | Bundle enabling all features |
+
+### Current Phase: **All Phases (1–12) Complete ✅**
+
+### Phase Completion Tracker
+
+| Phase | Feature | Status | Notes |
+|-------|---------|--------|-------|
+| 1. Workspace & Expr AST | `core` | ✅ Completed | 47 tests + 12 doctests pass, exact rational arithmetic & AST |
+| 2. Analytical Differentiation | `diff` | ✅ Completed | 60 tests + 16 doctests pass, diff/grad/jac/hessian implemented |
+| 3. E-Graph Language, 1:1 Rules & Provenance | `egraph` | ✅ Completed | `MathLang`, `MathAnalysis`, `RuleProvenance`, 52 1:1 Maxima citations (`simp.lisp`, `trigi.lisp`, `combin.lisp`, `logarc.lisp`) |
+| 4. Cost, Saturation, Extraction | `egraph` | ✅ Completed | FLOP-weighted `FlopCost`, `saturate` runner with bounds, multi-root extraction |
+| 5. CSE Post-Pass | `cse` | ✅ Completed | DAG-based `eliminate_common_subexprs`, `LetBinding`, `CseResult` |
+| 6. Codegen (TokenStream) | `codegen` | ✅ Completed | `emit_expr`, `emit_cse_block`, `FloatType` (F64/F32) |
+| 7. Multi-Format Parsers (Maxima/LaTeX) | `parser` | ✅ Completed | `winnow = "0.7"`-based `parse_maxima` and `parse_latex` |
+| 8. High-Level API & Pipeline Builder | `pipeline` | ✅ Completed | `optimize`, `optimize_gradient`, fluent `Pipeline` builder |
+| 9. Proc-Macro Crate | `macros` | ✅ Completed | `sym_fn!` and `sym_eval!` in `sym-macros` with span-aware diagnostics |
+| 10. Facade Crate & Prelude | `full` | ✅ Completed | `maxima-rs` facade crate with re-exports and `prelude` module |
+| 11. Testing Infrastructure & Coverage | all | ✅ Completed | 9 integration suites, 2 proptest suites, 1:1 citation coverage check (52 rules) |
+| 12. Ergonomics & Polish | all | ✅ Completed | Zero clippy warnings across workspace (`-D warnings`), rustfmt clean, zero runtime overhead verified |
+
+---
+
+### Session Rules & Protocol
+
+1. **README Rule**: Actively update [`README.md`](file:///e:/Rust/Max/README.md) after completing each phase (updating the Current Status table and relevant examples).
+2. **Session Log Rule**: Update [`SESSION_LOG.md`](file:///e:/Rust/Max/SESSION_LOG.md) phase tracker and notes at each milestone.
+3. **Clippy & Formatting Rule**: Run `cargo clippy --all-targets --all-features -- -D warnings` and `cargo fmt` before completing any phase.
+
+
+---
+
+## Session 3 — Full Implementation & Verification (Phases 3–12)
+
+**Date**: 2026-10-05 / 2026-10-06  
+**Scope**: End-to-end implementation and verification of Phases 3 through 12.
+
+### Summary of Deliverables Built
+1. **Phase 3 (E-Graph & 1:1 Maxima Rules)**:
+   - Defined [`egg::Language`](file:///e:/Rust/Max/sym-core/src/lang.rs) (`MathLang`) and constant analysis (`MathAnalysis`).
+   - Implemented [`RuleProvenance`](file:///e:/Rust/Max/sym-core/src/provenance.rs) registry and structured metadata citing Maxima Common LISP files (`simp.lisp`, `trigi.lisp`, `combin.lisp`, `logarc.lisp`).
+   - Implemented 52 rewrite rules across [`rules/arithmetic.rs`](file:///e:/Rust/Max/sym-core/src/rules/arithmetic.rs), [`rules/trigonometric.rs`](file:///e:/Rust/Max/sym-core/src/rules/trigonometric.rs), [`rules/exponential.rs`](file:///e:/Rust/Max/sym-core/src/rules/exponential.rs), and [`rules/logarithmic.rs`](file:///e:/Rust/Max/sym-core/src/rules/logarithmic.rs).
+2. **Phase 4 (Cost, Saturation, Extraction)**:
+   - Implemented [`FlopCost`](file:///e:/Rust/Max/sym-core/src/cost.rs) weighting constants and operations to extract minimal-computation expressions.
+   - Configured [`saturate`](file:///e:/Rust/Max/sym-core/src/saturate.rs) and [`extract`](file:///e:/Rust/Max/sym-core/src/extract.rs) with multi-root support.
+3. **Phase 5 (CSE Post-Pass)**:
+   - Implemented DAG-based subterm identification and topological let-binding generation in [`sym-core/src/cse.rs`](file:///e:/Rust/Max/sym-core/src/cse.rs).
+4. **Phase 6 (Codegen)**:
+   - Implemented TokenStream code generator in [`sym-core/src/codegen.rs`](file:///e:/Rust/Max/sym-core/src/codegen.rs) emitting flat `let` bindings for `f32` and `f64`.
+5. **Phase 7 (Multi-Format Parsers)**:
+   - Implemented `winnow = "0.7"` parsers for Maxima strings ([`parser/maxima.rs`](file:///e:/Rust/Max/sym-core/src/parser/maxima.rs)) and LaTeX scalar math formulas ([`parser/latex.rs`](file:///e:/Rust/Max/sym-core/src/parser/latex.rs)).
+6. **Phase 8 (High-Level API & Pipeline Builder)**:
+   - Implemented free functions `optimize()` / `optimize_gradient()` and fluent builder `Pipeline` in [`sym-core/src/pipeline.rs`](file:///e:/Rust/Max/sym-core/src/pipeline.rs).
+7. **Phase 9 (Proc-Macro Crate `sym-macros`)**:
+   - Implemented `sym_fn!` and `sym_eval!` in [`sym-macros`](file:///e:/Rust/Max/sym-macros/src/lib.rs) with span-preserving error diagnostics and attributes parsing (`fast_math`, `node_limit`, `time_limit_ms`).
+8. **Phase 10 (Facade Crate `maxima-rs` & Prelude)**:
+   - Re-exported all feature-gated functionality and exposed [`prelude`](file:///e:/Rust/Max/maxima-rs/src/prelude.rs).
+9. **Phase 11 (Testing Infrastructure & Coverage)**:
+   - Created test suite package [`maxima-tests`](file:///e:/Rust/Max/tests/Cargo.toml) with 9 integration suites and 2 proptest suites.
+   - Implemented automated 1:1 Maxima citation verification in [`tests/integration/maxima_coverage.rs`](file:///e:/Rust/Max/tests/integration/maxima_coverage.rs).
+10. **Phase 12 (Polish & Verification)**:
+    - Workspace clean build, all tests passed, 0 clippy warnings (`-D warnings`), code formatted with `cargo fmt`.
+
+---
+
+## Session 4 — Phase 13: Tensor & Matrix Calculus
+
+**Date**: 2026-10-06  
+**Scope**: Implementation of the foundational Ricci Calculus architecture for tensors (Phase 13).
+
+### Deliverables Built
+- Added `tensor` feature to `sym-core`.
+- Defined `Index` and `IndexType` (Covariant/Contravariant) in [`sym-core/src/tensor.rs`](file:///e:/Rust/Max/sym-core/src/tensor.rs).
+- Added `Tensor(String, Vec<Index>)` variant to the `Expr` AST.
+- Implemented serialization of `Tensor` into `egg::Symbol` string format (`"T|<name>,C|<idx>,U|<idx>"`) for e-graph compatibility.
+- Integrated `Tensor` across all passes: `MathLang` representation, cost evaluation, CSE counting, differentiation (0-tensor stub), and token emission (`T_cov_idx`).
+- Passes all tests and clippy checks cleanly.
+
+*Update this file at the end of every session with progress, decisions, and issues encountered.*
+## Session 5 - Phase 13: Advanced Math & Calculus
+
+**Date**: 2026-10-06  
+**Scope**: Implementation of the advanced math operations (Calculus, Tensor notation, Matrices) for the AST and LaTeX parser.
+
+### Deliverables Built
+- Added Derivative, Integral, Sum, Matrix and Tensor variants to the Expr AST in expr.rs.
+- Handled Matrix opaque serialization for egg::Symbol string format in MathLang.
+- Integrated all new symbolic nodes across the pipeline (CSE traversal, FLOP cost evaluation, element-wise differentiation, code emission).
+- Upgraded the winnow combinator parser in latex.rs to support \int, \sum, \begin{pmatrix}, \frac{\partial f}{\partial x}, and Greek letters with tensor notation (e.g. T_{\mu}).
+- Passed all golden tests for advanced math syntax and compilation checks (cargo clippy, cargo test).
+
+---
+
+## Architecture & Skill Reference
+- [/grafify](.agents/skills/grafify/SKILL.md) � Authoritative dependency graph, module call graph, and function-level cross-module interdependency matrix for continuous reference and maintenance.

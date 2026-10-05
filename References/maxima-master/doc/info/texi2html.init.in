@@ -1,0 +1,8 @@
+@TEXI_EXTRA_HEAD@ q{<link rel="icon" type="image/svg+xml" href="figures/maxima.svg">
+<link rel="alternate icon" href="figures/favicon.ico">
+@HIGHLIGHT1@
+@HIGHLIGHT2@
+@CUSTOM_PYGMENTS_CSS@
+@NAV_PANEL_CSS@
+@NEED_MATHJAX@}
+@TEXI_EXTRA_TAIL@;

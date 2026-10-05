@@ -1,0 +1,5 @@
+plot2d([x^2+y^2=1, -abs(x)], [x, -1.5, 1.5], [y, -2, 2], same_xy, nolegend,
+   [pdf_file, "./plotting12.pdf"]);
+plot2d([x^2+y^2=1, -abs(x)], [x, -1.5, 1.5], [y, -2, 2], same_xy, nolegend,
+   [png_file, "./plotting12.png"]);
+

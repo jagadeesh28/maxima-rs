@@ -1,0 +1,55 @@
+[package]
+name = "maxima-tests"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+maxima-rs = { path = "../maxima-rs", features = ["full"] }
+sym-core = { path = "../sym-core", features = ["full"] }
+sym-macros = { path = "../sym-macros" }
+proptest = { workspace = true }
+
+[[test]]
+name = "basic_arithmetic"
+path = "integration/basic_arithmetic.rs"
+
+[[test]]
+name = "trigonometric"
+path = "integration/trigonometric.rs"
+
+[[test]]
+name = "differentiation"
+path = "integration/differentiation.rs"
+
+[[test]]
+name = "cse"
+path = "integration/cse.rs"
+
+[[test]]
+name = "parser_maxima"
+path = "integration/parser_maxima.rs"
+
+[[test]]
+name = "parser_latex"
+path = "integration/parser_latex.rs"
+
+[[test]]
+name = "pipeline_api"
+path = "integration/pipeline_api.rs"
+
+[[test]]
+name = "macro_expansion"
+path = "integration/macro_expansion.rs"
+
+[[test]]
+name = "maxima_coverage"
+path = "integration/maxima_coverage.rs"
+
+[[test]]
+name = "numerical_equivalence"
+path = "proptest/numerical_equivalence.rs"
+
+[[test]]
+name = "diff_correctness"
+path = "proptest/diff_correctness.rs"

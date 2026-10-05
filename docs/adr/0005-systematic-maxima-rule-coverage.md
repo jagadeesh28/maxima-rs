@@ -1,0 +1,5 @@
+# Systematic 1:1 Maxima Rule Coverage with Source Citations
+
+**Status**: Accepted — supersedes [ADR-0003](0003-hand-curated-rewrite-rules.md)
+
+Context: The project brings Maxima's algebraic optimization capability into Rust via `egg` e-graph equality saturation. ADR-0003 originally chose hand-curated cherry-picking of Maxima rules to prevent e-class explosion. We now adopt systematic 1:1 coverage instead: every algebraic identity from Maxima's core simplification files (`simp.lisp`, `trigi.lisp`, `combin.lisp`, `logarc.lisp`) receives a corresponding `egg` rewrite rule with structured `RuleProvenance` metadata citing the exact source file and function. This enables automated coverage comparison between the Maxima reference and our implementation, ensures no identity is silently dropped, and maintains the e-graph engine's advantages (provable termination, cost-optimal extraction) while achieving comprehensive algebraic coverage. E-class explosion risk is managed through saturation limits (ADR-0001 still applies) rather than restricting rule count.

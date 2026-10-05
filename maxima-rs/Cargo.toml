@@ -1,0 +1,22 @@
+[package]
+name = "maxima-rs"
+version.workspace = true
+edition.workspace = true
+description = "Compile-time symbolic math optimization via e-graph equality saturation"
+keywords = ["symbolic", "mathematics", "optimization", "codegen", "macro"]
+categories = ["mathematics", "compilers"]
+
+[features]
+default = ["full"]
+full = ["diff", "egraph", "cse", "codegen", "parser", "pipeline", "macros"]
+diff = ["sym-core/diff"]
+egraph = ["sym-core/egraph"]
+cse = ["sym-core/cse"]
+codegen = ["sym-core/codegen"]
+parser = ["sym-core/parser"]
+pipeline = ["sym-core/pipeline"]
+macros = ["dep:sym-macros", "diff", "egraph", "cse", "codegen"]
+
+[dependencies]
+sym-core = { path = "../sym-core", default-features = false }
+sym-macros = { path = "../sym-macros", optional = true }
