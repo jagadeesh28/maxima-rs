@@ -20,6 +20,7 @@ poly = ["sym-core/poly"]
 integrate = ["sym-core/integrate"]
 series = ["sym-core/series"]
 limit = ["sym-core/limit"]
+solve = ["sym-core/solve"]
 macros = ["dep:sym-macros", "diff", "egraph", "cse", "codegen"]
 
 [dependencies]

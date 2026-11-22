@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–28 Complete ✅ — Phases 29–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–29 Complete ✅ — Phases 30–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -119,7 +119,7 @@ When starting a new session, instruct the AI:
 | 26. Laurent Series & Asymptotics | `series` | ✅ Completed | Truncated `Series { center, valuation, coeffs, order }` arithmetic + sin/cos/exp/1/(1-x)/1/sin expansions (133 unit + 9 integration) |
 | 27. Gruntz Limits Engine | `limit` | ✅ Completed | MRV enumeration, series-based limits, log-transform for `Pow`, numeric convergence fallback (138 unit + 6 integration) |
 | 28. Definite Integration & Pole Scanning | `integrate` | ✅ Completed | Rational pole scanner + FTC evaluation + improper limits (138 unit + 4 integration) |
-| 29. Closed-Form Algebraic Solvers | `solve` | ⬜ Planned | Degrees 1-4 formulas, factor-and-split, transcendental variable isolation, `AlgebraicSolutions` |
+| 29. Closed-Form Algebraic Solvers | `solve` | ✅ Completed | Rational-root factoring + linear/quadratic formulas (deg 1–4), transcendental isolation, `AlgebraicSolutions` (139 unit + 6 integration) |
 | 30. ODE Solvers | `solve` | ⬜ Planned | 1st-order standard forms (separable, linear, Bernoulli, exact) + 2nd-order constant coeffs (`OdeSolution`) |
 | 31. Maxima Parser CAS Syntax & Facade | `cas`/`parser` | ⬜ Planned | Maxima CAS commands parsing (`expand`, `factor`, `ratsimp`, `partfrac`, `integrate`, `limit`, `ode2`), facade & prelude |
 | 32. Verification & Maxima Benchmarks | all | ⬜ Planned | Proptests for integration/ODE invariants, Maxima test suite parity (`rtest_integrate.mac`, etc.), fmt/clippy |
@@ -493,6 +493,28 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - Pole scanning covers rational (distinct rational-root) poles; irrational/complex-singularity detection is a refinement.
+
+---
+
+## Session 14 — Phase 29: Closed-Form Algebraic Solvers ✅
+
+**Date**: 2026-11-22
+**Scope**: `solve` feature — polynomial and transcendental solvers (Phase 29).
+
+### Deliverables
+- `sym-core/src/solve/mod.rs`: `solve(expr, var) -> AlgebraicSolutions`.
+- `sym-core/src/solve/alg.rs`: rational-root factor-and-split + linear/quadratic closed forms (degree 1–4 with rational roots).
+- `sym-core/src/solve/isolate.rs`: variable isolation for invertible elementary functions.
+- `tests/integration/solvers_alg.rs` (6 tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --lib`: 139 passed.
+- `cargo test -p maxima-tests --test solvers_alg`: 6 passed (linear, quadratic rational/irrational, cubic, quartic, transcendental isolation) — every root back-substitutes to 0 within 1e-6.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- Cubics/quartics without rational roots use factor-and-split only; full Cardano/Ferrari radicals are a refinement.
+
 
 
 

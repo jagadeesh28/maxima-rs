@@ -58,3 +58,6 @@ pub mod series;
 
 #[cfg(feature = "limit")]
 pub mod limit;
+
+#[cfg(feature = "solve")]
+pub mod solve;

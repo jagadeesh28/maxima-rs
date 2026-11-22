@@ -951,10 +951,10 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/solve/mod.rs` | `solve` | ⬜ Not started | `solve(expr, var)` returning `AlgebraicSolutions(Vec<Expr>)` |
-| `sym-core/src/solve/alg.rs` | `solve` | ⬜ Not started | Linear, quadratic, Cardano's cubic, Ferrari's quartic, and factor-and-split via Phase 23 `factor` |
-| `sym-core/src/solve/isolate.rs` | `solve` | ⬜ Not started | Variable isolation for invertible elementary functions ($\exp$, $\ln$, $\sin$, $\cos$, $\tan$) |
-| `tests/integration/solvers_alg.rs` | `solve` | ⬜ Not started | Algebraic equation solving and exact root verification by back-substitution |
+| `sym-core/src/solve/mod.rs` | `solve` | ✅ Completed | `solve(expr, var)` returning `AlgebraicSolutions(Vec<Expr>)` |
+| `sym-core/src/solve/alg.rs` | `solve` | ✅ Completed | Linear, quadratic, Cardano's cubic, Ferrari's quartic, and factor-and-split via Phase 23 `factor` |
+| `sym-core/src/solve/isolate.rs` | `solve` | ✅ Completed | Variable isolation for invertible elementary functions ($\exp$, $\ln$, $\sin$, $\cos$, $\tan$) |
+| `tests/integration/solvers_alg.rs` | `solve` | ✅ Completed | Algebraic equation solving and exact root verification by back-substitution |
 
 ### Acceptance Criteria
 - Exact closed-form solutions for degrees 1, 2, 3, 4.

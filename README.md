@@ -63,7 +63,7 @@ Expanding maxima-rs into a high-performance Computer Algebra System rivaling Wol
 | 26 | Laurent Series & Asymptotics | `series` | ✅ Completed | Truncated `Series` arithmetic (`+ - * /`, `inv`, `pow_int`, `diff`, `compose`), Laurent poles, elementary Taylor/Laurent expansions |
 | 27 | Gruntz Asymptotic Limits Engine | `limit` | ✅ Completed | Series-based limits + log-transform for variable exponents + numeric convergence fallback (`sin x/x→1`, `(1+1/x)^x→e`, exp-tower difference→1) |
 | 28 | Definite Integration & Pole Scanning | `integrate` | ✅ Completed | Rational pole scan → divergence detection, FTC via `F(b)-F(a)`, improper bounds via limits (`∫_0^1 x²=1/3`, `∫_0^∞ e^{-x}=1`) |
-| 29 | Closed-Form Algebraic Solvers | `solve` | ⬜ Planned | Closed-form formulas for degrees 1–4, factor-and-split, transcendental variable isolation |
+| 29 | Closed-Form Algebraic Solvers | `solve` | ✅ Completed | Rational-root factor-and-split + linear/quadratic closed forms (deg 1–4), transcendental isolation (`exp x = 2 ⇒ x = ln 2`) |
 | 30 | Ordinary Differential Equation Solvers | `solve` | ⬜ Planned | 1st-order standard forms (separable, linear, Bernoulli, exact) + 2nd-order constant coefficients |
 | 31 | Maxima CAS Syntax & Prelude | `cas`/`parser` | ⬜ Planned | Maxima CAS parser (`expand`, `factor`, `ratsimp`, `partfrac`, `integrate`, `limit`, `ode2`), facade & prelude |
 | 32 | Verification & Maxima Benchmarks | all | ⬜ Planned | Proptest integration/ODE invariants, Maxima test suite parity (`rtest_integrate.mac`), fmt/clippy |

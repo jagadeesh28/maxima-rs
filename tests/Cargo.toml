@@ -83,6 +83,10 @@ name = "integrate_defint"
 path = "integration/integrate_defint.rs"
 
 [[test]]
+name = "solvers_alg"
+path = "integration/solvers_alg.rs"
+
+[[test]]
 name = "series"
 path = "integration/series.rs"
 
