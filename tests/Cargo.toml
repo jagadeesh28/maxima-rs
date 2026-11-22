@@ -51,6 +51,10 @@ name = "rational_factorial"
 path = "integration/rational_factorial.rs"
 
 [[test]]
+name = "matrix_fidelity"
+path = "integration/matrix_fidelity.rs"
+
+[[test]]
 name = "numerical_equivalence"
 path = "proptest/numerical_equivalence.rs"
 

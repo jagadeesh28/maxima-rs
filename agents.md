@@ -558,6 +558,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 ### Acceptance Criteria
 - Matrix round-trip test passes; no sentinel string remains in `sym-core`.
 
+**Status**: ✅ Completed — new `sym-core/src/matrix.rs` lossless prefix codec; `lang.rs` round-trips matrices through the e-graph; `matrix_fidelity` integration suite (3 tests) + unit tests; element-wise `matrix.lisp` rules documented as impossible for an opaque leaf.
+
 ---
 
 ## Phase 20 — WebUI Provenance & Maxima Coverage Surfacing

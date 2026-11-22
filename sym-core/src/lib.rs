@@ -10,6 +10,7 @@
 //! build scripts, CLI tools, or programmatic symbolic computation.
 
 pub mod expr;
+pub mod matrix;
 pub mod rational;
 pub mod tensor;
 

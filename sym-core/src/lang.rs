@@ -247,11 +247,9 @@ impl Expr {
                 let id_u = upper.build_recexpr(recexpr);
                 recexpr.add(MathLang::Sum([id_a, id_b, id_l, id_u]))
             }
-            Expr::Matrix(_mat) => {
-                // Matrices are flattened to an opaque symbol to avoid egg Language complexity for now
-                recexpr.add(MathLang::Matrix(Symbol::from(
-                    "matrix_unsupported_in_egraph",
-                )))
+            Expr::Matrix(mat) => {
+                let encoded = crate::matrix::encode_matrix_symbol(mat);
+                recexpr.add(MathLang::Matrix(Symbol::from(encoded.as_str())))
             }
         }
     }
@@ -331,9 +329,12 @@ impl Expr {
                 Self::from_recexpr_id(nodes, *l),
                 Self::from_recexpr_id(nodes, *u),
             ),
-            MathLang::Matrix(_) => {
-                // Return an empty matrix to prevent panic, since we flattened them out
-                Expr::Matrix(vec![])
+            MathLang::Matrix(s) => {
+                // Restore the full matrix from the structured symbol encoding.
+                match crate::matrix::decode_matrix_symbol(s.as_str()) {
+                    Some(rows) => Expr::Matrix(rows),
+                    None => Expr::Matrix(vec![]),
+                }
             }
         }
     }
@@ -385,5 +386,15 @@ mod tests {
         let fac = egraph.add(MathLang::Factorial([n]));
         egraph.rebuild();
         assert_eq!(egraph[fac].data, Some(Rat::from_int(120)));
+    }
+
+    #[test]
+    fn test_matrix_symbol_roundtrip_via_egraph() {
+        let expr = Expr::matrix(vec![
+            vec![Expr::var("a"), Expr::int(1)],
+            vec![Expr::sin(Expr::var("x")), Expr::frac(1, 2)],
+        ]);
+        let recexpr = expr.to_recexpr();
+        assert_eq!(Expr::from_recexpr(&recexpr), expr);
     }
 }

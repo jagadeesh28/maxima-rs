@@ -28,6 +28,7 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 | **16. Maxima Parser Parity** | `parser` | ✅ **Complete** | `%pi`/`%e`, postfix `!`, hyperbolic/inverse trig, `diff`/`integrate`/`sum`, `matrix([...])` |
 | **17. Rule Expansion I** | `egraph` | ✅ **Complete** | 79 provenanced rules; new `sinh.lisp` citations, inverse-trig cancellations, double-angle/angle-sum/`1+tan²=sec²` from `trigi.lisp` |
 | **18. Rule Expansion II** | `egraph` | ✅ **Complete** | 92 provenanced rules; `nrat4.lisp` rational normalization and `sfacts.lisp` factorial recurrences |
+| **19. Matrix E-Graph Fidelity** | `egraph` | ✅ **Complete** | Lossless matrix symbol codec; matrices survive saturation/extraction (no sentinel) |
 
 > **Rule**: This `README.md` file is actively updated upon the completion of every phase.
 
@@ -43,7 +44,7 @@ The detailed requirements live in [`agents.md`](file:///e:/Rust/Max/agents.md).
 | 16 | Parity | ✅ Complete | `parse_maxima` parity: constants, factorial, hyperbolic/inverse trig, calculus & matrix forms |
 | 17 | Parity | ✅ Complete | 1:1 rules citing `sinh.lisp` + deeper `trigi.lisp` |
 | 18 | Parity | ✅ Complete | 1:1 rules citing `nrat4.lisp` (ratsimp) and `sfacts.lisp` (factorial) |
-| 19 | Parity | ⬜ Planned | Matrix fidelity through the e-graph (structured symbol encoding) |
+| 19 | Parity | ✅ Complete | Matrix fidelity through the e-graph (structured symbol encoding) |
 | 20 | WebUI | ⬜ Planned | `GET /api/rules` + "Maxima coverage" panel in the UI |
 | 21 | Docs | ⬜ Planned | Coverage report, glossary/session-log updates, final green verification |
 

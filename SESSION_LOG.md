@@ -244,3 +244,14 @@ When starting a new session, instruct the AI:
 - New `tests/integration/rational_factorial.rs` (6 golden tests) wired into `tests/Cargo.toml`.
 - Verification: full workspace tests pass; clippy `-D warnings` clean.
 
+
+### Phase 19 — Matrix E-Graph Fidelity ✅
+- New `sym-core/src/matrix.rs`: lossless prefix-token codec (`MX`/`V`/`C`/operators/`TEN`/`DR`/`IN`/`SU`)
+  for `Expr::Matrix`, with recursive encode/decode and unit tests (incl. nested matrices/tensors).
+- `lang.rs` now encodes matrices with `encode_matrix_symbol` and restores them with
+  `decode_matrix_symbol`; removed the `"matrix_unsupported_in_egraph"` sentinel.
+- Documented limitation: an opaque matrix leaf cannot host element-wise `matrix.lisp` rewrites;
+  contents are preserved exactly and element simplification happens pre-injection.
+- New `tests/integration/matrix_fidelity.rs` (3 tests) proves matrices survive saturation/extraction.
+- Verification: `sym-core` 104 unit tests pass; matrix fidelity suite passes.
+
