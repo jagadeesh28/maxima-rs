@@ -32,8 +32,16 @@ impl CostFunction<MathLang> for FlopCost {
             | MathLang::Cos(_)
             | MathLang::Tan(_)
             | MathLang::Exp(_)
-            | MathLang::Ln(_) => 25,
-            MathLang::Tensor(_) => 0,
+            | MathLang::Ln(_)
+            | MathLang::Sinh(_)
+            | MathLang::Cosh(_)
+            | MathLang::Tanh(_)
+            | MathLang::Asin(_)
+            | MathLang::Acos(_)
+            | MathLang::Atan(_) => 25,
+            // Iterative product; heavier than a single flop, cheaper than a transcendental.
+            MathLang::Factorial(_) => 20,
+            MathLang::Tensor(_) | MathLang::NamedConst(_) => 0,
             MathLang::Derivative(_)
             | MathLang::Integral(_)
             | MathLang::Sum(_)

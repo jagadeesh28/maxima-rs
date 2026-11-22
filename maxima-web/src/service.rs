@@ -284,6 +284,15 @@ fn term(e: &Expr) -> String {
         Expr::Exp(a) => format!("e^{{{}}}", wrap(a)),
         Expr::Ln(a) => format!("\\ln{{{}}}", wrap(a)),
         Expr::Sqrt(a) => format!("\\sqrt{{{}}}", wrap(a)),
+        Expr::Sinh(a) => format!("\\sinh{{{}}}", wrap(a)),
+        Expr::Cosh(a) => format!("\\cosh{{{}}}", wrap(a)),
+        Expr::Tanh(a) => format!("\\tanh{{{}}}", wrap(a)),
+        Expr::Asin(a) => format!("\\arcsin{{{}}}", wrap(a)),
+        Expr::Acos(a) => format!("\\arccos{{{}}}", wrap(a)),
+        Expr::Atan(a) => format!("\\arctan{{{}}}", wrap(a)),
+        Expr::Pi => "\\pi".to_string(),
+        Expr::E => "e".to_string(),
+        Expr::Factorial(a) => format!("{}!", wrap(a)),
         Expr::Derivative(inner, var) => {
             format!("\\frac{{d}}{{d {}}}{{{}}}", term(var), wrap(inner))
         }
@@ -315,7 +324,7 @@ fn term(e: &Expr) -> String {
 }
 
 fn is_atom(e: &Expr) -> bool {
-    matches!(e, Expr::Var(_) | Expr::Const(_))
+    matches!(e, Expr::Var(_) | Expr::Const(_) | Expr::Pi | Expr::E)
 }
 
 fn rational_latex(r: &num_rational::BigRational) -> String {

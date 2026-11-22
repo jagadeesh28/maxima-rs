@@ -148,6 +148,12 @@ pub fn convert_syn_expr(e: &syn::Expr) -> syn::Result<Expr> {
                 "exp" => Ok(Expr::exp(receiver)),
                 "ln" => Ok(Expr::ln(receiver)),
                 "sqrt" => Ok(Expr::sqrt(receiver)),
+                "sinh" => Ok(Expr::sinh(receiver)),
+                "cosh" => Ok(Expr::cosh(receiver)),
+                "tanh" => Ok(Expr::tanh(receiver)),
+                "asin" => Ok(Expr::asin(receiver)),
+                "acos" => Ok(Expr::acos(receiver)),
+                "atan" => Ok(Expr::atan(receiver)),
                 "powi" | "powf" => {
                     let arg = mc.args.first().ok_or_else(|| {
                         syn::Error::new_spanned(mc, "pow method requires an exponent argument")
@@ -202,6 +208,42 @@ pub fn convert_syn_expr(e: &syn::Expr) -> syn::Result<Expr> {
                                 syn::Error::new_spanned(call, "sqrt requires 1 argument")
                             })?;
                             Ok(Expr::sqrt(convert_syn_expr(arg)?))
+                        }
+                        "sinh" => {
+                            let arg = args.next().ok_or_else(|| {
+                                syn::Error::new_spanned(call, "sinh requires 1 argument")
+                            })?;
+                            Ok(Expr::sinh(convert_syn_expr(arg)?))
+                        }
+                        "cosh" => {
+                            let arg = args.next().ok_or_else(|| {
+                                syn::Error::new_spanned(call, "cosh requires 1 argument")
+                            })?;
+                            Ok(Expr::cosh(convert_syn_expr(arg)?))
+                        }
+                        "tanh" => {
+                            let arg = args.next().ok_or_else(|| {
+                                syn::Error::new_spanned(call, "tanh requires 1 argument")
+                            })?;
+                            Ok(Expr::tanh(convert_syn_expr(arg)?))
+                        }
+                        "asin" => {
+                            let arg = args.next().ok_or_else(|| {
+                                syn::Error::new_spanned(call, "asin requires 1 argument")
+                            })?;
+                            Ok(Expr::asin(convert_syn_expr(arg)?))
+                        }
+                        "acos" => {
+                            let arg = args.next().ok_or_else(|| {
+                                syn::Error::new_spanned(call, "acos requires 1 argument")
+                            })?;
+                            Ok(Expr::acos(convert_syn_expr(arg)?))
+                        }
+                        "atan" => {
+                            let arg = args.next().ok_or_else(|| {
+                                syn::Error::new_spanned(call, "atan requires 1 argument")
+                            })?;
+                            Ok(Expr::atan(convert_syn_expr(arg)?))
                         }
                         "pow" => {
                             let base = args.next().ok_or_else(|| {

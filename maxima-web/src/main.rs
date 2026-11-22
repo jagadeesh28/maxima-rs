@@ -4,11 +4,11 @@
 //! `maxima-rs` symbolic math engine.
 
 use axum::{
+    Router,
     extract::State,
     http::StatusCode,
     response::{Html, Json},
     routing::{get, post},
-    Router,
 };
 use std::sync::Arc;
 use tower_http::services::ServeDir;
@@ -47,9 +47,7 @@ async fn main() {
         .await
         .expect("failed to bind to 0.0.0.0:3000");
     println!("maxima-web UI listening on http://localhost:3000");
-    axum::serve(listener, app)
-        .await
-        .expect("server error");
+    axum::serve(listener, app).await.expect("server error");
 }
 
 async fn index_html() -> Html<String> {

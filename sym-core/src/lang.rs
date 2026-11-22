@@ -27,11 +27,19 @@ define_language! {
         "exp" = Exp([Id; 1]),
         "ln" = Ln([Id; 1]),
         "sqrt" = Sqrt([Id; 1]),
+        "sinh" = Sinh([Id; 1]),
+        "cosh" = Cosh([Id; 1]),
+        "tanh" = Tanh([Id; 1]),
+        "asin" = Asin([Id; 1]),
+        "acos" = Acos([Id; 1]),
+        "atan" = Atan([Id; 1]),
+        "fac" = Factorial([Id; 1]),
 
         // Leaf nodes
         Const(BigRational),
         Var(Symbol),
         Tensor(Symbol),
+        NamedConst(Symbol),
 
         // Calculus
         "d" = Derivative([Id; 2]),
@@ -61,7 +69,11 @@ impl Analysis<MathLang> for MathAnalysis {
 
         match enode {
             MathLang::Const(c) => Some(c.clone()),
-            MathLang::Var(_) | MathLang::Tensor(_) => None,
+            MathLang::Var(_) | MathLang::Tensor(_) | MathLang::NamedConst(_) => None,
+            MathLang::Factorial([a]) => {
+                let ca = get_const(a)?;
+                Rat::factorial(&ca)
+            }
             MathLang::Add([a, b]) => {
                 let ca = get_const(a)?;
                 let cb = get_const(b)?;
@@ -97,6 +109,12 @@ impl Analysis<MathLang> for MathAnalysis {
             | MathLang::Exp(_)
             | MathLang::Ln(_)
             | MathLang::Sqrt(_)
+            | MathLang::Sinh(_)
+            | MathLang::Cosh(_)
+            | MathLang::Tanh(_)
+            | MathLang::Asin(_)
+            | MathLang::Acos(_)
+            | MathLang::Atan(_)
             | MathLang::Derivative(_)
             | MathLang::Integral(_)
             | MathLang::Sum(_)
@@ -178,6 +196,36 @@ impl Expr {
                 let id_a = a.build_recexpr(recexpr);
                 recexpr.add(MathLang::Sqrt([id_a]))
             }
+            Expr::Sinh(a) => {
+                let id_a = a.build_recexpr(recexpr);
+                recexpr.add(MathLang::Sinh([id_a]))
+            }
+            Expr::Cosh(a) => {
+                let id_a = a.build_recexpr(recexpr);
+                recexpr.add(MathLang::Cosh([id_a]))
+            }
+            Expr::Tanh(a) => {
+                let id_a = a.build_recexpr(recexpr);
+                recexpr.add(MathLang::Tanh([id_a]))
+            }
+            Expr::Asin(a) => {
+                let id_a = a.build_recexpr(recexpr);
+                recexpr.add(MathLang::Asin([id_a]))
+            }
+            Expr::Acos(a) => {
+                let id_a = a.build_recexpr(recexpr);
+                recexpr.add(MathLang::Acos([id_a]))
+            }
+            Expr::Atan(a) => {
+                let id_a = a.build_recexpr(recexpr);
+                recexpr.add(MathLang::Atan([id_a]))
+            }
+            Expr::Pi => recexpr.add(MathLang::NamedConst(Symbol::from("pi"))),
+            Expr::E => recexpr.add(MathLang::NamedConst(Symbol::from("e"))),
+            Expr::Factorial(a) => {
+                let id_a = a.build_recexpr(recexpr);
+                recexpr.add(MathLang::Factorial([id_a]))
+            }
             Expr::Tensor(name, indices) => {
                 let encoded = crate::tensor::encode_tensor_symbol(name, indices);
                 recexpr.add(MathLang::Tensor(Symbol::from(encoded.as_str())))
@@ -249,6 +297,18 @@ impl Expr {
             MathLang::Exp([a]) => Expr::exp(Self::from_recexpr_id(nodes, *a)),
             MathLang::Ln([a]) => Expr::ln(Self::from_recexpr_id(nodes, *a)),
             MathLang::Sqrt([a]) => Expr::sqrt(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Sinh([a]) => Expr::sinh(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Cosh([a]) => Expr::cosh(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Tanh([a]) => Expr::tanh(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Asin([a]) => Expr::asin(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Acos([a]) => Expr::acos(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Atan([a]) => Expr::atan(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Factorial([a]) => Expr::factorial(Self::from_recexpr_id(nodes, *a)),
+            MathLang::NamedConst(s) => match s.as_str() {
+                "pi" => Expr::Pi,
+                "e" => Expr::E,
+                other => Expr::var(other),
+            },
             MathLang::Tensor(s) => {
                 if let Some((name, indices)) = crate::tensor::decode_tensor_symbol(s.as_str()) {
                     Expr::Tensor(name, indices)
@@ -303,5 +363,27 @@ mod tests {
         let add = egraph.add(MathLang::Add([c1, c2]));
         egraph.rebuild();
         assert_eq!(egraph[add].data, Some(Rat::from_int(5)));
+    }
+
+    #[test]
+    fn test_roundtrip_new_nodes() {
+        let expr = Expr::add(
+            Expr::sinh(Expr::var("x")),
+            Expr::add(
+                Expr::factorial(Expr::int(5)),
+                Expr::add(Expr::pi(), Expr::mul(Expr::e(), Expr::atan(Expr::var("y")))),
+            ),
+        );
+        let recexpr = expr.to_recexpr();
+        assert_eq!(Expr::from_recexpr(&recexpr), expr);
+    }
+
+    #[test]
+    fn test_factorial_constant_analysis() {
+        let mut egraph = egg::EGraph::<MathLang, MathAnalysis>::default();
+        let n = egraph.add(MathLang::Const(Rat::from_int(5)));
+        let fac = egraph.add(MathLang::Factorial([n]));
+        egraph.rebuild();
+        assert_eq!(egraph[fac].data, Some(Rat::from_int(120)));
     }
 }

@@ -196,3 +196,15 @@ When starting a new session, instruct the AI:
 - `README.md`: corrected the `/api/compute` payload documentation.
 - Verification: `cargo test -p maxima-web` (5 passed), `cargo clippy -p maxima-web --all-targets -- -D warnings` clean.
 
+
+### Phase 15 — Advanced AST Nodes ✅
+- Added `Expr::{Sinh, Cosh, Tanh, Asin, Acos, Atan, Pi, E, Factorial}` with constructors.
+- Threaded through `Display`, `eval`, `variables`, `node_count`, `diff` (chain rules), `lang`
+  (`MathLang` + `MathAnalysis` factorial folding + `NamedConst` for π/e + round-trip), `cost`
+  (transcendentals 25, factorial 20), `cse`, `codegen` (`PI`/`E` consts + factorial loop),
+  `sym-macros` (`sinh`…`atan` methods and calls), and the web LaTeX renderer.
+- Added `Rat::factorial` exact folding (0‥100).
+- New unit tests in `expr`, `diff`, `lang`, `codegen`.
+- Verification: `cargo build --workspace --all-features`, `cargo test --workspace --all-features`,
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo fmt` all clean.
+

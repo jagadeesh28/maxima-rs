@@ -165,6 +165,46 @@ pub fn differentiate(expr: &Expr, var: &str) -> Expr {
             let denom = smart_mul(Expr::int(2), Expr::sqrt(*a.clone()));
             smart_div(da, denom)
         }
+        Expr::Sinh(a) => {
+            let da = differentiate(a, var);
+            smart_mul(Expr::cosh(*a.clone()), da)
+        }
+        Expr::Cosh(a) => {
+            let da = differentiate(a, var);
+            smart_mul(Expr::sinh(*a.clone()), da)
+        }
+        Expr::Tanh(a) => {
+            let da = differentiate(a, var);
+            // d/dx tanh(a) = (1 - tanh(a)^2) * a'
+            let tanh_sq = smart_pow(Expr::tanh(*a.clone()), Expr::int(2));
+            let sech_sq = smart_sub(Expr::int(1), tanh_sq);
+            smart_mul(sech_sq, da)
+        }
+        Expr::Asin(a) => {
+            let da = differentiate(a, var);
+            // d/dx asin(a) = a' / sqrt(1 - a^2)
+            let a_sq = smart_pow(*a.clone(), Expr::int(2));
+            let denom = Expr::sqrt(smart_sub(Expr::int(1), a_sq));
+            smart_div(da, denom)
+        }
+        Expr::Acos(a) => {
+            let da = differentiate(a, var);
+            // d/dx acos(a) = -a' / sqrt(1 - a^2)
+            let a_sq = smart_pow(*a.clone(), Expr::int(2));
+            let denom = Expr::sqrt(smart_sub(Expr::int(1), a_sq));
+            smart_div(smart_neg(da), denom)
+        }
+        Expr::Atan(a) => {
+            let da = differentiate(a, var);
+            // d/dx atan(a) = a' / (1 + a^2)
+            let a_sq = smart_pow(*a.clone(), Expr::int(2));
+            let denom = smart_add(Expr::int(1), a_sq);
+            smart_div(da, denom)
+        }
+        // π and e are constants with respect to any variable.
+        Expr::Pi | Expr::E => Expr::int(0),
+        // Factorials are integer-valued; treat as locally constant (Maxima parity).
+        Expr::Factorial(_) => Expr::int(0),
         Expr::Tensor(name, _indices) => {
             // For now, differentiate of a tensor with respect to a scalar variable is 0
             // unless the tensor's exact name matches the variable name.
@@ -540,6 +580,50 @@ mod tests {
         assert!(
             (h_xy - h_yx).abs() < 1e-12,
             "Hessian cross partials must match: H_xy={h_xy}, H_yx={h_yx}"
+        );
+    }
+
+    #[test]
+    fn test_diff_hyperbolic() {
+        let x = Expr::var("x");
+        let mut env = HashMap::new();
+        env.insert("x".to_string(), 0.3);
+
+        let d_sinh = differentiate(&Expr::sinh(x.clone()), "x");
+        assert!((d_sinh.eval(&env).unwrap() - 0.3_f64.cosh()).abs() < 1e-12);
+
+        let d_cosh = differentiate(&Expr::cosh(x.clone()), "x");
+        assert!((d_cosh.eval(&env).unwrap() - 0.3_f64.sinh()).abs() < 1e-12);
+
+        let d_tanh = differentiate(&Expr::tanh(x), "x");
+        let expected = 1.0 - 0.3_f64.tanh().powi(2);
+        assert!((d_tanh.eval(&env).unwrap() - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_diff_inverse_trig() {
+        let x = Expr::var("x");
+        let mut env = HashMap::new();
+        env.insert("x".to_string(), 0.3);
+
+        let expected_asin = 1.0 / (1.0_f64 - 0.09).sqrt();
+        let d_asin = differentiate(&Expr::asin(x.clone()), "x");
+        assert!((d_asin.eval(&env).unwrap() - expected_asin).abs() < 1e-12);
+
+        let d_acos = differentiate(&Expr::acos(x.clone()), "x");
+        assert!((d_acos.eval(&env).unwrap() + expected_asin).abs() < 1e-12);
+
+        let d_atan = differentiate(&Expr::atan(x), "x");
+        assert!((d_atan.eval(&env).unwrap() - 1.0 / 1.09_f64).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_diff_constants_and_factorial() {
+        assert_eq!(differentiate(&Expr::pi(), "x"), Expr::int(0));
+        assert_eq!(differentiate(&Expr::e(), "x"), Expr::int(0));
+        assert_eq!(
+            differentiate(&Expr::factorial(Expr::int(5)), "x"),
+            Expr::int(0)
         );
     }
 }

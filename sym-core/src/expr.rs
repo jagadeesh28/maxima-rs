@@ -89,6 +89,33 @@ pub enum Expr {
     /// `sqrt(a)` — square root (sugar for `Pow(a, 1/2)`)
     Sqrt(Box<Expr>),
 
+    /// `sinh(a)` — hyperbolic sine
+    Sinh(Box<Expr>),
+
+    /// `cosh(a)` — hyperbolic cosine
+    Cosh(Box<Expr>),
+
+    /// `tanh(a)` — hyperbolic tangent
+    Tanh(Box<Expr>),
+
+    /// `asin(a)` — inverse sine
+    Asin(Box<Expr>),
+
+    /// `acos(a)` — inverse cosine
+    Acos(Box<Expr>),
+
+    /// `atan(a)` — inverse tangent
+    Atan(Box<Expr>),
+
+    /// π — the circle constant (irrational, kept symbolic until evaluation)
+    Pi,
+
+    /// e — Euler's number (irrational, kept symbolic until evaluation)
+    E,
+
+    /// Factorial: `n!`
+    Factorial(Box<Expr>),
+
     /// A tensor with indices (Ricci calculus). E.g. $T^i_j$
     Tensor(String, Vec<Index>),
 
@@ -235,6 +262,51 @@ impl Expr {
         Expr::Sqrt(Box::new(a))
     }
 
+    /// `sinh(a)` — hyperbolic sine
+    pub fn sinh(a: Expr) -> Self {
+        Expr::Sinh(Box::new(a))
+    }
+
+    /// `cosh(a)` — hyperbolic cosine
+    pub fn cosh(a: Expr) -> Self {
+        Expr::Cosh(Box::new(a))
+    }
+
+    /// `tanh(a)` — hyperbolic tangent
+    pub fn tanh(a: Expr) -> Self {
+        Expr::Tanh(Box::new(a))
+    }
+
+    /// `asin(a)` — inverse sine
+    pub fn asin(a: Expr) -> Self {
+        Expr::Asin(Box::new(a))
+    }
+
+    /// `acos(a)` — inverse cosine
+    pub fn acos(a: Expr) -> Self {
+        Expr::Acos(Box::new(a))
+    }
+
+    /// `atan(a)` — inverse tangent
+    pub fn atan(a: Expr) -> Self {
+        Expr::Atan(Box::new(a))
+    }
+
+    /// π constant
+    pub fn pi() -> Self {
+        Expr::Pi
+    }
+
+    /// Euler's number `e`
+    pub fn e() -> Self {
+        Expr::E
+    }
+
+    /// Factorial `a!`
+    pub fn factorial(a: Expr) -> Self {
+        Expr::Factorial(Box::new(a))
+    }
+
     /// `Derivative`
     pub fn derivative(expr: Expr, var: Expr) -> Self {
         Expr::Derivative(Box::new(expr), Box::new(var))
@@ -317,9 +389,17 @@ impl Expr {
             | Expr::Tan(a)
             | Expr::Exp(a)
             | Expr::Ln(a)
-            | Expr::Sqrt(a) => {
+            | Expr::Sqrt(a)
+            | Expr::Sinh(a)
+            | Expr::Cosh(a)
+            | Expr::Tanh(a)
+            | Expr::Asin(a)
+            | Expr::Acos(a)
+            | Expr::Atan(a)
+            | Expr::Factorial(a) => {
                 a.collect_vars(vars);
             }
+            Expr::Pi | Expr::E => {}
             Expr::Tensor(name, _indices) => {
                 vars.insert(name.clone());
             }
@@ -385,6 +465,27 @@ impl Expr {
                 let v = a.eval(env)?;
                 if v < 0.0 { None } else { Some(v.sqrt()) }
             }
+            Expr::Sinh(a) => Some(a.eval(env)?.sinh()),
+            Expr::Cosh(a) => Some(a.eval(env)?.cosh()),
+            Expr::Tanh(a) => Some(a.eval(env)?.tanh()),
+            Expr::Asin(a) => Some(a.eval(env)?.asin()),
+            Expr::Acos(a) => Some(a.eval(env)?.acos()),
+            Expr::Atan(a) => Some(a.eval(env)?.atan()),
+            Expr::Pi => Some(std::f64::consts::PI),
+            Expr::E => Some(std::f64::consts::E),
+            Expr::Factorial(a) => {
+                let v = a.eval(env)?;
+                if v < 0.0 || v.fract() != 0.0 || v > 170.0 {
+                    None
+                } else {
+                    let n = v as u32;
+                    let mut acc = 1.0_f64;
+                    for k in 2..=n {
+                        acc *= f64::from(k);
+                    }
+                    Some(acc)
+                }
+            }
             Expr::Tensor(_, _) => {
                 // Tensor cannot be evaluated to a scalar natively right now
                 None
@@ -416,7 +517,15 @@ impl Expr {
             | Expr::Tan(a)
             | Expr::Exp(a)
             | Expr::Ln(a)
-            | Expr::Sqrt(a) => 1 + a.node_count(),
+            | Expr::Sqrt(a)
+            | Expr::Sinh(a)
+            | Expr::Cosh(a)
+            | Expr::Tanh(a)
+            | Expr::Asin(a)
+            | Expr::Acos(a)
+            | Expr::Atan(a)
+            | Expr::Factorial(a) => 1 + a.node_count(),
+            Expr::Pi | Expr::E => 1,
             Expr::Tensor(_, _) => 1,
             Expr::Derivative(a, b) | Expr::Integral(a, b) => 1 + a.node_count() + b.node_count(),
             Expr::Sum(a, b, c, d) => {
@@ -464,6 +573,15 @@ impl fmt::Display for Expr {
             Expr::Exp(a) => write!(f, "exp({a})"),
             Expr::Ln(a) => write!(f, "ln({a})"),
             Expr::Sqrt(a) => write!(f, "sqrt({a})"),
+            Expr::Sinh(a) => write!(f, "sinh({a})"),
+            Expr::Cosh(a) => write!(f, "cosh({a})"),
+            Expr::Tanh(a) => write!(f, "tanh({a})"),
+            Expr::Asin(a) => write!(f, "asin({a})"),
+            Expr::Acos(a) => write!(f, "acos({a})"),
+            Expr::Atan(a) => write!(f, "atan({a})"),
+            Expr::Pi => write!(f, "%pi"),
+            Expr::E => write!(f, "%e"),
+            Expr::Factorial(a) => write!(f, "({a})!"),
             Expr::Tensor(name, indices) => {
                 write!(f, "{}", name)?;
                 for idx in indices {
@@ -739,5 +857,49 @@ mod tests {
             (result - 0.0).abs() < 1e-15,
             "Rosenbrock at (1,1) should be 0, got {result}"
         );
+    }
+
+    #[test]
+    fn test_hyperbolic_display_and_eval() {
+        let expr = Expr::sinh(Expr::int(0));
+        assert_eq!(format!("{expr}"), "sinh(0)");
+        assert_eq!(expr.eval(&HashMap::new()), Some(0.0));
+        let env = HashMap::new();
+        assert!((Expr::cosh(Expr::int(0)).eval(&env).unwrap() - 1.0).abs() < 1e-15);
+        assert!((Expr::tanh(Expr::int(0)).eval(&env).unwrap()).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_inverse_trig_eval() {
+        let env = HashMap::new();
+        assert!(Expr::asin(Expr::int(0)).eval(&env).unwrap().abs() < 1e-15);
+        assert!(Expr::acos(Expr::int(1)).eval(&env).unwrap().abs() < 1e-15);
+        assert!(Expr::atan(Expr::int(0)).eval(&env).unwrap().abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_constants_display_and_eval() {
+        let env = HashMap::new();
+        assert_eq!(format!("{}", Expr::pi()), "%pi");
+        assert_eq!(format!("{}", Expr::e()), "%e");
+        assert!((Expr::pi().eval(&env).unwrap() - std::f64::consts::PI).abs() < 1e-15);
+        assert!((Expr::e().eval(&env).unwrap() - std::f64::consts::E).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_factorial_display_and_eval() {
+        let env = HashMap::new();
+        let f = Expr::factorial(Expr::int(5));
+        assert_eq!(format!("{f}"), "(5)!");
+        assert_eq!(f.eval(&env), Some(120.0));
+        assert_eq!(Expr::factorial(Expr::frac(1, 2)).eval(&env), None);
+        assert_eq!(Expr::factorial(Expr::int(1)).eval(&env), Some(1.0));
+    }
+
+    #[test]
+    fn test_new_nodes_variables() {
+        let expr = Expr::add(Expr::pi(), Expr::factorial(Expr::var("x")));
+        assert_eq!(expr.variables(), vec!["x".to_string()]);
+        assert_eq!(Expr::e().variables(), Vec::<String>::new());
     }
 }

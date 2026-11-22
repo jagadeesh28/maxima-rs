@@ -194,6 +194,29 @@ impl Rat {
         }
     }
 
+    /// Attempt to compute `n!` for a non-negative integer rational.
+    ///
+    /// Returns `None` for non-integers, negative values, or arguments above
+    /// `100` (guarding against pathological constant folding).
+    ///
+    /// ```ignore
+    /// assert_eq!(Rat::factorial(&Rat::from_int(5)), Some(Rat::from_int(120)));
+    /// ```
+    pub fn factorial(r: &BigRational) -> Option<BigRational> {
+        if !Self::is_integer(r) {
+            return None;
+        }
+        let n = r.numer().to_u32()?;
+        if n > 100 {
+            return None;
+        }
+        let mut acc = BigInt::one();
+        for k in 2..=n {
+            acc *= BigInt::from(k);
+        }
+        Some(BigRational::from_integer(acc))
+    }
+
     /// Negate a rational.
     pub fn negate(r: &BigRational) -> BigRational {
         -r

@@ -106,6 +106,52 @@ pub fn emit_expr(expr: &Expr, config: &CodegenConfig) -> TokenStream {
             let ea = emit_expr(a, config);
             quote!(#ea.sqrt())
         }
+        Expr::Sinh(a) => {
+            let ea = emit_expr(a, config);
+            quote!(#ea.sinh())
+        }
+        Expr::Cosh(a) => {
+            let ea = emit_expr(a, config);
+            quote!(#ea.cosh())
+        }
+        Expr::Tanh(a) => {
+            let ea = emit_expr(a, config);
+            quote!(#ea.tanh())
+        }
+        Expr::Asin(a) => {
+            let ea = emit_expr(a, config);
+            quote!(#ea.asin())
+        }
+        Expr::Acos(a) => {
+            let ea = emit_expr(a, config);
+            quote!(#ea.acos())
+        }
+        Expr::Atan(a) => {
+            let ea = emit_expr(a, config);
+            quote!(#ea.atan())
+        }
+        Expr::Pi => {
+            let ty = config.float_type.type_tokens();
+            quote!(#ty::consts::PI)
+        }
+        Expr::E => {
+            let ty = config.float_type.type_tokens();
+            quote!(#ty::consts::E)
+        }
+        Expr::Factorial(a) => {
+            let ea = emit_expr(a, config);
+            let ty = config.float_type.type_tokens();
+            quote! {{
+                let __n = #ea as u32;
+                let mut __acc: #ty = 1.0;
+                let mut __k: u32 = 2;
+                while __k <= __n {
+                    __acc *= __k as #ty;
+                    __k += 1;
+                }
+                __acc
+            }}
+        }
         Expr::Tensor(name, indices) => {
             let mut s = name.clone();
             for idx in indices {
@@ -203,5 +249,32 @@ mod tests {
         let tokens = emit_cse_block(&cse, &CodegenConfig::default());
         let s = tokens.to_string();
         assert!(s.contains("let _t"));
+    }
+
+    #[test]
+    fn test_emit_new_nodes() {
+        let cfg = CodegenConfig::default();
+        assert!(
+            emit_expr(&Expr::sinh(Expr::var("x")), &cfg)
+                .to_string()
+                .contains("sinh")
+        );
+        assert!(
+            emit_expr(&Expr::atan(Expr::var("x")), &cfg)
+                .to_string()
+                .contains("atan")
+        );
+        assert!(
+            emit_expr(&Expr::pi(), &cfg)
+                .to_string()
+                .contains("consts :: PI")
+        );
+        assert!(
+            emit_expr(&Expr::e(), &cfg)
+                .to_string()
+                .contains("consts :: E")
+        );
+        let fac = emit_expr(&Expr::factorial(Expr::int(5)), &cfg).to_string();
+        assert!(fac.contains("__acc"));
     }
 }

@@ -91,9 +91,17 @@ fn count_subexprs(expr: &Expr, counts: &mut HashMap<Expr, usize>) {
         | Expr::Tan(a)
         | Expr::Exp(a)
         | Expr::Ln(a)
-        | Expr::Sqrt(a) => {
+        | Expr::Sqrt(a)
+        | Expr::Sinh(a)
+        | Expr::Cosh(a)
+        | Expr::Tanh(a)
+        | Expr::Asin(a)
+        | Expr::Acos(a)
+        | Expr::Atan(a)
+        | Expr::Factorial(a) => {
             count_subexprs(a, counts);
         }
+        Expr::Pi | Expr::E => {}
         Expr::Tensor(_, _) => {}
         Expr::Derivative(a, b) | Expr::Integral(a, b) => {
             count_subexprs(a, counts);
@@ -149,6 +157,15 @@ fn substitute_bindings(expr: &Expr, binding_map: &HashMap<Expr, String>) -> Expr
         Expr::Exp(a) => Expr::exp(substitute_bindings(a, binding_map)),
         Expr::Ln(a) => Expr::ln(substitute_bindings(a, binding_map)),
         Expr::Sqrt(a) => Expr::sqrt(substitute_bindings(a, binding_map)),
+        Expr::Sinh(a) => Expr::sinh(substitute_bindings(a, binding_map)),
+        Expr::Cosh(a) => Expr::cosh(substitute_bindings(a, binding_map)),
+        Expr::Tanh(a) => Expr::tanh(substitute_bindings(a, binding_map)),
+        Expr::Asin(a) => Expr::asin(substitute_bindings(a, binding_map)),
+        Expr::Acos(a) => Expr::acos(substitute_bindings(a, binding_map)),
+        Expr::Atan(a) => Expr::atan(substitute_bindings(a, binding_map)),
+        Expr::Factorial(a) => Expr::factorial(substitute_bindings(a, binding_map)),
+        Expr::Pi => Expr::Pi,
+        Expr::E => Expr::E,
         Expr::Tensor(name, indices) => Expr::tensor(name, indices.clone()),
         Expr::Derivative(a, b) => Expr::derivative(
             substitute_bindings(a, binding_map),

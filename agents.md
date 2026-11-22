@@ -487,6 +487,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 - `cargo test --workspace` green; round-trip tests for all new variants.
 - `--no-default-features` and `--all-features` both build.
 
+**Status**: ✅ Completed — 9 new `Expr` variants, derivatives, `MathLang` round-trip, FLOP weights, CSE traversal, codegen, macros, and web LaTeX rendering all covered; `cargo test --workspace --all-features` green (94 sym-core unit tests).
+
 ---
 
 ## Phase 16 — Maxima String Parser Parity
