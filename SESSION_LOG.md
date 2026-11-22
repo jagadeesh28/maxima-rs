@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–32 Complete ✅ — Phase 33 Planned (WebUI) ⬜**
+### Current Phase: **All Phases 1–33 Complete ✅**
 
 ### Phase Completion Tracker
 
@@ -123,6 +123,7 @@ When starting a new session, instruct the AI:
 | 30. ODE Solvers | `solve` | ✅ Completed | 1st-order linear + 2nd-order constant coefficients (`OdeSolution`), back-substitution verified (139 unit + 3 integration) |
 | 31. Maxima Parser CAS Syntax & Facade | `cas`/`parser` | ✅ Completed | `parse_maxima_cas` + `CasCommand`/`execute_cas`, prelude & maxima-rs CAS re-exports (139 unit + 10 integration) |
 | 32. Verification & Maxima Benchmarks | all | ✅ Completed | Proptests (integrate/solve invariants, 10³ cases) + Maxima parity cases; fmt/clippy green (139 unit) |
+| 33. WebUI Recursive Composer & E2E | `maxima-web` | ✅ Completed | `GET /api/functions` catalog + recursive composer UI + `webui_e2e` (8 web + 6 e2e tests) |
 
 ---
 
@@ -579,6 +580,31 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - Parity cases are a curated representative subset, not exhaustive `.mac` playback.
+
+---
+
+## Session 18 — Phase 33: WebUI Recursive Composer & E2E ✅
+
+**Date**: 2026-11-22
+**Scope**: Recursive expression composer + final webUI integration suite (Phase 33).
+
+### Deliverables
+- `maxima-web/src/lib.rs`: exposes `api` + `service` as a library so tests share the HTTP backend code.
+- `maxima-web/src/api.rs`: `FunctionCatalogEntry` + `FunctionCatalog`.
+- `maxima-web/src/service.rs`: `functions_catalog()` (unary/binary/CAS entries with Maxima+LaTeX templates) + unit test.
+- `maxima-web/src/main.rs`: `GET /api/functions` route (binary now uses the library).
+- `maxima-web/static/index.html` / `app.js`: compose dropdown, recursive wrap (cursor-aware, Maxima+LaTeX), Undo/Clear history.
+- `tests/integration/webui_e2e.rs` (6 tests) registered in `tests/Cargo.toml` (tests crate now depends on `maxima-web`).
+
+### Verification
+- `cargo test -p maxima-web`: 8 passed (incl. function catalog).
+- `cargo test -p maxima-tests --test webui_e2e`: 6 passed (`/functions` catalog, `/rules` ≥92, simplify recursive, differentiate, provenance, matrix).
+- `node --check maxima-web/static/app.js`: OK.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- Composer inserts templates via string wrapping (no DOM-level AST editor); cursor selection is honored.
+
 
 
 

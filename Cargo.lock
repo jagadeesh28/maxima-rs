@@ -412,6 +412,7 @@ name = "maxima-tests"
 version = "0.2.0"
 dependencies = [
  "maxima-rs",
+ "maxima-web",
  "proptest",
  "sym-core",
  "sym-macros",

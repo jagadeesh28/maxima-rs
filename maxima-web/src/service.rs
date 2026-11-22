@@ -544,3 +544,107 @@ mod tests {
         assert!(resp.extra.contains_key("rules"));
     }
 }
+
+/// Catalog of composable functions/operators for the webUI recursive composer.
+pub fn functions_catalog() -> crate::api::FunctionCatalog {
+    use crate::api::{FunctionCatalog, FunctionCatalogEntry};
+
+    let mut functions = Vec::new();
+
+    for name in [
+        "sin", "cos", "tan", "sinh", "cosh", "tanh", "asin", "acos", "atan", "exp", "ln", "sqrt",
+    ] {
+        functions.push(FunctionCatalogEntry {
+            name: name.to_string(),
+            arity: 1,
+            kind: "unary",
+            maxima_template: format!("{name}({{}})"),
+            latex_template: format!("\\{name}({{}})"),
+        });
+    }
+    functions.push(FunctionCatalogEntry {
+        name: "factorial".to_string(),
+        arity: 1,
+        kind: "unary",
+        maxima_template: "({})!".to_string(),
+        latex_template: "({})!".to_string(),
+    });
+    for op in ["+", "-", "*", "/", "^"] {
+        functions.push(FunctionCatalogEntry {
+            name: op.to_string(),
+            arity: 2,
+            kind: "binary",
+            maxima_template: format!("({{}}) {op} ({{}})"),
+            latex_template: format!("({{}}) {op} ({{}})"),
+        });
+    }
+    for name in ["expand", "factor", "ratsimp"] {
+        functions.push(FunctionCatalogEntry {
+            name: name.to_string(),
+            arity: 1,
+            kind: "cas",
+            maxima_template: format!("{name}({{}})"),
+            latex_template: format!("{name}({{}})"),
+        });
+    }
+    for name in ["integrate", "limit", "solve"] {
+        functions.push(FunctionCatalogEntry {
+            name: name.to_string(),
+            arity: 2,
+            kind: "cas",
+            maxima_template: format!("{name}({{}}, x)"),
+            latex_template: format!("{name}({{}}, x)"),
+        });
+    }
+    functions.push(FunctionCatalogEntry {
+        name: "ode2".to_string(),
+        arity: 3,
+        kind: "cas",
+        maxima_template: "ode2({}, y, x)".to_string(),
+        latex_template: "ode2({}, y, x)".to_string(),
+    });
+    functions.push(FunctionCatalogEntry {
+        name: "taylor".to_string(),
+        arity: 2,
+        kind: "cas",
+        maxima_template: "taylor({}, x, 0, 6)".to_string(),
+        latex_template: "taylor({}, x, 0, 6)".to_string(),
+    });
+
+    FunctionCatalog { functions }
+}
+
+#[cfg(test)]
+mod function_catalog_tests {
+    use super::functions_catalog;
+
+    #[test]
+    fn catalog_has_expected_entries() {
+        let cat = functions_catalog();
+        assert!(
+            cat.functions
+                .iter()
+                .any(|f| f.name == "sin" && f.arity == 1 && f.kind == "unary")
+        );
+        assert!(
+            cat.functions
+                .iter()
+                .any(|f| f.name == "+" && f.arity == 2 && f.kind == "binary")
+        );
+        assert!(
+            cat.functions
+                .iter()
+                .any(|f| f.name == "expand" && f.kind == "cas")
+        );
+        assert!(
+            cat.functions
+                .iter()
+                .any(|f| f.name == "ode2" && f.arity == 3)
+        );
+        assert!(
+            cat.functions
+                .iter()
+                .all(|f| f.maxima_template.contains("{}"))
+        );
+    }
+}

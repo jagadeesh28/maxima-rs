@@ -1079,12 +1079,12 @@ expression, and add a final end-to-end integration test suite covering the whole
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `maxima-web/static/index.html` | `maxima-web` | ⬜ Not started | "Compose / function builder" dropdown beside `#exprInput`; undo/clear controls |
-| `maxima-web/static/app.js` | `maxima-web` | ⬜ Not started | Recursive `compose()`/`nest()` logic, cursor-aware insertion, input-format-aware templates (Maxima vs LaTeX), undo history |
-| `maxima-web/src/api.rs` | `maxima-web` | ⬜ Not started | `FunctionCatalogEntry` + `FunctionCatalog` response models |
-| `maxima-web/src/service.rs` | `maxima-web` | ⬜ Not started | `functions_catalog()` (name, arity, kind, maxima/latex templates) + unit tests |
-| `maxima-web/src/main.rs` | `maxima-web` | ⬜ Not started | Register `GET /api/functions`; keep `/api/operations` authoritative |
-| `tests/integration/webui_e2e.rs` | `maxima-web` | ⬜ Not started | Final integration test suite: API contract + recursive composition + CAS round-trips |
+| `maxima-web/static/index.html` | `maxima-web` | ✅ Completed | "Compose / function builder" dropdown beside `#exprInput`; undo/clear controls |
+| `maxima-web/static/app.js` | `maxima-web` | ✅ Completed | Recursive `compose()`/`nest()` logic, cursor-aware insertion, input-format-aware templates (Maxima vs LaTeX), undo history |
+| `maxima-web/src/api.rs` | `maxima-web` | ✅ Completed | `FunctionCatalogEntry` + `FunctionCatalog` response models |
+| `maxima-web/src/service.rs` | `maxima-web` | ✅ Completed | `functions_catalog()` (name, arity, kind, maxima/latex templates) + unit tests |
+| `maxima-web/src/main.rs` | `maxima-web` | ✅ Completed | Register `GET /api/functions`; keep `/api/operations` authoritative |
+| `tests/integration/webui_e2e.rs` | `maxima-web` | ✅ Completed | Final integration test suite: API contract + recursive composition + CAS round-trips |
 
 ### Requirements
 - **Composable catalog** (served by `GET /api/functions`):
@@ -1113,5 +1113,5 @@ expression, and add a final end-to-end integration test suite covering the whole
 - `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
   and `cargo test --workspace --all-features` all exit green with no regressions.
 
-**Status**: ⬜ Not started
+**Status**: ✅ Completed — `GET /api/functions` catalog, recursive composer dropdown (wrap/undo/clear, Maxima+LaTeX aware), `webui_e2e` suite; 8 web tests + 6 e2e tests green.
 

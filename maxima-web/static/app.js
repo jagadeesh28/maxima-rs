@@ -286,3 +286,85 @@ fetchRules();
 checkHealth();
 setInterval(checkHealth, 30000);
 initTheme();
+
+// ── Recursive expression composer ────────────────────────────────
+const composeHistory = [];
+const composeEls = {
+  sel: document.getElementById('composeFn'),
+  apply: document.getElementById('composeApplyBtn'),
+  undo: document.getElementById('composeUndoBtn'),
+  clear: document.getElementById('composeClearBtn')
+};
+
+async function fetchFunctions() {
+  if (!composeEls.sel) return;
+  try {
+    const res = await fetch(API + '/functions');
+    const data = await res.json();
+    composeEls.sel.innerHTML = '';
+    for (const f of (data.functions || [])) {
+      const o = document.createElement('option');
+      o.value = f.name + '|' + f.kind + '|' + f.arity;
+      o.textContent = f.kind + ': ' + f.name;
+      o.title = f.maxima_template;
+      composeEls.sel.appendChild(o);
+    }
+  } catch (e) {
+    console.warn('could not fetch functions', e);
+  }
+}
+
+function pushComposeHistory() {
+  composeHistory.push(els.expr.value);
+  if (composeHistory.length > 50) composeHistory.shift();
+  if (composeEls.undo) composeEls.undo.disabled = composeHistory.length === 0;
+}
+
+function wrapArg(name, kind, arg, fmt) {
+  if (kind === 'binary') {
+    return '(' + arg + ') ' + name + ' 1';
+  }
+  if (kind === 'cas') {
+    if (name === 'ode2') return 'ode2(' + arg + ', y, x)';
+    if (name === 'taylor') return 'taylor(' + arg + ', x, 0, 6)';
+    if (name === 'integrate' || name === 'limit' || name === 'solve') return name + '(' + arg + ', x)';
+    return name + '(' + arg + ')';
+  }
+  if (name === 'factorial') return '(' + arg + ')!';
+  if (fmt === 'latex') return '\\' + name + '{' + arg + '}';
+  return name + '(' + arg + ')';
+}
+
+function applyCompose() {
+  if (!composeEls.sel || !composeEls.sel.value) return;
+  const [name, kind] = composeEls.sel.value.split('|');
+  const ta = els.expr;
+  const full = ta.value;
+  const start = ta.selectionStart == null ? full.length : ta.selectionStart;
+  const end = ta.selectionEnd == null ? full.length : ta.selectionEnd;
+  const hasSel = start !== end;
+  const base = (hasSel ? full.slice(start, end) : full).trim() || 'x';
+  pushComposeHistory();
+  const inserted = wrapArg(name, kind, base, els.format.value);
+  if (hasSel) {
+    ta.value = full.slice(0, start) + inserted + full.slice(end);
+    ta.selectionStart = start;
+    ta.selectionEnd = start + inserted.length;
+  } else {
+    ta.value = inserted;
+  }
+  ta.focus();
+}
+
+if (composeEls.apply) composeEls.apply.addEventListener('click', applyCompose);
+if (composeEls.undo) composeEls.undo.addEventListener('click', () => {
+  const prev = composeHistory.pop();
+  if (prev !== undefined) els.expr.value = prev;
+  composeEls.undo.disabled = composeHistory.length === 0;
+});
+if (composeEls.clear) composeEls.clear.addEventListener('click', () => {
+  pushComposeHistory();
+  els.expr.value = '';
+  els.expr.focus();
+});
+fetchFunctions();

@@ -13,11 +13,8 @@ use axum::{
 use std::sync::Arc;
 use tower_http::services::ServeDir;
 
-mod api;
-mod service;
-
-use api::{ComputeRequest, HealthResponse, Operation};
-use service::compute;
+use maxima_web::api::{self, ComputeRequest, HealthResponse, Operation};
+use maxima_web::service::{self, compute};
 
 #[derive(Clone)]
 struct AppState {
@@ -34,6 +31,7 @@ async fn main() {
         .route("/health", get(health))
         .route("/operations", get(operations))
         .route("/rules", get(rules))
+        .route("/functions", get(functions))
         .route("/compute", post(compute_handler))
         .with_state(state.clone());
 
@@ -149,6 +147,10 @@ async fn operations(State(_): State<Arc<AppState>>) -> Json<Vec<Operation>> {
 
 async fn rules(State(_): State<Arc<AppState>>) -> Json<api::RulesResponse> {
     Json(service::rules_catalog())
+}
+
+async fn functions(State(_): State<Arc<AppState>>) -> Json<api::FunctionCatalog> {
+    Json(service::functions_catalog())
 }
 
 async fn compute_handler(

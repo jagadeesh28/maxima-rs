@@ -8,6 +8,7 @@ publish = false
 maxima-rs = { path = "../maxima-rs", features = ["full"] }
 sym-core = { path = "../sym-core", features = ["full"] }
 sym-macros = { path = "../sym-macros" }
+maxima-web = { path = "../maxima-web" }
 proptest = { workspace = true }
 
 [[test]]
@@ -105,6 +106,10 @@ path = "proptest/solve_correctness.rs"
 [[test]]
 name = "maxima_cas_parity"
 path = "integration/maxima_cas_parity.rs"
+
+[[test]]
+name = "webui_e2e"
+path = "integration/webui_e2e.rs"
 
 [[test]]
 name = "series"

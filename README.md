@@ -67,6 +67,7 @@ Expanding maxima-rs into a high-performance Computer Algebra System rivaling Wol
 | 30 | Ordinary Differential Equation Solvers | `solve` | ✅ Completed | Linear 1st-order + 2nd-order constant-coefficient (real distinct/repeated/complex) with `_C1`/`_C2`, back-substitution verified |
 | 31 | Maxima CAS Syntax & Prelude | `cas`/`parser` | ✅ Completed | `parse_maxima_cas`/`execute_cas` for expand/factor/ratsimp/partfrac/limit/integrate/defint/taylor/solve/ode2; prelude re-exports CAS ops |
 | 32 | Verification & Maxima Benchmarks | all | ✅ Completed | Proptest integration/solve invariants (≥10³ cases) + Maxima-style parity cases (`rtest_integrate/limit/solve`) + clean fmt/clippy |
+| 33 | WebUI Recursive Composer & E2E | `maxima-web` | ✅ Completed | Dropdown function composer (recursive wrap, undo, format-aware), `GET /api/functions`, `webui_e2e` suite |
 
 ---
 

@@ -106,3 +106,24 @@ pub struct RulesResponse {
     pub by_file: Vec<FileRuleCount>,
     pub rules: Vec<RuleEntry>,
 }
+
+/// One composable function/operator exposed by `GET /api/functions`.
+#[derive(Debug, Clone, Serialize)]
+pub struct FunctionCatalogEntry {
+    /// Function or operator name (`sin`, `expand`, `+`, ...).
+    pub name: String,
+    /// Number of operands/arguments (unary = 1, binary = 2, CAS = 1–3).
+    pub arity: u8,
+    /// Category: `"unary"`, `"binary"`, or `"cas"`.
+    pub kind: &'static str,
+    /// Maxima-syntax composition template (placeholders `{}`).
+    pub maxima_template: String,
+    /// LaTeX-syntax composition template (placeholders `{}`).
+    pub latex_template: String,
+}
+
+/// Response payload for `GET /api/functions` (composable function catalog).
+#[derive(Debug, Clone, Serialize)]
+pub struct FunctionCatalog {
+    pub functions: Vec<FunctionCatalogEntry>,
+}
