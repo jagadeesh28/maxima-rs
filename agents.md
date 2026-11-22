@@ -522,6 +522,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 ### Acceptance Criteria
 - `maxima_coverage` passes with the increased count; provenance invariants hold.
 
+**Status**: ✅ Completed — 27 new rules (19 hyperbolic/inverse-trig citing `sinh.lisp`, 8 deeper `trigi.lisp` identities); registry now 79 provenanced rules; `RuleConfig` gained a `hyperbolic` switch.
+
 ---
 
 ## Phase 18 — 1:1 Rule Expansion II: Rational Normalization & Factorial

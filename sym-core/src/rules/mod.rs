@@ -5,6 +5,7 @@
 
 pub mod arithmetic;
 pub mod exponential;
+pub mod hyperbolic;
 pub mod logarithmic;
 pub mod trigonometric;
 
@@ -23,6 +24,8 @@ pub struct RuleConfig {
     pub exponential: bool,
     /// Enable logarithmic identities (`logarc.lisp`).
     pub logarithmic: bool,
+    /// Enable hyperbolic and inverse-trigonometric identities (`sinh.lisp` / `trigi.lisp`).
+    pub hyperbolic: bool,
 }
 
 impl Default for RuleConfig {
@@ -32,6 +35,7 @@ impl Default for RuleConfig {
             trigonometric: true,
             exponential: true,
             logarithmic: true,
+            hyperbolic: true,
         }
     }
 }
@@ -92,6 +96,15 @@ pub fn get_sourced_rules(config: &RuleConfig) -> Vec<SourcedRule<MathLang, MathA
         }
     }
 
+    // 5. Hyperbolic and inverse-trigonometric rules
+    if config.hyperbolic {
+        for r in hyperbolic::hyperbolic_rules() {
+            if config.fast_math || !r.provenance.fast_math_only {
+                rules.push(r);
+            }
+        }
+    }
+
     rules
 }
 
@@ -113,7 +126,7 @@ mod tests {
         let config = RuleConfig::default();
         let rules = get_rules(&config);
         assert!(!rules.is_empty());
-        assert!(rules.len() >= 30);
+        assert!(rules.len() >= 79);
     }
 
     #[test]

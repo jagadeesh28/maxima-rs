@@ -26,6 +26,7 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 | **14. WebUI Correctness** | `maxima-web` | ✅ **Complete** | Fixed pane layout, JS syntax/copy wiring, `simplify`/`optimize` API contract, service tests |
 | **15. Advanced AST Nodes** | `core` | ✅ **Complete** | `sinh/cosh/tanh`, `asin/acos/atan`, `%pi`/`%e`, factorial threaded through diff, e-graph, cost, CSE, codegen, macros |
 | **16. Maxima Parser Parity** | `parser` | ✅ **Complete** | `%pi`/`%e`, postfix `!`, hyperbolic/inverse trig, `diff`/`integrate`/`sum`, `matrix([...])` |
+| **17. Rule Expansion I** | `egraph` | ✅ **Complete** | 79 provenanced rules; new `sinh.lisp` citations, inverse-trig cancellations, double-angle/angle-sum/`1+tan²=sec²` from `trigi.lisp` |
 
 > **Rule**: This `README.md` file is actively updated upon the completion of every phase.
 
@@ -39,7 +40,7 @@ The detailed requirements live in [`agents.md`](file:///e:/Rust/Max/agents.md).
 | 14 | WebUI | ✅ Complete | Fixed broken `<main>` layout, `copyText()` script bug, and `simplify`/`optimize` API contract |
 | 15 | Parity | ✅ Complete | AST nodes for `sinh/cosh/tanh`, `asin/acos/atan`, `%pi`, `%e`, factorial + full plumbing |
 | 16 | Parity | ✅ Complete | `parse_maxima` parity: constants, factorial, hyperbolic/inverse trig, calculus & matrix forms |
-| 17 | Parity | ⬜ Planned | 1:1 rules citing `sinh.lisp` + deeper `trigi.lisp` |
+| 17 | Parity | ✅ Complete | 1:1 rules citing `sinh.lisp` + deeper `trigi.lisp` |
 | 18 | Parity | ⬜ Planned | 1:1 rules citing `nrat4.lisp` (ratsimp) and `sfacts.lisp` (factorial) |
 | 19 | Parity | ⬜ Planned | Matrix fidelity through the e-graph (structured symbol encoding) |
 | 20 | WebUI | ⬜ Planned | `GET /api/rules` + "Maxima coverage" panel in the UI |

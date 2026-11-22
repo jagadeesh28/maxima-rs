@@ -7,7 +7,13 @@ fn test_all_rules_have_maxima_citations() {
     let rules = all_rule_provenances();
     assert!(!rules.is_empty(), "Rule registry should not be empty");
 
-    let valid_source_files = ["simp.lisp", "trigi.lisp", "combin.lisp", "logarc.lisp"];
+    let valid_source_files = [
+        "simp.lisp",
+        "trigi.lisp",
+        "combin.lisp",
+        "logarc.lisp",
+        "sinh.lisp",
+    ];
 
     let mut file_counts = std::collections::HashMap::new();
 
@@ -31,22 +37,16 @@ fn test_all_rules_have_maxima_citations() {
         *file_counts.entry(prov.source_file).or_insert(0) += 1;
     }
 
-    // Verify all 4 primary Maxima source files have active rules mapped
+    // Verify all primary Maxima source files have active rules mapped
+    for file in valid_source_files {
+        assert!(file_counts.contains_key(file), "{file} must have rules");
+    }
+
+    // Phase 17: expanded 1:1 coverage must keep growing.
     assert!(
-        file_counts.contains_key("simp.lisp"),
-        "simp.lisp must have rules"
-    );
-    assert!(
-        file_counts.contains_key("trigi.lisp"),
-        "trigi.lisp must have rules"
-    );
-    assert!(
-        file_counts.contains_key("logarc.lisp"),
-        "logarc.lisp must have rules"
-    );
-    assert!(
-        file_counts.contains_key("combin.lisp"),
-        "combin.lisp must have rules"
+        rules.len() >= 79,
+        "expected at least 79 provenanced rules, found {}",
+        rules.len()
     );
 
     println!("\n=== Maxima Lisp 1:1 Rule Citation Coverage Summary ===");

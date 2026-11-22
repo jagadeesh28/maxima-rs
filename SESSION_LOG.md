@@ -219,3 +219,16 @@ When starting a new session, instruct the AI:
 - Verification: `cargo test -p sym-core --all-features` (100 unit + 16 doctests),
   `cargo test -p maxima-tests --test parser_maxima` (8 passed).
 
+
+### Phase 17 — Rule Expansion I ✅
+- New `sym-core/src/rules/hyperbolic.rs` (19 rules) citing `sinh.lisp`
+  (`simp-%sinh`/`simp-%cosh`/`simp-%tanh`) and `trigi.lisp`
+  (`simp-%asin`/`simp-%acos`/`simp-%atan`): zero values, parity, `cosh²-sinh²=1`,
+  `tanh` definition, inverse cancellations.
+- Extended `rules/trigonometric.rs` (8 rules): double-angle, angle-sum (`sin`/`cos`/`tan`),
+  `1+tan²=1/cos²`, and `1∓sin²/cos²` complements.
+- `RuleConfig` gained `hyperbolic` (default `true`); `rules/mod.rs` registers the new set.
+- `maxima_coverage` now validates 5 Maxima Lisp files and asserts ≥ 79 rules.
+- Added hyperbolic/inverse-trig golden tests.
+- Verification: full workspace tests pass; clippy `-D warnings` clean.
+
