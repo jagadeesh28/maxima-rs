@@ -46,3 +46,6 @@ pub mod parser;
 
 #[cfg(feature = "pipeline")]
 pub mod pipeline;
+
+#[cfg(feature = "poly")]
+pub mod poly;
