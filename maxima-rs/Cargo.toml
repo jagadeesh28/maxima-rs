@@ -2,6 +2,7 @@
 name = "maxima-rs"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 description = "Compile-time symbolic math optimization via e-graph equality saturation"
 keywords = ["symbolic", "mathematics", "optimization", "codegen", "macro"]
 categories = ["mathematics", "compilers"]

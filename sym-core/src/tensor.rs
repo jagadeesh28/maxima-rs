@@ -69,10 +69,9 @@ pub fn decode_tensor_symbol(s: &str) -> Option<(String, Vec<Index>)> {
     for part in parts {
         if let Some(stripped) = part.strip_prefix("C|") {
             indices.push(Index::cov(stripped));
-        } else if let Some(stripped) = part.strip_prefix("U|") {
-            indices.push(Index::con(stripped));
         } else {
-            return None;
+            let stripped = part.strip_prefix("U|")?;
+            indices.push(Index::con(stripped));
         }
     }
     Some((name, indices))
