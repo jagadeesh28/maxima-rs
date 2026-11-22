@@ -87,6 +87,10 @@ name = "solvers_alg"
 path = "integration/solvers_alg.rs"
 
 [[test]]
+name = "solvers_ode"
+path = "integration/solvers_ode.rs"
+
+[[test]]
 name = "series"
 path = "integration/series.rs"
 

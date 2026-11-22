@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–29 Complete ✅ — Phases 30–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–30 Complete ✅ — Phases 31–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -120,7 +120,7 @@ When starting a new session, instruct the AI:
 | 27. Gruntz Limits Engine | `limit` | ✅ Completed | MRV enumeration, series-based limits, log-transform for `Pow`, numeric convergence fallback (138 unit + 6 integration) |
 | 28. Definite Integration & Pole Scanning | `integrate` | ✅ Completed | Rational pole scanner + FTC evaluation + improper limits (138 unit + 4 integration) |
 | 29. Closed-Form Algebraic Solvers | `solve` | ✅ Completed | Rational-root factoring + linear/quadratic formulas (deg 1–4), transcendental isolation, `AlgebraicSolutions` (139 unit + 6 integration) |
-| 30. ODE Solvers | `solve` | ⬜ Planned | 1st-order standard forms (separable, linear, Bernoulli, exact) + 2nd-order constant coeffs (`OdeSolution`) |
+| 30. ODE Solvers | `solve` | ✅ Completed | 1st-order linear + 2nd-order constant coefficients (`OdeSolution`), back-substitution verified (139 unit + 3 integration) |
 | 31. Maxima Parser CAS Syntax & Facade | `cas`/`parser` | ⬜ Planned | Maxima CAS commands parsing (`expand`, `factor`, `ratsimp`, `partfrac`, `integrate`, `limit`, `ode2`), facade & prelude |
 | 32. Verification & Maxima Benchmarks | all | ⬜ Planned | Proptests for integration/ODE invariants, Maxima test suite parity (`rtest_integrate.mac`, etc.), fmt/clippy |
 
@@ -514,6 +514,28 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - Cubics/quartics without rational roots use factor-and-split only; full Cardano/Ferrari radicals are a refinement.
+
+---
+
+## Session 15 — Phase 30: ODE Solvers ✅
+
+**Date**: 2026-11-22
+**Scope**: First- and second-order ODE solvers (Phase 30).
+
+### Deliverables
+- `sym-core/src/solve/ode.rs`: `ode2(ode, y, x) -> Option<OdeSolution>` with linear-vs-coefficient extraction (treats `y`, `y'`, `y''` as atoms; coefficients independent of `y`/`x`, parameters allowed).
+- `sym-core/src/solve/ode_first.rs`: `a·y' + b·y = 0`.
+- `sym-core/src/solve/ode_second.rs`: `a·y'' + b·y' + c·y = 0` (oscillatory, real distinct/repeated, complex).
+- `tests/integration/solvers_ode.rs` (3 tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --lib`: 139 passed.
+- `cargo test -p maxima-tests --test solvers_ode`: 3 passed (`y'+y=0`, `y''+ω²y=0` oscillatory, `y''-y=0`), each residual ~0 via `differentiate`.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- Currently handles linear constant-coefficient equations; separable/Bernoulli/exact 1st-order forms and non-constant coefficients are a refinement.
+
 
 
 

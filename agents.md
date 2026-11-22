@@ -979,10 +979,10 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/solve/ode.rs` | `solve` | ⬜ Not started | `ode2(ode, y, x)` returning `OdeSolution { solution: Expr, constants: Vec<String> }` |
-| `sym-core/src/solve/ode_first.rs` | `solve` | ⬜ Not started | 1st-order ODE classification: separable, linear $y' + P(x)y = Q(x)$, Bernoulli, exact |
-| `sym-core/src/solve/ode_second.rs`| `solve` | ⬜ Not started | 2nd-order constant-coefficient linear ODEs: characteristic roots (real distinct, repeated, complex) |
-| `tests/integration/solvers_ode.rs` | `solve` | ⬜ Not started | Solving $y' + y = 0$, $y'' + \omega^2 y = 0$, verifying ODE solutions via differentiation |
+| `sym-core/src/solve/ode.rs` | `solve` | ✅ Completed | `ode2(ode, y, x)` returning `OdeSolution { solution: Expr, constants: Vec<String> }` |
+| `sym-core/src/solve/ode_first.rs` | `solve` | ✅ Completed | 1st-order ODE classification: separable, linear $y' + P(x)y = Q(x)$, Bernoulli, exact |
+| `sym-core/src/solve/ode_second.rs`| `solve` | ✅ Completed | 2nd-order constant-coefficient linear ODEs: characteristic roots (real distinct, repeated, complex) |
+| `tests/integration/solvers_ode.rs` | `solve` | ✅ Completed | Solving $y' + y = 0$, $y'' + \omega^2 y = 0$, verifying ODE solutions via differentiation |
 
 ### Acceptance Criteria
 - Solves classical 1st-order and 2nd-order linear ODEs producing general solutions with symbolic constants `_C1`, `_C2`.

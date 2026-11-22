@@ -1,7 +1,12 @@
-//! Closed-form algebraic solvers (Phase 29).
+//! Ordinary differential equation solvers (Phase 30).
 
 pub mod alg;
 pub mod isolate;
+pub mod ode;
+pub mod ode_first;
+pub mod ode_second;
+
+pub use ode::{OdeSolution, ode2};
 
 use crate::expr::Expr;
 
