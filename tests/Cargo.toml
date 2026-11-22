@@ -65,3 +65,7 @@ path = "proptest/diff_correctness.rs"
 [[test]]
 name = "poly_expand"
 path = "integration/poly_expand.rs"
+
+[[test]]
+name = "poly_rat"
+path = "integration/poly_rat.rs"

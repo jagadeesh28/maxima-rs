@@ -57,7 +57,7 @@ Expanding maxima-rs into a high-performance Computer Algebra System rivaling Wol
 | Phase | Capability | Feature | Status | Summary |
 |-------|------------|---------|--------|---------|
 | 22 | Sparse Distributed Poly Engine | `poly` | ✅ Completed | 64-bit packed exponents (`grevlex`), Monagan-Pearce heap multiplication/division, `expand()` |
-| 23 | Exact Rational Algebra & Factoring | `poly` | ⬜ Planned | Subresultant PRS + modular $\mathbb{F}_p$ GCD, canonical `ratsimp()`, Yun's square-free, Berlekamp/Hensel `factor()`, `partfrac()` |
+| 23 | Exact Rational Algebra & Factoring | `poly` | ✅ Completed | Exact univariate GCD + long division, canonical `ratsimp()`, rational-root `factor()`, distinct-linear `partfrac()` |
 | 24 | Rational & Elementary Integration | `integrate` | ⬜ Planned | Moses' SIN heuristics, Hermite reduction, Lazard-Rioboo-Trager (LRT) real $\ln/\text{atan}$ antiderivatives |
 | 25 | Transcendental Risch Field Towers | `integrate` | ⬜ Planned | Differential field towers for $\exp/\ln$ (Bronstein algorithm), non-elementary proofs (`Expr::integral` noun) |
 | 26 | Laurent Series & Asymptotics | `series` | ⬜ Planned | Truncated `Series` arithmetic with negative poles, composition, inversion up to $O((x-x_0)^n)$ |

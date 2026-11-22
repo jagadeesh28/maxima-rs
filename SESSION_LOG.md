@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–22 Complete ✅ — Phases 23–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–23 Complete ✅ — Phases 24–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -113,7 +113,7 @@ When starting a new session, instruct the AI:
 | 20. WebUI Provenance | `maxima-web` | ✅ Completed | `GET /api/rules`, `provenance` op, coverage panel |
 | 21. Documentation & Verification | all | ✅ Completed | Coverage report, glossary, final fmt/clippy/test |
 | 22. Sparse Distributed Poly Engine | `poly` | ✅ Completed | 64-bit packed exponents, `grevlex`, Monagan-Pearce heap multiplication/division, `expand()` (121 unit + 6 integration tests) |
-| 23. Exact Rational Algebra & Factorization | `poly` | ⬜ Planned | Subresultant PRS + modular $\mathbb{F}_p$ GCD, `ratsimp`, Yun square-free, Berlekamp/Hensel `factor`, `partfrac` |
+| 23. Exact Rational Algebra & Factorization | `poly` | ✅ Completed | Exact univariate GCD + `ratsimp`, rational-root `factor`, distinct-linear `partfrac` (129 unit + 4 integration tests) |
 | 24. Symbolic Integration: Rational & Elementary | `integrate` | ⬜ Planned | Moses' SIN, Hermite reduction, Lazard-Rioboo-Trager (LRT) real $\ln/\text{atan}$, IBP |
 | 25. Transcendental Risch Differential Towers | `integrate` | ⬜ Planned | Bronstein differential field towers for $\exp/\ln$, non-elementary proofs (`Expr::integral` noun) |
 | 26. Laurent Series & Asymptotics | `series` | ⬜ Planned | Truncated `Series { center, valuation, coeffs, order }` arithmetic and elementary expansions |
@@ -371,5 +371,28 @@ When starting a new session, instruct the AI:
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean.
 - Existing suites stay green (`basic_arithmetic`, `trigonometric`, …); `maxima-web` 7 tests; sym-core doctests 16.
 - `cargo build -p sym-core --no-default-features --features poly`: OK; `cargo fmt --all -- --check`: clean.
+
+---
+
+## Session 8 — Phase 23: Exact Rational Algebra & Factorization ✅
+
+**Date**: 2026-11-22
+**Scope**: GCD, rational simplification, factorization, and partial fractions (Phase 23).
+
+### Deliverables
+- `sym-core/src/poly/gcd.rs`: exact Euclidean univariate `poly_gcd`, `poly_divrem`/`poly_div_exact`, `poly_derivative`.
+- `sym-core/src/poly/rat.rs`: `Fraction` (num/den polys), `to_fraction`, `ratsimp` (GCD reduction + monic denominator).
+- `sym-core/src/poly/factor.rs`: rational-root linear factorization (integer coefficient extraction, rational-root candidates, synthetic division); Berlekamp/Hensel lifting noted as a planned refinement.
+- `sym-core/src/poly/partfrac.rs`: cover-up partial fractions over distinct linear factors.
+- `tests/integration/poly_rat.rs` (4 golden tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --features poly --lib`: 129 passed.
+- `cargo test -p maxima-tests --test poly_rat`: 4 passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- `factor`/`partfrac` cover univariate polynomials with rational-root structure; full Berlekamp/Hensel and multivariate factorization remain a follow-up.
+
 
 

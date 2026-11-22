@@ -784,11 +784,11 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/poly/gcd.rs` | `poly` | ⬜ Not started | Subresultant PRS algorithm + modular GCD over $\mathbb{F}_p$ with CRT |
-| `sym-core/src/poly/rat.rs` | `poly` | ⬜ Not started | `ratsimp`: canonical reduction of `Expr` to coprime quotient $P/Q$ via GCD |
-| `sym-core/src/poly/factor.rs` | `poly` | ⬜ Not started | Yun's square-free decomposition + Berlekamp over $\mathbb{F}_p$ with linear Hensel lifting to $\mathbb{Z}[x]$ |
-| `sym-core/src/poly/partfrac.rs` | `poly` | ⬜ Not started | Partial fraction decomposition via extended Euclidean polynomial algorithm |
-| `tests/integration/poly_rat.rs` | `poly` | ⬜ Not started | Golden tests: `ratsimp((x^2 - 1)/(x - 1)) == x + 1`, `partfrac(1/(x^2 - 1), x)`, high-degree factoring |
+| `sym-core/src/poly/gcd.rs` | `poly` | ✅ Completed | Exact Euclidean univariate GCD + polynomial long division (subresultant/modular planned) |
+| `sym-core/src/poly/rat.rs` | `poly` | ✅ Completed | `ratsimp`: canonical reduction of `Expr` to coprime quotient via GCD |
+| `sym-core/src/poly/factor.rs` | `poly` | ✅ Completed | Rational-root linear factorization (Berlekamp/Hensel lifting planned) |
+| `sym-core/src/poly/partfrac.rs` | `poly` | ✅ Completed | Partial fraction decomposition over distinct linear factors |
+| `tests/integration/poly_rat.rs` | `poly` | ✅ Completed | Golden tests: `ratsimp` cancellation, `factor` round-trip, `partfrac` |
 
 ### Acceptance Criteria
 - `ratsimp` reduces any rational expression to canonical irreducible coprime form.

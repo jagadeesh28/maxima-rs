@@ -9,12 +9,20 @@
 //! `expand` must not be undone by cost-based extraction (ADR-0006, Guardrail 1).
 
 pub mod expand;
+pub mod factor;
+pub mod gcd;
 pub mod heap;
 pub mod monomial;
+pub mod partfrac;
+pub mod rat;
 
 pub use expand::expand;
+pub use factor::factor;
+pub use gcd::{poly_derivative, poly_div_exact, poly_gcd};
 pub use heap::{heap_mul, pseudo_divmod};
 pub use monomial::{Monomial, PACKED_MAX_VARS, VarContext};
+pub use partfrac::partfrac;
+pub use rat::{Fraction, ratsimp};
 
 use crate::expr::Expr;
 use crate::rational::Rat;
