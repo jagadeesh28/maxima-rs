@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–30 Complete ✅ — Phases 31–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–31 Complete ✅ — Phases 32–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -121,7 +121,7 @@ When starting a new session, instruct the AI:
 | 28. Definite Integration & Pole Scanning | `integrate` | ✅ Completed | Rational pole scanner + FTC evaluation + improper limits (138 unit + 4 integration) |
 | 29. Closed-Form Algebraic Solvers | `solve` | ✅ Completed | Rational-root factoring + linear/quadratic formulas (deg 1–4), transcendental isolation, `AlgebraicSolutions` (139 unit + 6 integration) |
 | 30. ODE Solvers | `solve` | ✅ Completed | 1st-order linear + 2nd-order constant coefficients (`OdeSolution`), back-substitution verified (139 unit + 3 integration) |
-| 31. Maxima Parser CAS Syntax & Facade | `cas`/`parser` | ⬜ Planned | Maxima CAS commands parsing (`expand`, `factor`, `ratsimp`, `partfrac`, `integrate`, `limit`, `ode2`), facade & prelude |
+| 31. Maxima Parser CAS Syntax & Facade | `cas`/`parser` | ✅ Completed | `parse_maxima_cas` + `CasCommand`/`execute_cas`, prelude & maxima-rs CAS re-exports (139 unit + 10 integration) |
 | 32. Verification & Maxima Benchmarks | all | ⬜ Planned | Proptests for integration/ODE invariants, Maxima test suite parity (`rtest_integrate.mac`, etc.), fmt/clippy |
 
 ---
@@ -535,6 +535,29 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - Currently handles linear constant-coefficient equations; separable/Bernoulli/exact 1st-order forms and non-constant coefficients are a refinement.
+
+---
+
+## Session 16 — Phase 31: Maxima CAS Parser & Facade ✅
+
+**Date**: 2026-11-22
+**Scope**: `cas` feature; Maxima CAS command parsing + facade/prelude (Phase 31).
+
+### Deliverables
+- `sym-core/src/parser/maxima.rs`: `CasCommand` + `parse_maxima_cas` + `execute_cas` for `expand`, `factor`, `ratsimp`, `partfrac`, `limit`, `integrate`, `defint`, `taylor`, `solve`, `ode2`.
+- `sym-core/src/series.rs`: `taylor()` convenience wrapper.
+- `maxima-rs/src/prelude.rs`: re-exports `expand`, `ratsimp`, `factor`, `partfrac`, `integrate`, `defint`/`DefiniteResult`, `taylor`, `limit`, `solve`, `ode2`, and the CAS command parser.
+- New `cas` Cargo feature (sym-core + maxima-rs), included in `full`; maxima-rs `full` now also bundles series/limit/solve.
+- `tests/integration/parser_cas.rs` (10 tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --lib`: 139 passed.
+- `cargo test -p maxima-tests --test parser_cas`: 10 passed (parse+execute each command; prelude exposes all CAS operations).
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- CAS command parser accepts single top-level calls (no `;`-separated batches); nested command calls are not composed.
+
 
 
 

@@ -379,6 +379,11 @@ pub fn series_expand(expr: &Expr, var: &str, center: &Expr, order: i64) -> Optio
     expand(expr, var, center, order)
 }
 
+/// Convenience wrapper: expand a series and convert it back into an [`Expr`].
+pub fn taylor(expr: &Expr, var: &str, center: &Expr, order: i64) -> Option<Expr> {
+    series_expand(expr, var, center, order).map(|s| s.to_expr())
+}
+
 fn const_rat(e: &Expr) -> Option<BigRational> {
     match e {
         Expr::Const(r) => Some(r.clone()),

@@ -1008,11 +1008,11 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/parser/maxima.rs` | `parser` | ⬜ Not started | Syntax combinators for `expand(...)`, `factor(...)`, `ratsimp(...)`, `partfrac(..., x)`, `limit(..., x, a)`, `ode2(..., y, x)` |
-| `sym-core/src/lib.rs` | `cas` | ⬜ Not started | Module exports for `poly`, `integrate`, `series`, `limit`, `solve` |
-| `maxima-rs/src/lib.rs` | `cas` | ⬜ Not started | Re-exports of all CAS operations and solver structures |
-| `maxima-rs/src/prelude.rs` | `cas` | ⬜ Not started | Convenient prelude exports for one-line CAS usage |
-| `tests/integration/parser_cas.rs` | `parser`, `cas`| ⬜ Not started | Golden tests parsing Maxima CAS commands and executing them end-to-end |
+| `sym-core/src/parser/maxima.rs` | `parser` | ✅ Completed | Syntax combinators for `expand(...)`, `factor(...)`, `ratsimp(...)`, `partfrac(..., x)`, `limit(..., x, a)`, `ode2(..., y, x)` |
+| `sym-core/src/lib.rs` | `cas` | ✅ Completed | Module exports for `poly`, `integrate`, `series`, `limit`, `solve` |
+| `maxima-rs/src/lib.rs` | `cas` | ✅ Completed | Re-exports of all CAS operations and solver structures |
+| `maxima-rs/src/prelude.rs` | `cas` | ✅ Completed | Convenient prelude exports for one-line CAS usage |
+| `tests/integration/parser_cas.rs` | `parser`, `cas`| ✅ Completed | Golden tests parsing Maxima CAS commands and executing them end-to-end |
 
 ### Acceptance Criteria
 - Maxima command syntax parses cleanly and executes corresponding CAS routines.

@@ -32,3 +32,22 @@ pub use sym_core::codegen::FloatType;
 // Procedural macros
 #[cfg(feature = "macros")]
 pub use sym_macros::{sym_eval, sym_fn};
+
+// ── CAS operations (Phases 22–31) ─────────────────────────────────
+#[cfg(feature = "poly")]
+pub use sym_core::poly::{expand, factor, partfrac, ratsimp};
+
+#[cfg(feature = "integrate")]
+pub use sym_core::integrate::{defint::DefiniteResult, defint::defint, integrate};
+
+#[cfg(feature = "series")]
+pub use sym_core::series::taylor;
+
+#[cfg(feature = "limit")]
+pub use sym_core::limit::limit;
+
+#[cfg(feature = "solve")]
+pub use sym_core::solve::{AlgebraicSolutions, OdeSolution, ode2, solve};
+
+#[cfg(all(feature = "parser", feature = "cas"))]
+pub use sym_core::parser::maxima::{CasCommand, execute_cas, parse_maxima_cas};

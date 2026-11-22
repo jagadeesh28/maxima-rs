@@ -91,6 +91,10 @@ name = "solvers_ode"
 path = "integration/solvers_ode.rs"
 
 [[test]]
+name = "parser_cas"
+path = "integration/parser_cas.rs"
+
+[[test]]
 name = "series"
 path = "integration/series.rs"
 

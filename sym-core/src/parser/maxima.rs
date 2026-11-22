@@ -441,3 +441,147 @@ mod tests {
         }
     }
 }
+#[cfg(feature = "cas")]
+mod cas_commands {
+    use super::parse_maxima;
+    use crate::expr::Expr;
+    use crate::integrate::defint::{DefiniteResult, defint};
+    use crate::parser::ParseError;
+
+    /// A parsed Maxima CAS top-level command.
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum CasCommand {
+        Expand(Expr),
+        Factor(Expr),
+        Ratsimp(Expr),
+        Partfrac(Expr, String),
+        Limit(Expr, String, Expr),
+        Solve(Expr, String),
+        Ode2(Expr, String, String),
+        Integrate(Expr, String),
+        Defint(Expr, String, Expr, Expr),
+        Taylor(Expr, String, Expr, i64),
+    }
+
+    fn split_top_level(s: &str) -> Vec<&str> {
+        let mut depth = 0i32;
+        let mut start = 0usize;
+        let mut out = Vec::new();
+        for (i, ch) in s.char_indices() {
+            match ch {
+                '(' | '[' => depth += 1,
+                ')' | ']' => depth -= 1,
+                ',' if depth == 0 => {
+                    out.push(s[start..i].trim());
+                    start = i + 1;
+                }
+                _ => {}
+            }
+        }
+        out.push(s[start..].trim());
+        out.retain(|x| !x.is_empty());
+        out
+    }
+
+    fn parse_point(s: &str) -> Result<Expr, ParseError> {
+        match s.trim() {
+            "inf" => Ok(Expr::var("inf")),
+            "minf" => Ok(Expr::var("minf")),
+            other => parse_maxima(other),
+        }
+    }
+
+    /// Parse a Maxima CAS command such as `expand((x + y)^2)`.
+    pub fn parse_maxima_cas(input: &str) -> Result<CasCommand, ParseError> {
+        let s = input.trim();
+        let err = |m: &str| ParseError::Syntax {
+            message: m.to_string(),
+            remaining: s.to_string(),
+        };
+        let open = s.find('(').ok_or_else(|| err("expected command call"))?;
+        let close = s.rfind(')').ok_or_else(|| err("missing ')'"))?;
+        if close < open {
+            return Err(err("malformed command"));
+        }
+        let name = &s[..open];
+        let args = split_top_level(&s[open + 1..close]);
+        let need = |n: usize| -> Result<(), ParseError> {
+            if args.len() == n {
+                Ok(())
+            } else {
+                Err(err("wrong argument count"))
+            }
+        };
+        let e = |i: usize| parse_maxima(args[i]);
+        let v = |i: usize| args[i].to_string();
+        match name {
+            "expand" => {
+                need(1)?;
+                Ok(CasCommand::Expand(e(0)?))
+            }
+            "factor" => {
+                need(1)?;
+                Ok(CasCommand::Factor(e(0)?))
+            }
+            "ratsimp" => {
+                need(1)?;
+                Ok(CasCommand::Ratsimp(e(0)?))
+            }
+            "partfrac" => {
+                need(2)?;
+                Ok(CasCommand::Partfrac(e(0)?, v(1)))
+            }
+            "limit" => {
+                need(3)?;
+                Ok(CasCommand::Limit(e(0)?, v(1), parse_point(args[2])?))
+            }
+            "solve" => {
+                need(2)?;
+                Ok(CasCommand::Solve(e(0)?, v(1)))
+            }
+            "ode2" => {
+                need(3)?;
+                Ok(CasCommand::Ode2(e(0)?, v(1), v(2)))
+            }
+            "integrate" => {
+                need(2)?;
+                Ok(CasCommand::Integrate(e(0)?, v(1)))
+            }
+            "defint" => {
+                need(4)?;
+                Ok(CasCommand::Defint(e(0)?, v(1), e(2)?, e(3)?))
+            }
+            "taylor" => {
+                need(4)?;
+                let order = args[3]
+                    .trim()
+                    .parse::<i64>()
+                    .map_err(|_| err("bad taylor order"))?;
+                Ok(CasCommand::Taylor(e(0)?, v(1), e(2)?, order))
+            }
+            _ => Err(err("unknown CAS command")),
+        }
+    }
+
+    /// Execute a parsed CAS command, returning the resulting expression.
+    pub fn execute_cas(cmd: &CasCommand) -> Option<Expr> {
+        match cmd {
+            CasCommand::Expand(e) => Some(crate::poly::expand(e)),
+            CasCommand::Factor(e) => Some(crate::poly::factor(e)),
+            CasCommand::Ratsimp(e) => crate::poly::ratsimp(e).ok(),
+            CasCommand::Partfrac(e, v) => crate::poly::partfrac(e, v).ok(),
+            CasCommand::Limit(e, v, p) => crate::limit::limit(e, v, p),
+            CasCommand::Solve(e, v) => crate::solve::solve(e, v).0.into_iter().next(),
+            CasCommand::Ode2(e, y, x) => crate::solve::ode2(e, y, x).map(|s| s.solution),
+            CasCommand::Integrate(e, v) => Some(crate::integrate::integrate(e, v)),
+            CasCommand::Defint(e, v, a, b) => match defint(e, v, a, b) {
+                DefiniteResult::Value(x) => Some(x),
+                _ => None,
+            },
+            CasCommand::Taylor(e, v, c, o) => crate::series::taylor(e, v, c, *o),
+        }
+    }
+}
+
+#[cfg(feature = "cas")]
+pub use cas_commands::{CasCommand, execute_cas, parse_maxima_cas};
