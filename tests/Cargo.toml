@@ -69,3 +69,7 @@ path = "integration/poly_expand.rs"
 [[test]]
 name = "poly_rat"
 path = "integration/poly_rat.rs"
+
+[[test]]
+name = "integrate_elementary"
+path = "integration/integrate_elementary.rs"

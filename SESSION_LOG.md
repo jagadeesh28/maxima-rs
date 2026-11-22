@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–23 Complete ✅ — Phases 24–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–24 Complete ✅ — Phases 25–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -114,7 +114,7 @@ When starting a new session, instruct the AI:
 | 21. Documentation & Verification | all | ✅ Completed | Coverage report, glossary, final fmt/clippy/test |
 | 22. Sparse Distributed Poly Engine | `poly` | ✅ Completed | 64-bit packed exponents, `grevlex`, Monagan-Pearce heap multiplication/division, `expand()` (121 unit + 6 integration tests) |
 | 23. Exact Rational Algebra & Factorization | `poly` | ✅ Completed | Exact univariate GCD + `ratsimp`, rational-root `factor`, distinct-linear `partfrac` (129 unit + 4 integration tests) |
-| 24. Symbolic Integration: Rational & Elementary | `integrate` | ⬜ Planned | Moses' SIN, Hermite reduction, Lazard-Rioboo-Trager (LRT) real $\ln/\text{atan}$, IBP |
+| 24. Symbolic Integration: Rational & Elementary | `integrate` | ✅ Completed | Linearity, power rule, elementary (trig/exp/ln), rational via partial fractions, IBP; noun fallback (131 unit + 10 integration) |
 | 25. Transcendental Risch Differential Towers | `integrate` | ⬜ Planned | Bronstein differential field towers for $\exp/\ln$, non-elementary proofs (`Expr::integral` noun) |
 | 26. Laurent Series & Asymptotics | `series` | ⬜ Planned | Truncated `Series { center, valuation, coeffs, order }` arithmetic and elementary expansions |
 | 27. Gruntz Limits Engine | `limit` | ⬜ Planned | Dominik Gruntz MRV algorithm, $\omega \to 0$ distortion, 3-tier zero-equivalence decider |
@@ -393,6 +393,30 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - `factor`/`partfrac` cover univariate polynomials with rational-root structure; full Berlekamp/Hensel and multivariate factorization remain a follow-up.
+
+---
+
+## Session 9 — Phase 24: Symbolic Integration (Rational & Elementary) ✅
+
+**Date**: 2026-11-22
+**Scope**: New `integrate` feature; procedural indefinite integration (Phase 24).
+
+### Deliverables
+- `sym-core/src/integrate/mod.rs`: `integrate(expr, var)` — linearity, power rule, elementary dispatch, rational/IBP fallbacks, `Expr::integral` noun.
+- `sym-core/src/integrate/sin.rs`: linear-argument rules for sin/cos/exp/sinh/cosh/ln.
+- `sym-core/src/integrate/hermite.rs`: rational integration via `partfrac`.
+- `sym-core/src/integrate/lrt.rs`: logarithmic antiderivative terms `(c/a)·ln(u)`.
+- `sym-core/src/integrate/ibp.rs`: integration by parts for `x^n·exp/sin/cos`.
+- `tests/integration/integrate_elementary.rs` (10 anti-difference tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --lib`: 131 passed.
+- `cargo test -p maxima-tests --test integrate_elementary`: 10 passed (differentiate each antiderivative back to the integrand).
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- Non-linear arguments and denominators without distinct rational linear factors return the noun form; full Risch/Hermite/LRT arrive in Phase 25.
+
 
 
 

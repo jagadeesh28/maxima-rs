@@ -49,3 +49,6 @@ pub mod pipeline;
 
 #[cfg(feature = "poly")]
 pub mod poly;
+
+#[cfg(feature = "integrate")]
+pub mod integrate;

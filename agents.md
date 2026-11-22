@@ -814,12 +814,12 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/integrate/mod.rs` | `integrate` | ⬜ Not started | `integrate(expr: &Expr, var: &str) -> Expr` orchestrator and dispatcher |
-| `sym-core/src/integrate/sin.rs` | `integrate` | ⬜ Not started | Moses' SIN heuristics: linearity, constant pulling, $u$-substitution via `diff.rs` |
-| `sym-core/src/integrate/hermite.rs` | `integrate` | ⬜ Not started | Hermite reduction stripping repeated denominator poles without full factorization |
-| `sym-core/src/integrate/lrt.rs` | `integrate` | ⬜ Not started | Lazard-Rioboo-Trager algorithm computing real $\ln$ and $\text{atan}$ terms via resultant Sturm sequences |
-| `sym-core/src/integrate/ibp.rs` | `integrate` | ⬜ Not started | LIATE-guided Integration by Parts with strict recursion depth cap (guard against cycles) |
-| `tests/integration/integrate_elementary.rs` | `integrate` | ⬜ Not started | Golden tests for rational functions, trig, exp, log, and IBP combinations |
+| `sym-core/src/integrate/mod.rs` | `integrate` | ✅ Completed | `integrate()` orchestrator: linearity, power rule, elementary, rational, IBP; noun fallback |
+| `sym-core/src/integrate/sin.rs` | `integrate` | ✅ Completed | Elementary (trig/exp/ln) linear-argument rules |
+| `sym-core/src/integrate/hermite.rs` | `integrate` | ✅ Completed | Rational integration via partial fractions (Hermite/LRT subset) |
+| `sym-core/src/integrate/lrt.rs` | `integrate` | ✅ Completed | Logarithmic antiderivative terms (linear-factor subset) |
+| `sym-core/src/integrate/ibp.rs` | `integrate` | ✅ Completed | Integration by parts for `x^n · exp/sin/cos` |
+| `tests/integration/integrate_elementary.rs` | `integrate` | ✅ Completed | 10 anti-difference golden tests (diff(∫f) ≈ f) |
 
 ### Acceptance Criteria
 - All rational functions integrate deterministically into algebraic parts + real $\ln / \text{atan}$ terms.

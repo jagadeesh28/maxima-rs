@@ -6,7 +6,7 @@ license.workspace = true
 
 [features]
 default = ["full"]
-full = ["diff", "egraph", "cse", "codegen", "parser", "pipeline", "tensor", "poly"]
+full = ["diff", "egraph", "cse", "codegen", "parser", "pipeline", "tensor", "poly", "integrate"]
 tensor = []
 diff = []
 egraph = ["dep:egg"]
@@ -15,6 +15,7 @@ codegen = ["dep:proc-macro2", "dep:quote"]
 parser = ["dep:winnow", "dep:thiserror"]
 pipeline = ["diff", "egraph", "cse", "codegen"]
 poly = []
+integrate = ["poly", "diff"]
 
 [dependencies]
 num-rational = { workspace = true }
