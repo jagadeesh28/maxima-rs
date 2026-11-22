@@ -871,8 +871,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/series.rs` | `series` | ⬜ Not started | `Series { center: Expr, valuation: i64, coeffs: Vec<Expr>, order: i64 }` with `+`, `-`, `*`, `/`, composition, `diff` |
-| `tests/integration/series.rs` | `series` | ⬜ Not started | Taylor/Laurent expansions for $\sin(x)$, $\cos(x)$, $\exp(x)$, $\frac{1}{1-x}$, $\frac{1}{\sin(x)}$ at $x=0$ up to $O(x^n)$ |
+| `sym-core/src/series.rs` | `series` | ✅ Completed | `Series { center: Expr, valuation: i64, coeffs: Vec<Expr>, order: i64 }` with `+`, `-`, `*`, `/`, composition, `diff` |
+| `tests/integration/series.rs` | `series` | ✅ Completed | Taylor/Laurent expansions for $\sin(x)$, $\cos(x)$, $\exp(x)$, $\frac{1}{1-x}$, $\frac{1}{\sin(x)}$ at $x=0$ up to $O(x^n)$ |
 
 ### Acceptance Criteria
 - Correct arithmetic on series with negative valuations (Laurent poles).

@@ -77,3 +77,7 @@ path = "integration/integrate_elementary.rs"
 [[test]]
 name = "integrate_risch"
 path = "integration/integrate_risch.rs"
+
+[[test]]
+name = "series"
+path = "integration/series.rs"

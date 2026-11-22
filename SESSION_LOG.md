@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–25 Complete ✅ — Phases 26–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–26 Complete ✅ — Phases 27–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -116,7 +116,7 @@ When starting a new session, instruct the AI:
 | 23. Exact Rational Algebra & Factorization | `poly` | ✅ Completed | Exact univariate GCD + `ratsimp`, rational-root `factor`, distinct-linear `partfrac` (129 unit + 4 integration tests) |
 | 24. Symbolic Integration: Rational & Elementary | `integrate` | ✅ Completed | Linearity, power rule, elementary (trig/exp/ln), rational via partial fractions, IBP; noun fallback (131 unit + 10 integration) |
 | 25. Transcendental Risch Differential Towers | `integrate` | ✅ Completed | Derivative-divides u-substitution (`∫x·e^{x²}`, `∫e^x/(e^x+1)`, `∫2x/(x²+1)`); non-elementary → noun (133 unit + 6 integration) |
-| 26. Laurent Series & Asymptotics | `series` | ⬜ Planned | Truncated `Series { center, valuation, coeffs, order }` arithmetic and elementary expansions |
+| 26. Laurent Series & Asymptotics | `series` | ✅ Completed | Truncated `Series { center, valuation, coeffs, order }` arithmetic + sin/cos/exp/1/(1-x)/1/sin expansions (133 unit + 9 integration) |
 | 27. Gruntz Limits Engine | `limit` | ⬜ Planned | Dominik Gruntz MRV algorithm, $\omega \to 0$ distortion, 3-tier zero-equivalence decider |
 | 28. Definite Integration & Pole Scanning | `integrate` | ⬜ Planned | Sturm pole scanning, FTC evaluation, improper limits via Gruntz |
 | 29. Closed-Form Algebraic Solvers | `solve` | ⬜ Planned | Degrees 1-4 formulas, factor-and-split, transcendental variable isolation, `AlgebraicSolutions` |
@@ -436,6 +436,23 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - Substitutions are recognised for derivative-divides exp/power/log patterns; general Bronstein tower solving remains a refinement.
+
+---
+
+## Session 11 — Phase 26: Laurent Series ✅
+
+**Date**: 2026-11-22
+**Scope**: Truncated Laurent/Taylor series engine (Phase 26).
+
+### Deliverables
+- `sym-core/src/series.rs`: `Series { var, center, valuation, coeffs, order }` with `add/sub/neg/mul/inv/div/pow_int/diff/compose`, constant folding for exact zero detection, and `series_expand` for sin/cos/exp/ln kernels composed onto arbitrary series.
+- `tests/integration/series.rs` (9 tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --lib`: 133 passed.
+- `cargo test -p maxima-tests --test series`: 9 passed (sin/cos/exp/1/(1-x)/1/sin incl. Laurent pole, inverse multiplication, derivative, composition `sin(x²)`).
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
 
 
 

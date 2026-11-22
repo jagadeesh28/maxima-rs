@@ -52,3 +52,6 @@ pub mod poly;
 
 #[cfg(feature = "integrate")]
 pub mod integrate;
+
+#[cfg(feature = "series")]
+pub mod series;
