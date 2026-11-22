@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–31 Complete ✅ — Phases 32–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–32 Complete ✅ — Phase 33 Planned (WebUI) ⬜**
 
 ### Phase Completion Tracker
 
@@ -122,7 +122,7 @@ When starting a new session, instruct the AI:
 | 29. Closed-Form Algebraic Solvers | `solve` | ✅ Completed | Rational-root factoring + linear/quadratic formulas (deg 1–4), transcendental isolation, `AlgebraicSolutions` (139 unit + 6 integration) |
 | 30. ODE Solvers | `solve` | ✅ Completed | 1st-order linear + 2nd-order constant coefficients (`OdeSolution`), back-substitution verified (139 unit + 3 integration) |
 | 31. Maxima Parser CAS Syntax & Facade | `cas`/`parser` | ✅ Completed | `parse_maxima_cas` + `CasCommand`/`execute_cas`, prelude & maxima-rs CAS re-exports (139 unit + 10 integration) |
-| 32. Verification & Maxima Benchmarks | all | ⬜ Planned | Proptests for integration/ODE invariants, Maxima test suite parity (`rtest_integrate.mac`, etc.), fmt/clippy |
+| 32. Verification & Maxima Benchmarks | all | ✅ Completed | Proptests (integrate/solve invariants, 10³ cases) + Maxima parity cases; fmt/clippy green (139 unit) |
 
 ---
 
@@ -557,6 +557,29 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - CAS command parser accepts single top-level calls (no `;`-separated batches); nested command calls are not composed.
+
+---
+
+## Session 17 — Phase 32: Verification & Maxima Parity ✅
+
+**Date**: 2026-11-22
+**Scope**: proptest invariants + Maxima-style parity suite (Phase 32).
+
+### Deliverables
+- `tests/proptest/integrate_correctness.rs`: `d/dx(∫f) ≈ f` over random polynomials (256 proptest cases + 1000 deterministic).
+- `tests/proptest/solve_correctness.rs`: quadratic root back-substitution (256 proptest cases + 1089 deterministic).
+- `tests/integration/maxima_cas_parity.rs`: representative `rtest_integrate`/`rtest_limit`/`rtest_solve` cases.
+- All registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p maxima-tests --test integrate_correctness`: 2 passed.
+- `cargo test -p maxima-tests --test solve_correctness`: 2 passed.
+- `cargo test -p maxima-tests --test maxima_cas_parity`: 4 passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- Parity cases are a curated representative subset, not exhaustive `.mac` playback.
+
 
 
 

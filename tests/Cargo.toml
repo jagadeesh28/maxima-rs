@@ -95,6 +95,18 @@ name = "parser_cas"
 path = "integration/parser_cas.rs"
 
 [[test]]
+name = "integrate_correctness"
+path = "proptest/integrate_correctness.rs"
+
+[[test]]
+name = "solve_correctness"
+path = "proptest/solve_correctness.rs"
+
+[[test]]
+name = "maxima_cas_parity"
+path = "integration/maxima_cas_parity.rs"
+
+[[test]]
 name = "series"
 path = "integration/series.rs"
 

@@ -1040,11 +1040,11 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `tests/proptest/integrate_correctness.rs` | `integrate`, `poly` | ⬜ Not started | Proptest: $\forall f, \text{ratsimp}\left(\frac{d}{dx}\int f dx - f\right) == 0$ + numerical equivalence check |
-| `tests/proptest/solve_correctness.rs` | `solve`, `poly` | ⬜ Not started | Proptest: root back-substitution $f(\text{root}) == 0$ |
-| `tests/integration/maxima_cas_parity.rs` | `cas` | ⬜ Not started | Parity benchmark suite comparing against test cases in `rtest_integrate.mac`, `rtest_limit.mac`, `rtest_solve.mac` |
-| `SESSION_LOG.md` | — | ⬜ Not started | Final session log update and phase completion tracker |
-| `README.md` | — | ⬜ Not started | Updated feature matrix, CAS capabilities, and usage examples |
+| `tests/proptest/integrate_correctness.rs` | `integrate`, `poly` | ✅ Completed | Proptest: $\forall f, \text{ratsimp}\left(\frac{d}{dx}\int f dx - f\right) == 0$ + numerical equivalence check |
+| `tests/proptest/solve_correctness.rs` | `solve`, `poly` | ✅ Completed | Proptest: root back-substitution $f(\text{root}) == 0$ |
+| `tests/integration/maxima_cas_parity.rs` | `cas` | ✅ Completed | Parity benchmark suite comparing against test cases in `rtest_integrate.mac`, `rtest_limit.mac`, `rtest_solve.mac` |
+| `SESSION_LOG.md` | — | ✅ Completed | Final session log update and phase completion tracker |
+| `README.md` | — | ✅ Completed | Updated feature matrix, CAS capabilities, and usage examples |
 
 ### Acceptance Criteria
 - All proptest invariants hold over $10^3$ random algebraic and trigonometric expressions.

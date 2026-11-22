@@ -66,7 +66,7 @@ Expanding maxima-rs into a high-performance Computer Algebra System rivaling Wol
 | 29 | Closed-Form Algebraic Solvers | `solve` | ✅ Completed | Rational-root factor-and-split + linear/quadratic closed forms (deg 1–4), transcendental isolation (`exp x = 2 ⇒ x = ln 2`) |
 | 30 | Ordinary Differential Equation Solvers | `solve` | ✅ Completed | Linear 1st-order + 2nd-order constant-coefficient (real distinct/repeated/complex) with `_C1`/`_C2`, back-substitution verified |
 | 31 | Maxima CAS Syntax & Prelude | `cas`/`parser` | ✅ Completed | `parse_maxima_cas`/`execute_cas` for expand/factor/ratsimp/partfrac/limit/integrate/defint/taylor/solve/ode2; prelude re-exports CAS ops |
-| 32 | Verification & Maxima Benchmarks | all | ⬜ Planned | Proptest integration/ODE invariants, Maxima test suite parity (`rtest_integrate.mac`), fmt/clippy |
+| 32 | Verification & Maxima Benchmarks | all | ✅ Completed | Proptest integration/solve invariants (≥10³ cases) + Maxima-style parity cases (`rtest_integrate/limit/solve`) + clean fmt/clippy |
 
 ---
 
