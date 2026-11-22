@@ -47,6 +47,10 @@ name = "maxima_coverage"
 path = "integration/maxima_coverage.rs"
 
 [[test]]
+name = "rational_factorial"
+path = "integration/rational_factorial.rs"
+
+[[test]]
 name = "numerical_equivalence"
 path = "proptest/numerical_equivalence.rs"
 

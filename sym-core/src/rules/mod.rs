@@ -5,8 +5,10 @@
 
 pub mod arithmetic;
 pub mod exponential;
+pub mod factorial;
 pub mod hyperbolic;
 pub mod logarithmic;
+pub mod rational;
 pub mod trigonometric;
 
 use crate::lang::{MathAnalysis, MathLang};
@@ -26,6 +28,10 @@ pub struct RuleConfig {
     pub logarithmic: bool,
     /// Enable hyperbolic and inverse-trigonometric identities (`sinh.lisp` / `trigi.lisp`).
     pub hyperbolic: bool,
+    /// Enable rational normalization (`nrat4.lisp`).
+    pub rational: bool,
+    /// Enable factorial simplification (`sfacts.lisp`).
+    pub factorial: bool,
 }
 
 impl Default for RuleConfig {
@@ -36,6 +42,8 @@ impl Default for RuleConfig {
             exponential: true,
             logarithmic: true,
             hyperbolic: true,
+            rational: true,
+            factorial: true,
         }
     }
 }
@@ -105,6 +113,24 @@ pub fn get_sourced_rules(config: &RuleConfig) -> Vec<SourcedRule<MathLang, MathA
         }
     }
 
+    // 6. Rational normalization rules
+    if config.rational {
+        for r in rational::rational_rules() {
+            if config.fast_math || !r.provenance.fast_math_only {
+                rules.push(r);
+            }
+        }
+    }
+
+    // 7. Factorial rules
+    if config.factorial {
+        for r in factorial::factorial_rules() {
+            if config.fast_math || !r.provenance.fast_math_only {
+                rules.push(r);
+            }
+        }
+    }
+
     rules
 }
 
@@ -126,7 +152,7 @@ mod tests {
         let config = RuleConfig::default();
         let rules = get_rules(&config);
         assert!(!rules.is_empty());
-        assert!(rules.len() >= 79);
+        assert!(rules.len() >= 92);
     }
 
     #[test]

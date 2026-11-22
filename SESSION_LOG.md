@@ -232,3 +232,15 @@ When starting a new session, instruct the AI:
 - Added hyperbolic/inverse-trig golden tests.
 - Verification: full workspace tests pass; clippy `-D warnings` clean.
 
+
+### Phase 18 — Rule Expansion II ✅
+- New `sym-core/src/rules/rational.rs` (8 rules) citing `nrat4.lisp` `$ratsimp`/`$nrat`:
+  sign normalization, double reciprocals, quotient-of-quotient, same/different-denominator
+  addition/subtraction, multiply-by-fraction, and power quotients.
+- New `sym-core/src/rules/factorial.rs` (5 rules) citing `sfacts.lisp` `factcomb`:
+  `0!/1!`, successor recurrence, `n!/(n-1)!`, `(n+1)!/n!`.
+- `RuleConfig` gained `rational` and `factorial` switches (default `true`).
+- Registry now 92 provenanced rules; coverage test validates `nrat4.lisp` and `sfacts.lisp`.
+- New `tests/integration/rational_factorial.rs` (6 golden tests) wired into `tests/Cargo.toml`.
+- Verification: full workspace tests pass; clippy `-D warnings` clean.
+

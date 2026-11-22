@@ -13,6 +13,8 @@ fn test_all_rules_have_maxima_citations() {
         "combin.lisp",
         "logarc.lisp",
         "sinh.lisp",
+        "nrat4.lisp",
+        "sfacts.lisp",
     ];
 
     let mut file_counts = std::collections::HashMap::new();
@@ -42,10 +44,10 @@ fn test_all_rules_have_maxima_citations() {
         assert!(file_counts.contains_key(file), "{file} must have rules");
     }
 
-    // Phase 17: expanded 1:1 coverage must keep growing.
+    // Phase 18: expanded 1:1 coverage must keep growing.
     assert!(
-        rules.len() >= 79,
-        "expected at least 79 provenanced rules, found {}",
+        rules.len() >= 92,
+        "expected at least 92 provenanced rules, found {}",
         rules.len()
     );
 

@@ -539,6 +539,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 ### Acceptance Criteria
 - Golden simplification tests pass; coverage count updated; provenance intact.
 
+**Status**: ✅ Completed — `rules/rational.rs` (8 rules, `nrat4.lisp`) and `rules/factorial.rs` (5 rules, `sfacts.lisp`); registry now 92 provenanced rules; new `rational_factorial` golden suite.
+
 ---
 
 ## Phase 19 — E-Graph Fidelity for Matrices
