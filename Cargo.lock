@@ -401,7 +401,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "maxima-rs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "sym-core",
  "sym-macros",
@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "maxima-tests"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "maxima-rs",
  "proptest",
@@ -419,7 +419,7 @@ dependencies = [
 
 [[package]]
 name = "maxima-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "maxima-rs",
@@ -798,7 +798,7 @@ dependencies = [
 
 [[package]]
 name = "sym-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "egg",
  "num-bigint",
@@ -812,7 +812,7 @@ dependencies = [
 
 [[package]]
 name = "sym-macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -6,7 +6,7 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 
 ---
 
-## Current Status: Phase 21 Complete ✅
+## Current Status: Phase 21 Complete ✅ (v0.2.0)
 
 | Phase | Feature | Status | Summary |
 |-------|---------|--------|---------|
@@ -126,7 +126,7 @@ The workspace is designed with modular feature gates to keep compile times fast 
 ```toml
 # Minimal lightweight installation (just AST + calculus, no e-graphs or macros):
 [dependencies]
-maxima-rs = { version = "0.1", default-features = false, features = ["diff"] }
+maxima-rs = { version = "0.2", default-features = false, features = ["diff"] }
 ```
 
 ---
