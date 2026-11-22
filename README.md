@@ -50,6 +50,24 @@ The detailed requirements live in [`agents.md`](file:///e:/Rust/Max/agents.md).
 | 20 | WebUI | ✅ Complete | `GET /api/rules` + "Maxima coverage" panel in the UI |
 | 21 | Docs | ✅ Complete | Coverage report, glossary/session-log updates, final green verification |
 
+### Roadmap: Phases 22–32: Wolfram Mathematica-Grade CAS Expansion (Planned)
+
+Expanding maxima-rs into a high-performance Computer Algebra System rivaling Wolfram Mathematica via hybrid procedural algorithms and equality saturation ([ADR-0006](docs/adr/0006-hybrid-egraph-and-procedural-cas.md)).
+
+| Phase | Capability | Feature | Status | Summary |
+|-------|------------|---------|--------|---------|
+| 22 | Sparse Distributed Poly Engine | `poly` | ✅ Completed | 64-bit packed exponents (`grevlex`), Monagan-Pearce heap multiplication/division, `expand()` |
+| 23 | Exact Rational Algebra & Factoring | `poly` | ⬜ Planned | Subresultant PRS + modular $\mathbb{F}_p$ GCD, canonical `ratsimp()`, Yun's square-free, Berlekamp/Hensel `factor()`, `partfrac()` |
+| 24 | Rational & Elementary Integration | `integrate` | ⬜ Planned | Moses' SIN heuristics, Hermite reduction, Lazard-Rioboo-Trager (LRT) real $\ln/\text{atan}$ antiderivatives |
+| 25 | Transcendental Risch Field Towers | `integrate` | ⬜ Planned | Differential field towers for $\exp/\ln$ (Bronstein algorithm), non-elementary proofs (`Expr::integral` noun) |
+| 26 | Laurent Series & Asymptotics | `series` | ⬜ Planned | Truncated `Series` arithmetic with negative poles, composition, inversion up to $O((x-x_0)^n)$ |
+| 27 | Gruntz Asymptotic Limits Engine | `limit` | ⬜ Planned | Dominik Gruntz MRV algorithm, $\omega \to 0$ distortion, 3-tier zero-equivalence decider |
+| 28 | Definite Integration & Pole Scanning | `integrate` | ⬜ Planned | Real pole scanning, Fundamental Theorem of Calculus, improper limits via Gruntz |
+| 29 | Closed-Form Algebraic Solvers | `solve` | ⬜ Planned | Closed-form formulas for degrees 1–4, factor-and-split, transcendental variable isolation |
+| 30 | Ordinary Differential Equation Solvers | `solve` | ⬜ Planned | 1st-order standard forms (separable, linear, Bernoulli, exact) + 2nd-order constant coefficients |
+| 31 | Maxima CAS Syntax & Prelude | `cas`/`parser` | ⬜ Planned | Maxima CAS parser (`expand`, `factor`, `ratsimp`, `partfrac`, `integrate`, `limit`, `ode2`), facade & prelude |
+| 32 | Verification & Maxima Benchmarks | all | ⬜ Planned | Proptest integration/ODE invariants, Maxima test suite parity (`rtest_integrate.mac`), fmt/clippy |
+
 ---
 
 ## Overview & Vision

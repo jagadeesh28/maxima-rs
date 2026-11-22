@@ -120,4 +120,28 @@ _Avoid_: Matrix flattening, matrix placeholder
 The `GET /api/rules` endpoint and WebUI "Maxima coverage" panel exposing the provenanced rule catalog and per-Lisp-file counts.
 _Avoid_: Rule listing, provenance dump
 
+**Procedural CAS Algorithm**:
+A deterministic, directed symbolic manipulation routine (e.g., polynomial factoring, Risch integration, Gruntz limits, ODE solvers) operating directly on `Expr` ASTs outside the e-graph.
+_Avoid_: E-graph rewrite, saturation rule, macro transform
+
+**Sparse Distributed Multivariate Polynomial (Poly)**:
+A canonical polynomial data structure storing sorted non-zero terms with packed monomial exponent vectors and exact rational coefficients.
+_Avoid_: Recursive polynomial, sum-of-products AST, dense polynomial
+
+**Ratsimp (Rational Simplification)**:
+The canonical reduction of a rational expression to a coprime quotient of polynomials $P/Q$ via polynomial greatest common divisor (GCD).
+_Avoid_: Fraction cancellation, division cleanup, rational normalization
+
+**Hermite Reduction**:
+An algebraic integration pre-pass decomposing a rational function into a purely rational derivative part and a square-free denominator integral without full factorization.
+_Avoid_: Partial fraction integration, rational reduction
+
+**Rothstein-Trager / Lazard-Rioboo-Trager (LRT)**:
+An algebraic algorithm computing logarithmic and arctangent parts of rational integrals via resultant polynomials over square-free denominators.
+_Avoid_: Complex log expansion, heuristic integration
+
+**Gruntz Limit Algorithm**:
+An asymptotic limit algorithm for exp-log functions that isolates Most Rapidly Varying (MRV) subexpression sets and expands generalized series around $\omega \to 0$.
+_Avoid_: L'Hopital's rule, naive Taylor limit
+
 

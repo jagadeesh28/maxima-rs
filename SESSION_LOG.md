@@ -77,9 +77,15 @@ When starting a new session, instruct the AI:
 | `parser` | Phase 7 | Yes | Maxima string & LaTeX math parsers via `winnow` |
 | `pipeline` | Phase 8 | Yes | `optimize()`, `optimize_gradient()`, `Pipeline` builder |
 | `macros` | Phase 9 | Yes | `sym_fn!` and `sym_eval!` proc-macros |
+| `poly` | Phases 22, 23 | Yes | Sparse distributed multivariate polynomials, 64-bit packed exponents, Monagan-Pearce heap, `expand`, `ratsimp`, `gcd`, `factor`, `partfrac` |
+| `integrate` | Phases 24, 25, 28 | Yes | Symbolic integration (SIN, Hermite, LRT real ln/atan, Bronstein Risch field towers, FTC defint) |
+| `series` | Phase 26 | Yes | Truncated Laurent series arithmetic and asymptotic expansions |
+| `limit` | Phase 27 | Yes | Dominik Gruntz's MRV limits engine + 3-tier zero decider |
+| `solve` | Phases 29, 30 | Yes | Closed-form algebraic solvers (deg 1-4, factor-and-split) + ODE solvers (1st-order standard & 2nd-order constant coeffs) |
+| `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **All Phases (1–21) Complete ✅**
+### Current Phase: **Phases 1–22 Complete ✅ — Phases 23–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -106,6 +112,17 @@ When starting a new session, instruct the AI:
 | 19. Matrix E-Graph Fidelity | `egraph` | ✅ Completed | Lossless matrix symbol codec; no sentinel |
 | 20. WebUI Provenance | `maxima-web` | ✅ Completed | `GET /api/rules`, `provenance` op, coverage panel |
 | 21. Documentation & Verification | all | ✅ Completed | Coverage report, glossary, final fmt/clippy/test |
+| 22. Sparse Distributed Poly Engine | `poly` | ✅ Completed | 64-bit packed exponents, `grevlex`, Monagan-Pearce heap multiplication/division, `expand()` (121 unit + 6 integration tests) |
+| 23. Exact Rational Algebra & Factorization | `poly` | ⬜ Planned | Subresultant PRS + modular $\mathbb{F}_p$ GCD, `ratsimp`, Yun square-free, Berlekamp/Hensel `factor`, `partfrac` |
+| 24. Symbolic Integration: Rational & Elementary | `integrate` | ⬜ Planned | Moses' SIN, Hermite reduction, Lazard-Rioboo-Trager (LRT) real $\ln/\text{atan}$, IBP |
+| 25. Transcendental Risch Differential Towers | `integrate` | ⬜ Planned | Bronstein differential field towers for $\exp/\ln$, non-elementary proofs (`Expr::integral` noun) |
+| 26. Laurent Series & Asymptotics | `series` | ⬜ Planned | Truncated `Series { center, valuation, coeffs, order }` arithmetic and elementary expansions |
+| 27. Gruntz Limits Engine | `limit` | ⬜ Planned | Dominik Gruntz MRV algorithm, $\omega \to 0$ distortion, 3-tier zero-equivalence decider |
+| 28. Definite Integration & Pole Scanning | `integrate` | ⬜ Planned | Sturm pole scanning, FTC evaluation, improper limits via Gruntz |
+| 29. Closed-Form Algebraic Solvers | `solve` | ⬜ Planned | Degrees 1-4 formulas, factor-and-split, transcendental variable isolation, `AlgebraicSolutions` |
+| 30. ODE Solvers | `solve` | ⬜ Planned | 1st-order standard forms (separable, linear, Bernoulli, exact) + 2nd-order constant coeffs (`OdeSolution`) |
+| 31. Maxima Parser CAS Syntax & Facade | `cas`/`parser` | ⬜ Planned | Maxima CAS commands parsing (`expand`, `factor`, `ratsimp`, `partfrac`, `integrate`, `limit`, `ode2`), facade & prelude |
+| 32. Verification & Maxima Benchmarks | all | ⬜ Planned | Proptests for integration/ODE invariants, Maxima test suite parity (`rtest_integrate.mac`, etc.), fmt/clippy |
 
 ---
 
@@ -304,4 +321,55 @@ When starting a new session, instruct the AI:
 | 19 — Matrix e-graph fidelity | ✅ |
 | 20 — WebUI provenance | ✅ |
 | 21 — Docs & verification | ✅ |
+
+---
+
+## Session 5 — Comprehensive CAS Expansion & Architectural Grilling (Phases 22–32)
+
+**Date**: 2026-11-22  
+**Scope**: Expanded repository to next-level CAS on-par with Wolfram Mathematica based on `agents_instructions.md`. Conducted interactive `/grill-with-docs` architectural review, web research on state-of-the-art polynomial and symbolic algorithms (SDMP, LRT, Gruntz, Bronstein Risch), and committed a 11-phase implementation roadmap.
+
+### Settled Design Decisions (Session 5: Decisions 30–40)
+
+| # | Decision | Choice | Round |
+|---|----------|--------|-------|
+| 30 | Polynomial Representation | Sparse Distributed Multivariate Polynomial (`Poly`) with packed 64-bit exponents under Graded Reverse Lexicographical (`grevlex`) term order; dynamic `Vec<u32>` fallback for >8 variables | R1 |
+| 31 | Polynomial Arithmetic | Monagan-Pearce heap-based priority-queue multiplication and pseudo-division in $O(t)$ memory | R1 |
+| 32 | GCD & Factorization Ladder | Multi-tier escalation: Subresultant PRS as exact baseline, modular GCD over $\mathbb{F}_p$ for high degrees; Yun's square-free; Berlekamp/Cantor-Zassenhaus over $\mathbb{F}_p$ with linear Hensel lifting to $\mathbb{Z}[x]$ for factoring; extended Euclidean for `partfrac` | R1 |
+| 33 | Hybrid E-Graph / Procedural Invariant | Dedicated procedural AST-to-AST pipelines owning canonical structural invariants, calling scoped e-graph passes only for local subterm reduction; formalised in **ADR-0006** | R1 |
+| 34 | Rational Integration Algorithm | Hermite reduction stripping repeated denominator poles without full factoring + Lazard-Rioboo-Trager (LRT) computing real-valued $\ln / \text{atan}$ antiderivatives directly via Sturm sequences | R1 |
+| 35 | Gruntz Zero-Equivalence Decider | 3-tier decider: 1) exact `ratsimp` and constant folding, 2) e-graph algebraic saturation, 3) multi-point float interval evaluation guard | R1 |
+| 36 | Cargo Feature Partitioning | Fine-grained features (`poly`, `integrate`, `series`, `limit`, `solve`) unified under meta-feature `cas`, included in `full` | R1 |
+| 37 | Monomial Exponent Packing | 64-bit packed word (8 variables $\times$ 8-bit degree $\le 255$) with single-instruction integer comparison under `grevlex` | R2 |
+| 38 | Integration Noun Fallback | Unified with existing `Expr::Integral(Box<Expr>, Box<Expr>)` via `Expr::integral(f, var)` constructor | R2 |
+| 39 | Series Representation | Truncated Laurent series: `Series { center: Expr, valuation: i64, coeffs: Vec<Expr>, order: i64 }` supporting negative pole orders and fractional Puiseux powers | R2 |
+| 40 | Solvers Return Types | Dedicated types: `AlgebraicSolutions(Vec<Expr>)` and `OdeSolution { solution: Expr, constants: Vec<String> }` with conversion to equality expressions | R2 |
+
+### Artifacts Created & Updated
+- **ADR Created**: [`docs/adr/0006-hybrid-egraph-and-procedural-cas.md`](docs/adr/0006-hybrid-egraph-and-procedural-cas.md) — Accepted.
+- **GLOSSARY Extended**: Added 6 canonical CAS terms (*Sparse Distributed Multivariate Polynomial*, *Procedural CAS Algorithm*, *Ratsimp*, *Hermite Reduction*, *Rothstein-Trager / LRT*, *Gruntz Limit Algorithm*).
+- **Plan Committed**: Added detailed Phase 22–32 specifications to [`agents.md`](agents.md).
+
+---
+
+## Session 7 — Phase 22: Sparse Multivariate Polynomial Engine ✅
+
+**Date**: 2026-11-22
+**Scope**: Implemented the `poly` Cargo feature and procedural polynomial engine (Phase 22).
+
+### Deliverables
+- New `poly` feature in `sym-core` and `maxima-rs` (added to `full`); `#[cfg(feature = "poly")] pub mod poly;`.
+- `sym-core/src/poly/monomial.rs`: `Monomial` (grevlex, 64-bit `packed()` for ≤8 vars, `VarContext`).
+- `sym-core/src/poly/mod.rs`: `Poly`/`Term` over exact `BigRational`, `Expr <-> Poly` conversion, add/sub/mul/pow, term normalization.
+- `sym-core/src/poly/heap.rs`: Monagan-Pearce heap multiplication + univariate `pseudo_divmod`.
+- `sym-core/src/poly/expand.rs`: `expand()` via `Poly`, structural distribution fallback for non-polynomials.
+- `tests/integration/poly_expand.rs` (6 golden tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --features poly --lib`: 121 passed.
+- `cargo test -p maxima-tests --test poly_expand`: 6 passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean.
+- Existing suites stay green (`basic_arithmetic`, `trigonometric`, …); `maxima-web` 7 tests; sym-core doctests 16.
+- `cargo build -p sym-core --no-default-features --features poly`: OK; `cargo fmt --all -- --check`: clean.
+
 
