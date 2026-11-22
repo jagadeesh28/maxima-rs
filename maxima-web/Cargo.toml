@@ -1,0 +1,19 @@
+[package]
+name = "maxima-web"
+version = "0.1.0"
+edition = "2024"
+description = "Modern webUI for maxima-rs: symbolic math in the browser"
+publish = false
+
+[dependencies]
+maxima-rs = { path = "../maxima-rs", features = ["full"] }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tower-http = { version = "0.5", features = ["fs"] }
+num-rational = "0.4"
+num-traits = "0.2"
+
+[profile.release]
+opt-level = 2

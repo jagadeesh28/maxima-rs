@@ -1,0 +1,83 @@
+//! API request/response models for the maxima-rs webUI.
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// Incoming computation request from the webUI.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ComputeRequest {
+    /// The mathematical expression (Maxima syntax or LaTeX).
+    pub expression: String,
+    /// "maxima" (default) or "latex".
+    #[serde(default = "default_input_format")]
+    pub input_format: String,
+    /// One of: simplify, parse_maxima, parse_latex, differentiate, gradient,
+    /// jacobian, hessian, cse, rust_code, evaluate.
+    pub operation: String,
+    /// Variables for differentiation / gradient / jacobian / hessian / rust_code.
+    #[serde(default)]
+    pub variables: Vec<String>,
+    /// Single variable shorthand (used by differentiate).
+    #[serde(default)]
+    pub variable: String,
+    /// "f64" (default) or "f32" — target float type for codegen/eval.
+    #[serde(default = "default_float_type")]
+    pub float_type: String,
+    /// Variable -> numeric value for the evaluate operation.
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+}
+
+fn default_input_format() -> String {
+    "maxima".into()
+}
+
+fn default_float_type() -> String {
+    "f64".into()
+}
+
+/// Outgoing computation response.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ComputeResponse {
+    pub success: bool,
+    pub operation: String,
+    /// Primary result (display form).
+    pub result: String,
+    /// Primary result as LaTeX (KaTeX-rendered by the frontend).
+    pub result_latex: String,
+    /// Extra structured results serialized as JSON values.
+    #[serde(default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+    /// Rust source code (operation = "rust_code").
+    pub rust_code: Option<String>,
+    /// Error message when success == false.
+    pub error: Option<String>,
+    /// Server-side processing time in milliseconds.
+    pub elapsed_ms: u64,
+}
+
+impl ComputeResponse {
+    pub fn ok() -> Self {
+        Self {
+            success: true,
+            ..Default::default()
+        }
+    }
+}
+
+/// Health check response.
+#[derive(Serialize)]
+pub struct HealthResponse {
+    pub status: String,
+    pub crate_name: String,
+}
+
+/// List of available operations (returned by GET /api/operations).
+#[derive(Serialize)]
+pub struct Operation {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub needs_variables: bool,
+    pub needs_env: bool,
+}
