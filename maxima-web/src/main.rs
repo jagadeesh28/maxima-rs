@@ -33,6 +33,7 @@ async fn main() {
     let api = Router::new()
         .route("/health", get(health))
         .route("/operations", get(operations))
+        .route("/rules", get(rules))
         .route("/compute", post(compute_handler))
         .with_state(state.clone());
 
@@ -136,7 +137,18 @@ async fn operations(State(_): State<Arc<AppState>>) -> Json<Vec<Operation>> {
             needs_variables: false,
             needs_env: true,
         },
+        Operation {
+            id: "provenance",
+            name: "Maxima Rule Coverage",
+            description: "1:1 Maxima LISP citations and per-file rule counts",
+            needs_variables: false,
+            needs_env: false,
+        },
     ])
+}
+
+async fn rules(State(_): State<Arc<AppState>>) -> Json<api::RulesResponse> {
+    Json(service::rules_catalog())
 }
 
 async fn compute_handler(

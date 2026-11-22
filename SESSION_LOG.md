@@ -255,3 +255,15 @@ When starting a new session, instruct the AI:
 - New `tests/integration/matrix_fidelity.rs` (3 tests) proves matrices survive saturation/extraction.
 - Verification: `sym-core` 104 unit tests pass; matrix fidelity suite passes.
 
+
+### Phase 20 — WebUI Provenance & Coverage Surfacing ✅
+- `maxima-web/src/api.rs`: new `RuleEntry`, `FileRuleCount`, `RulesResponse` models.
+- `maxima-web/src/service.rs`: `rules_catalog()` (sorted by file/name, per-file counts) and a
+  `provenance` compute operation that needs no expression.
+- `maxima-web/src/main.rs`: `GET /api/rules` route and a `provenance` entry in `/api/operations`.
+- Frontend: "Maxima coverage" panel (per-file counts from `/api/rules`) plus `sinh(x)`, `atan(x)`,
+  `5!` example chips; `node --check` clean.
+- Tests: 7 web tests (incl. catalog shape + provenance op).
+- Live verification (fresh binary): `GET /api/rules` → `92` rules across 7 files;
+  `sinh(x)^2 - cosh(x)^2` → `(-1)`; `5!` → `120`; matrix round-trip preserved.
+

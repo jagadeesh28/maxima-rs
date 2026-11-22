@@ -24,7 +24,9 @@ const els = {
   themeToggle: document.getElementById('themeToggle'),
   statusBadge: document.getElementById('statusBadge'),
   copyResultBtn: document.getElementById('copyResultBtn'),
-  copyCodeBtn: document.getElementById('copyCodeBtn')
+  copyCodeBtn: document.getElementById('copyCodeBtn'),
+  rulesTotal: document.getElementById('rulesTotal'),
+  rulesTable: document.getElementById('rulesTable')
 };
 
 const OP_NEEDS_VARS = new Set(['differentiate','gradient','jacobian','hessian','rust_code']);
@@ -81,6 +83,24 @@ function copyText(text, btn) {
     btn.innerHTML = '<svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M22 11c0-1.2-1.074-2.167-2-2.388V7c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-1.612c.926.221 2 1.188 2 2.388 0 1.21-.854 2.237-2 2.438V21c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2v-1.562c-1.145-.201-2-1.228-2-2.438 0-1.2 1.074-2.167 2-2.388V7c0-1.1.9-2 2-2h6.612C19.926 8.833 22 9.796 22 11m-7-8a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>';
     setTimeout(() => btn.innerHTML = old, 1200);
   }).catch(err => console.warn('clipboard unavailable', err));
+}
+
+async function fetchRules() {
+  try {
+    const res = await fetch(API + '/rules');
+    if (!res.ok) throw new Error('rules unavailable');
+    const data = await res.json();
+    if (els.rulesTotal) els.rulesTotal.textContent = data.total + ' rules';
+    if (els.rulesTable) {
+      els.rulesTable.innerHTML = (data.by_file || []).map(f =>
+        '<div class="flex items-center justify-between px-2 py-1 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">' +
+        '<span class="mono text-xs">' + escapeHtml(f.file) + '</span>' +
+        '<span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">' + f.count + '</span></div>'
+      ).join('');
+    }
+  } catch (e) {
+    console.warn('could not fetch rules', e);
+  }
 }
 
 async function fetchOperations() {
@@ -262,6 +282,7 @@ els.computeBtn.addEventListener('click', async () => {
 });
 
 fetchOperations();
+fetchRules();
 checkHealth();
 setInterval(checkHealth, 30000);
 initTheme();

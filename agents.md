@@ -576,6 +576,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 ### Acceptance Criteria
 - `cargo test -p maxima-web` green; panel renders counts; layout remains correct.
 
+**Status**: ✅ Completed — `GET /api/rules` + `RulesResponse`/`RuleEntry`/`FileRuleCount`; `provenance` compute operation (no expression required); UI coverage panel; chips for `sinh(x)`, `atan(x)`, `5!`; 7 web tests. Live check: 92 rules across 7 files.
+
 ---
 
 ## Phase 21 — Documentation, Coverage Report & Final Verification

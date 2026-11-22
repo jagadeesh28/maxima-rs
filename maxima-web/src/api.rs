@@ -81,3 +81,28 @@ pub struct Operation {
     pub needs_variables: bool,
     pub needs_env: bool,
 }
+
+/// One provenanced rewrite rule exposed by `GET /api/rules`.
+#[derive(Debug, Clone, Serialize)]
+pub struct RuleEntry {
+    pub name: &'static str,
+    pub source_file: &'static str,
+    pub source_fn: &'static str,
+    pub identity: &'static str,
+    pub fast_math_only: bool,
+}
+
+/// Number of rules citing a given Maxima Lisp file.
+#[derive(Debug, Clone, Serialize)]
+pub struct FileRuleCount {
+    pub file: &'static str,
+    pub count: usize,
+}
+
+/// Response payload for `GET /api/rules` (1:1 Maxima coverage report).
+#[derive(Debug, Clone, Serialize)]
+pub struct RulesResponse {
+    pub total: usize,
+    pub by_file: Vec<FileRuleCount>,
+    pub rules: Vec<RuleEntry>,
+}

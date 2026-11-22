@@ -11,7 +11,7 @@ use maxima_rs::cse::eliminate_common_subexprs;
 use maxima_rs::prelude::*;
 use maxima_rs::saturate::SaturationConfig;
 
-use crate::api::ComputeResponse;
+use crate::api::{ComputeResponse, FileRuleCount, RuleEntry, RulesResponse};
 
 /// Run a single compute operation, mutating [`ComputeResponse`] in place.
 /// Returns a `String` error on failure; the caller decides how to report it.
@@ -20,6 +20,38 @@ fn run_operation(
     resp: &mut ComputeResponse,
 ) -> Result<(), String> {
     let start = Instant::now();
+
+    // Provenance does not require an input expression.
+    if req.operation == "provenance" {
+        let catalog = rules_catalog();
+        resp.extra.insert("total".into(), catalog.total.into());
+        resp.extra.insert(
+            "by_file".into(),
+            serde_json::to_value(&catalog.by_file).unwrap(),
+        );
+        resp.extra.insert(
+            "rules".into(),
+            serde_json::to_value(&catalog.rules).unwrap(),
+        );
+        resp.extra
+            .insert("variables".into(), serde_json::Value::Array(vec![]));
+        resp.extra.insert(
+            "result".into(),
+            format!(
+                "{} provenanced rules across {} Maxima Lisp files",
+                catalog.total,
+                catalog.by_file.len()
+            )
+            .into(),
+        );
+        resp.extra.insert(
+            "result_latex".into(),
+            format!("{}\\text{{ rules}}", catalog.total).into(),
+        );
+        resp.elapsed_ms = start.elapsed().as_millis() as u64;
+        return Ok(());
+    }
+
     let expr = parse_input(req)?;
     let detected: Vec<String> = expr.variables();
 
@@ -178,6 +210,44 @@ pub fn compute(req: &crate::api::ComputeRequest) -> ComputeResponse {
         resp.error = Some(e);
     }
     resp
+}
+
+/// Build the 1:1 Maxima rule coverage report surfaced by `GET /api/rules`.
+pub fn rules_catalog() -> RulesResponse {
+    let provenances = maxima_rs::rules::all_rule_provenances();
+    let total = provenances.len();
+
+    let mut rules: Vec<RuleEntry> = provenances
+        .into_iter()
+        .map(|(name, prov)| RuleEntry {
+            name,
+            source_file: prov.source_file,
+            source_fn: prov.source_fn,
+            identity: prov.identity,
+            fast_math_only: prov.fast_math_only,
+        })
+        .collect();
+    rules.sort_by(|a, b| {
+        a.source_file
+            .cmp(b.source_file)
+            .then_with(|| a.name.cmp(b.name))
+    });
+
+    let mut counts: std::collections::BTreeMap<&'static str, usize> =
+        std::collections::BTreeMap::new();
+    for rule in &rules {
+        *counts.entry(rule.source_file).or_insert(0) += 1;
+    }
+    let by_file = counts
+        .into_iter()
+        .map(|(file, count)| FileRuleCount { file, count })
+        .collect();
+
+    RulesResponse {
+        total,
+        by_file,
+        rules,
+    }
 }
 
 fn parse_input(req: &crate::api::ComputeRequest) -> Result<Expr, String> {
@@ -427,5 +497,50 @@ mod tests {
         let resp = compute(&request("x", "does-not-exist"));
         assert!(!resp.success);
         assert!(resp.error.is_some());
+    }
+
+    #[test]
+    fn test_rules_catalog_shape() {
+        let catalog = rules_catalog();
+        assert!(catalog.total >= 92, "expected >= 92 rules");
+        assert_eq!(catalog.total, catalog.rules.len());
+
+        let summed: usize = catalog.by_file.iter().map(|f| f.count).sum();
+        assert_eq!(summed, catalog.total);
+
+        for file in [
+            "simp.lisp",
+            "trigi.lisp",
+            "sinh.lisp",
+            "nrat4.lisp",
+            "sfacts.lisp",
+        ] {
+            assert!(
+                catalog.by_file.iter().any(|f| f.file == file),
+                "missing file {file}"
+            );
+        }
+
+        for rule in &catalog.rules {
+            assert!(!rule.name.is_empty());
+            assert!(!rule.source_file.is_empty());
+            assert!(!rule.source_fn.is_empty());
+            assert!(!rule.identity.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_provenance_operation() {
+        // Provenance does not require an expression.
+        let resp = compute(&request("", "provenance"));
+        assert!(resp.success, "error: {:?}", resp.error);
+        let total = resp
+            .extra
+            .get("total")
+            .and_then(|v| v.as_u64())
+            .expect("total");
+        assert!(total >= 92);
+        assert!(resp.extra.contains_key("by_file"));
+        assert!(resp.extra.contains_key("rules"));
     }
 }
