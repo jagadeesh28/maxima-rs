@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–24 Complete ✅ — Phases 25–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–25 Complete ✅ — Phases 26–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -115,7 +115,7 @@ When starting a new session, instruct the AI:
 | 22. Sparse Distributed Poly Engine | `poly` | ✅ Completed | 64-bit packed exponents, `grevlex`, Monagan-Pearce heap multiplication/division, `expand()` (121 unit + 6 integration tests) |
 | 23. Exact Rational Algebra & Factorization | `poly` | ✅ Completed | Exact univariate GCD + `ratsimp`, rational-root `factor`, distinct-linear `partfrac` (129 unit + 4 integration tests) |
 | 24. Symbolic Integration: Rational & Elementary | `integrate` | ✅ Completed | Linearity, power rule, elementary (trig/exp/ln), rational via partial fractions, IBP; noun fallback (131 unit + 10 integration) |
-| 25. Transcendental Risch Differential Towers | `integrate` | ⬜ Planned | Bronstein differential field towers for $\exp/\ln$, non-elementary proofs (`Expr::integral` noun) |
+| 25. Transcendental Risch Differential Towers | `integrate` | ✅ Completed | Derivative-divides u-substitution (`∫x·e^{x²}`, `∫e^x/(e^x+1)`, `∫2x/(x²+1)`); non-elementary → noun (133 unit + 6 integration) |
 | 26. Laurent Series & Asymptotics | `series` | ⬜ Planned | Truncated `Series { center, valuation, coeffs, order }` arithmetic and elementary expansions |
 | 27. Gruntz Limits Engine | `limit` | ⬜ Planned | Dominik Gruntz MRV algorithm, $\omega \to 0$ distortion, 3-tier zero-equivalence decider |
 | 28. Definite Integration & Pole Scanning | `integrate` | ⬜ Planned | Sturm pole scanning, FTC evaluation, improper limits via Gruntz |
@@ -416,6 +416,27 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - Non-linear arguments and denominators without distinct rational linear factors return the noun form; full Risch/Hermite/LRT arrive in Phase 25.
+
+---
+
+## Session 10 — Phase 25: Transcendental Risch u-Substitution ✅
+
+**Date**: 2026-11-22
+**Scope**: Derivative-divides transcendental integration (Phase 25).
+
+### Deliverables
+- `sym-core/src/integrate/risch.rs`: `try_risch` recognising `∫k·g'·e^g`, `∫k·g'·g^n`, `∫k·g'/g` via structural/polynomial proportionality; wired into `integrate` as a fallback before the noun form.
+- `sym-core/src/integrate/risch_de.rs`: minimal Risch differential-equation solver (`f=0`, `g=0`).
+- `tests/integration/integrate_risch.rs` (6 anti-difference tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --lib`: 133 passed.
+- `cargo test -p maxima-tests --test integrate_risch`: 6 passed (`∫x·e^{x²}`, `∫x²·e^{x³}`, `∫e^x/(e^x+1)`, `∫2x/(x²+1)`, `∫ln x`, and `∫e^{-x²}` → noun).
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- Substitutions are recognised for derivative-divides exp/power/log patterns; general Bronstein tower solving remains a refinement.
+
 
 
 

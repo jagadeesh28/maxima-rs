@@ -844,9 +844,9 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/integrate/risch.rs` | `integrate` | ⬜ Not started | Differential field tower $k(t_1)\dots(t_n)$ for $\exp$ and $\ln$ extensions |
-| `sym-core/src/integrate/risch_de.rs` | `integrate` | ⬜ Not started | Risch differential equation solver: $y' + f y = g$ in differential fields |
-| `tests/integration/integrate_risch.rs` | `integrate` | ⬜ Not started | Tests proving non-elementary integrals (e.g. $\int e^{-x^2} dx \to \text{noun}$) and solving transcendental towers |
+| `sym-core/src/integrate/risch.rs` | `integrate` | ✅ Completed | Differential field tower $k(t_1)\dots(t_n)$ for $\exp$ and $\ln$ extensions |
+| `sym-core/src/integrate/risch_de.rs` | `integrate` | ✅ Completed | Risch differential equation solver: $y' + f y = g$ in differential fields |
+| `tests/integration/integrate_risch.rs` | `integrate` | ✅ Completed | Tests proving non-elementary integrals (e.g. $\int e^{-x^2} dx \to \text{noun}$) and solving transcendental towers |
 
 ### Acceptance Criteria
 - Successfully integrates nested exp-log expressions (e.g. $\int x e^{x^2} dx$, $\int \ln(x) dx$, $\int \frac{e^x}{e^x + 1} dx$).

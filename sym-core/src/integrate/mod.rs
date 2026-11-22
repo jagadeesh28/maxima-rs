@@ -8,6 +8,8 @@
 pub mod hermite;
 pub mod ibp;
 pub mod lrt;
+pub mod risch;
+pub mod risch_de;
 pub mod sin;
 
 use crate::expr::Expr;
@@ -55,6 +57,16 @@ pub(crate) fn noun(expr: &Expr, var: &str) -> Expr {
 
 /// Integrate `expr` with respect to `var`, returning an antiderivative or noun.
 pub fn integrate(expr: &Expr, var: &str) -> Expr {
+    let result = integrate_core(expr, var);
+    if matches!(&result, Expr::Integral(f, v) if **f == *expr && **v == Expr::var(var))
+        && let Some(sub) = risch::try_risch(expr, var)
+    {
+        return sub;
+    }
+    result
+}
+
+fn integrate_core(expr: &Expr, var: &str) -> Expr {
     if is_constant_wrt(expr, var) {
         return Expr::mul(expr.clone(), Expr::var(var));
     }

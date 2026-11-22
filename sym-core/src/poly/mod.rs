@@ -69,7 +69,7 @@ impl fmt::Display for PolyError {
 impl std::error::Error for PolyError {}
 
 /// A sparse distributed multivariate polynomial.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Poly {
     pub(crate) terms: Vec<Term>,
     pub(crate) ctx: VarContext,
