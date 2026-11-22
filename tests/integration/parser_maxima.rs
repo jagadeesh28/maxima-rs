@@ -48,3 +48,50 @@ fn test_parse_exponential_and_log() {
     let expected = Expr::mul(Expr::exp(Expr::var("x")), Expr::ln(Expr::var("y")));
     assert_eq!(e, expected);
 }
+
+#[test]
+fn test_parse_constants_and_factorial() {
+    let half_pi = parse_maxima("%pi / 2").expect("parse %pi");
+    assert_eq!(half_pi, Expr::div(Expr::pi(), Expr::int(2)));
+
+    let fac = parse_maxima("5!").expect("parse factorial");
+    assert_eq!(fac, Expr::factorial(Expr::int(5)));
+    assert_eq!(fac.eval(&Default::default()), Some(120.0));
+}
+
+#[test]
+fn test_parse_hyperbolic_and_inverse_trig() {
+    let e = parse_maxima("sinh(x) + atan(y)").expect("parse hyperbolic/inverse trig");
+    assert_eq!(
+        e,
+        Expr::add(Expr::sinh(Expr::var("x")), Expr::atan(Expr::var("y")))
+    );
+}
+
+#[test]
+fn test_parse_calculus_and_matrix() {
+    let d = parse_maxima("diff(x^2, x)").expect("parse diff");
+    assert_eq!(
+        d,
+        Expr::derivative(Expr::pow(Expr::var("x"), Expr::int(2)), Expr::var("x"))
+    );
+
+    let m = parse_maxima("matrix([1, 2], [3, 4])").expect("parse matrix");
+    match m {
+        Expr::Matrix(rows) => {
+            assert_eq!(rows.len(), 2);
+            assert_eq!(rows[0][1], Expr::int(2));
+            assert_eq!(rows[1][0], Expr::int(3));
+        }
+        other => panic!("expected matrix, got {other}"),
+    }
+}
+
+#[test]
+fn test_parse_maxima_display_roundtrip() {
+    for s in ["%pi + %e", "sinh(x)^2", "3!", "2 * x!"] {
+        let parsed = parse_maxima(s).expect("initial parse");
+        let reparsed = parse_maxima(&parsed.to_string());
+        assert!(reparsed.is_ok(), "display roundtrip failed for {s}");
+    }
+}

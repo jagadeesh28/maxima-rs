@@ -504,6 +504,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 ### Acceptance Criteria
 - New golden tests pass; symmetrical constructs parse in both parsers.
 
+**Status**: ✅ Completed — `%pi`/`%e`/other `%`-symbols, postfix `!` (tighter than `^`), hyperbolic/inverse-trig calls, `diff`/`integrate`/`sum`, `matrix([..],[..])`; 8 integration tests + parser unit tests pass.
+
 ---
 
 ## Phase 17 — 1:1 Rule Expansion I: Hyperbolic, Inverse Trig, Deeper Trig

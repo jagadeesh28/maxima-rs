@@ -208,3 +208,14 @@ When starting a new session, instruct the AI:
 - Verification: `cargo build --workspace --all-features`, `cargo test --workspace --all-features`,
   `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo fmt` all clean.
 
+
+### Phase 16 — Maxima Parser Parity ✅
+- Rewrote `parse_maxima` core: identifier parsing now handles `_`, `%pi`/`%e` (and keeps other
+  `%symbols` symbolic), postfix `!` via a new `postfix` precedence level (tighter than `^`),
+  and multi-argument calls.
+- Added `diff(f,x)` → `Derivative`, `integrate(f,x)` → `Integral`, `sum(f,i,lo,hi)` → `Sum`,
+  and `matrix([..],[..])` → `Matrix`.
+- Added 6 parser unit tests and 5 integration golden tests in `tests/integration/parser_maxima.rs`.
+- Verification: `cargo test -p sym-core --all-features` (100 unit + 16 doctests),
+  `cargo test -p maxima-tests --test parser_maxima` (8 passed).
+
