@@ -55,3 +55,6 @@ pub mod integrate;
 
 #[cfg(feature = "series")]
 pub mod series;
+
+#[cfg(feature = "limit")]
+pub mod limit;

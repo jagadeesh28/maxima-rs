@@ -81,3 +81,7 @@ path = "integration/integrate_risch.rs"
 [[test]]
 name = "series"
 path = "integration/series.rs"
+
+[[test]]
+name = "limits"
+path = "integration/limits.rs"

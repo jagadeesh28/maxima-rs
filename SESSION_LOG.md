@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–26 Complete ✅ — Phases 27–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–27 Complete ✅ — Phases 28–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -117,7 +117,7 @@ When starting a new session, instruct the AI:
 | 24. Symbolic Integration: Rational & Elementary | `integrate` | ✅ Completed | Linearity, power rule, elementary (trig/exp/ln), rational via partial fractions, IBP; noun fallback (131 unit + 10 integration) |
 | 25. Transcendental Risch Differential Towers | `integrate` | ✅ Completed | Derivative-divides u-substitution (`∫x·e^{x²}`, `∫e^x/(e^x+1)`, `∫2x/(x²+1)`); non-elementary → noun (133 unit + 6 integration) |
 | 26. Laurent Series & Asymptotics | `series` | ✅ Completed | Truncated `Series { center, valuation, coeffs, order }` arithmetic + sin/cos/exp/1/(1-x)/1/sin expansions (133 unit + 9 integration) |
-| 27. Gruntz Limits Engine | `limit` | ⬜ Planned | Dominik Gruntz MRV algorithm, $\omega \to 0$ distortion, 3-tier zero-equivalence decider |
+| 27. Gruntz Limits Engine | `limit` | ✅ Completed | MRV enumeration, series-based limits, log-transform for `Pow`, numeric convergence fallback (138 unit + 6 integration) |
 | 28. Definite Integration & Pole Scanning | `integrate` | ⬜ Planned | Sturm pole scanning, FTC evaluation, improper limits via Gruntz |
 | 29. Closed-Form Algebraic Solvers | `solve` | ⬜ Planned | Degrees 1-4 formulas, factor-and-split, transcendental variable isolation, `AlgebraicSolutions` |
 | 30. ODE Solvers | `solve` | ⬜ Planned | 1st-order standard forms (separable, linear, Bernoulli, exact) + 2nd-order constant coeffs (`OdeSolution`) |
@@ -452,6 +452,28 @@ When starting a new session, instruct the AI:
 - `cargo test -p sym-core --lib`: 133 passed.
 - `cargo test -p maxima-tests --test series`: 9 passed (sin/cos/exp/1/(1-x)/1/sin incl. Laurent pole, inverse multiplication, derivative, composition `sin(x²)`).
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+---
+
+## Session 12 — Phase 27: Asymptotic Limits ✅
+
+**Date**: 2026-11-22
+**Scope**: `limit` feature — MRV enumeration, series-based limits, log-transform, numeric fallback (Phase 27).
+
+### Deliverables
+- `sym-core/src/limit/mod.rs`: `limit(expr, var, point)` with `t=±1/x` substitution for infinite points, series-based constant-term extraction, `Pow` log-transform (`exp(lim(exp·ln base))`), leading-term exp-difference rewrite, and numeric convergence fallback recognising exact constants.
+- `sym-core/src/limit/mrv.rs`: exponential/logarithmic subexpression enumeration.
+- `sym-core/src/limit/zero.rs`: tiered zero-equivalence decider (exact → polynomial → series constant term).
+- `tests/integration/limits.rs` (6 tests) registered in `tests/Cargo.toml`.
+
+### Verification
+- `cargo test -p sym-core --lib`: 138 passed.
+- `cargo test -p maxima-tests --test limits`: 6 passed (`sin x/x→1`, `(1+1/x)^x→e`, `e^{x+e^{-x}}-e^x→1`, `1/x→∞→0`, removable rational, polynomial).
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- Non-analytic/essential limits outside the handled patterns rely on the numeric convergence fallback; a full Gruntz MRV tower replaces this incrementally.
+
 
 
 

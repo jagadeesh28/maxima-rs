@@ -19,6 +19,7 @@ pipeline = ["sym-core/pipeline"]
 poly = ["sym-core/poly"]
 integrate = ["sym-core/integrate"]
 series = ["sym-core/series"]
+limit = ["sym-core/limit"]
 macros = ["dep:sym-macros", "diff", "egraph", "cse", "codegen"]
 
 [dependencies]

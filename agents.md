@@ -897,10 +897,10 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/limit/mrv.rs` | `limit` | ⬜ Not started | Most Rapidly Varying (MRV) subexpression set extraction and comparability relation |
-| `sym-core/src/limit/mod.rs` | `limit` | ⬜ Not started | Gruntz algorithm orchestrator: $\omega \to 0$ distortion variable substitution and series expansion |
-| `sym-core/src/limit/zero.rs` | `limit` | ⬜ Not started | 3-tier zero-equivalence decider (`ratsimp` -> e-graph saturation -> interval evaluation guard) |
-| `tests/integration/limits.rs` | `limit` | ⬜ Not started | Golden tests: $\lim_{x\to 0} \frac{\sin x}{x} = 1$, $\lim_{x\to\infty} \left(1 + \frac{1}{x}\right)^x = e$, $\lim_{x\to\infty} (e^{x + e^{-x}} - e^x) = 1$ |
+| `sym-core/src/limit/mrv.rs` | `limit` | ✅ Completed | Most Rapidly Varying (MRV) subexpression set extraction and comparability relation |
+| `sym-core/src/limit/mod.rs` | `limit` | ✅ Completed | Gruntz algorithm orchestrator: $\omega \to 0$ distortion variable substitution and series expansion |
+| `sym-core/src/limit/zero.rs` | `limit` | ✅ Completed | 3-tier zero-equivalence decider (`ratsimp` -> e-graph saturation -> interval evaluation guard) |
+| `tests/integration/limits.rs` | `limit` | ✅ Completed | Golden tests: $\lim_{x\to 0} \frac{\sin x}{x} = 1$, $\lim_{x\to\infty} \left(1 + \frac{1}{x}\right)^x = e$, $\lim_{x\to\infty} (e^{x + e^{-x}} - e^x) = 1$ |
 
 ### Acceptance Criteria
 - Solves challenging exp-log limits where naive L'Hôpital / Taylor expansions fail or loop.

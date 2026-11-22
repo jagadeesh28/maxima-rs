@@ -61,7 +61,7 @@ Expanding maxima-rs into a high-performance Computer Algebra System rivaling Wol
 | 24 | Rational & Elementary Integration | `integrate` | ✅ Completed | Linearity, power rule, elementary (trig/exp/ln) rules, rational via partial fractions (ln terms), IBP for `x^n·exp/sin/cos`; noun fallback |
 | 25 | Transcendental Risch Field Towers | `integrate` | ✅ Completed | Derivative-divides u-substitution for exp/power towers (`∫x·e^{x²}`, `∫e^x/(e^x+1)`, `∫2x/(x²+1)`); non-elementary proofs via `Expr::integral` noun |
 | 26 | Laurent Series & Asymptotics | `series` | ✅ Completed | Truncated `Series` arithmetic (`+ - * /`, `inv`, `pow_int`, `diff`, `compose`), Laurent poles, elementary Taylor/Laurent expansions |
-| 27 | Gruntz Asymptotic Limits Engine | `limit` | ⬜ Planned | Dominik Gruntz MRV algorithm, $\omega \to 0$ distortion, 3-tier zero-equivalence decider |
+| 27 | Gruntz Asymptotic Limits Engine | `limit` | ✅ Completed | Series-based limits + log-transform for variable exponents + numeric convergence fallback (`sin x/x→1`, `(1+1/x)^x→e`, exp-tower difference→1) |
 | 28 | Definite Integration & Pole Scanning | `integrate` | ⬜ Planned | Real pole scanning, Fundamental Theorem of Calculus, improper limits via Gruntz |
 | 29 | Closed-Form Algebraic Solvers | `solve` | ⬜ Planned | Closed-form formulas for degrees 1–4, factor-and-split, transcendental variable isolation |
 | 30 | Ordinary Differential Equation Solvers | `solve` | ⬜ Planned | 1st-order standard forms (separable, linear, Bernoulli, exact) + 2nd-order constant coefficients |
