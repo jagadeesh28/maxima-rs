@@ -136,7 +136,7 @@ fn run_operation(req: &crate::api::ComputeRequest, resp: &mut ComputeResponse) -
             resp.extra.insert(
                 "outputs_latex".into(),
                 serde_json::to_value(
-                    &cse.outputs.iter().map(latex).collect::<Vec<_>>(),
+                    cse.outputs.iter().map(latex).collect::<Vec<_>>(),
                 )
                 .unwrap(),
             );
@@ -222,7 +222,7 @@ fn parse_env(env: &HashMap<String, String>) -> Result<HashMap<String, f64>, Stri
 }
 
 fn emit_rust_fn(expr: &Expr, vars: &[&str], fn_name: &str, float_type: FloatType) -> String {
-    let cse = eliminate_common_subexprs(&[expr.clone()]);
+    let cse = eliminate_common_subexprs(std::slice::from_ref(expr));
     let cfg = CodegenConfig { float_type };
     let ty = match float_type {
         FloatType::F64 => "f64",
@@ -293,10 +293,10 @@ fn term(e: &Expr) -> String {
         Expr::Ln(a) => format!("\\ln{{{}}}", wrap(a)),
         Expr::Sqrt(a) => format!("\\sqrt{{{}}}", wrap(a)),
         Expr::Derivative(inner, var) => {
-            format!("\\frac{{d}}{{d {}}}{{{}}}", term(&*var), wrap(&*inner))
+            format!("\\frac{{d}}{{d {}}}{{{}}}", term(var), wrap(inner))
         }
         Expr::Integral(inner, var) => {
-            format!("\\int {} \\, d{}", wrap(&*inner), term(&*var))
+            format!("\\int {} \\, d{}", wrap(inner), term(var))
         }
         Expr::Tensor(name, indices) => {
             let mut s = escape_latex(name);

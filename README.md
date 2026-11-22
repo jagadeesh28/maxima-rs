@@ -112,6 +112,7 @@ maxima-rs = { version = "0.1", default-features = false, features = ["diff"] }
 - [`sym-core`](file:///e:/Rust/Max/sym-core/) — Core engine: expression AST, rational constants, differentiation, e-graph rules, cost function, CSE, codegen.
 - [`sym-macros`](file:///e:/Rust/Max/sym-macros/) — Procedural macro implementation (`sym_fn!`, `sym_eval!`).
 - [`maxima-rs`](file:///e:/Rust/Max/maxima-rs/) — Public facade crate re-exporting the engine and macros.
+- [`maxima-web`](file:///e:/Rust/Max/maxima-web/) — Interactive browser WebUI & JSON compute API (built with Axum).
 - [`docs/adr/`](file:///e:/Rust/Max/docs/adr/) — Architectural Decision Records.
 - [`GLOSSARY.md`](file:///e:/Rust/Max/GLOSSARY.md) — Canonical domain vocabulary.
 - [`agents.md`](file:///e:/Rust/Max/agents.md) — Phased implementation plan.
@@ -171,3 +172,36 @@ env.insert("y".to_string(), 1.0);
 assert_eq!(grad[0].eval(&env), Some(0.0));
 assert_eq!(grad[1].eval(&env), Some(0.0));
 ```
+
+---
+
+## Interactive Local Web Server (`maxima-web`)
+
+`maxima-rs` includes an interactive local web server providing a browser-based UI and a JSON REST API for real-time symbolic optimization:
+
+### Running the Web Server
+
+Run the `maxima-web` crate from within its folder or with `--bin maxima-web`:
+
+```powershell
+# From the repository root:
+cargo run -p maxima-web
+
+# Or from inside the maxima-web directory:
+cd maxima-web
+cargo run
+```
+
+Then open **[http://localhost:3000](http://localhost:3000)** in your browser.
+
+### Capabilities in the Web UI:
+- **Real-time Simplify & Optimize**: Equality saturation using 1:1 Maxima rules.
+- **Analytical Derivatives**: Compute partial derivatives, gradients, Jacobians, and Hessians.
+- **CSE Breakdown**: View common subexpressions extracted as ordered intermediate let-bindings.
+- **Zero-Overhead Rust Codegen**: Inspect and copy compilable Rust function bodies.
+- **Math Formats**: Interactive rendering with KaTeX supporting Maxima syntax and LaTeX inputs.
+- **REST API Endpoints**:
+  - `POST /api/compute`: Accepts `{ "expr": "...", "format": "maxima"|"latex", "operation": "optimize"|"derivative"|"gradient"|"cse"|"rust_code"|"evaluate" }`
+  - `GET /api/operations`: Lists all supported operations and metadata.
+  - `GET /api/health`: Health status and engine version.
+
