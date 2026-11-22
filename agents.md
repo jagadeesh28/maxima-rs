@@ -593,6 +593,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 ### Acceptance Criteria
 - Zero clippy warnings, formatted, all tests pass, docs consistent with coverage numbers.
 
+**Status**: ✅ Completed — coverage report added (92 rules / 7 Lisp files), glossary extended with 7 parity terms, README status → Phase 21, and the final green workspace verification recorded in `SESSION_LOG.md`.
+
 ---
 
 ## Phase 14–21 Deliverables Summary

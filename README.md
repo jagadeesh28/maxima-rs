@@ -6,13 +6,13 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 
 ---
 
-## Current Status: Phase 13 Complete ✅
+## Current Status: Phase 21 Complete ✅
 
 | Phase | Feature | Status | Summary |
 |-------|---------|--------|---------|
 | **1. Workspace & Expr AST** | `core` | ✅ **Complete** | Foundational AST, exact rational arithmetic, evaluation, display |
 | **2. Analytical Differentiation** | `diff` | ✅ **Complete** | Partial derivatives, gradients, Jacobians, Hessians |
-| **3. E-Graph Language, 1:1 Rules & Provenance** | `egraph` | ✅ **Complete** | `egg::Language` mapping, 52 1:1 Maxima LISP rules with citations & `RuleProvenance` |
+| **3. E-Graph Language, 1:1 Rules & Provenance** | `egraph` | ✅ **Complete** | `egg::Language` mapping, initial 52 1:1 Maxima LISP rules with citations & `RuleProvenance` (now 92; see coverage) |
 | **4. Cost, Saturation, Extraction** | `egraph` | ✅ **Complete** | FLOP-weighted cost model, runner config, multi-root extractor |
 | **5. CSE Post-Pass** | `cse` | ✅ **Complete** | DAG-based common subexpression elimination |
 | **6. Codegen (TokenStream)** | `codegen` | ✅ **Complete** | `proc_macro2::TokenStream` function body generation |
@@ -30,6 +30,7 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 | **18. Rule Expansion II** | `egraph` | ✅ **Complete** | 92 provenanced rules; `nrat4.lisp` rational normalization and `sfacts.lisp` factorial recurrences |
 | **19. Matrix E-Graph Fidelity** | `egraph` | ✅ **Complete** | Lossless matrix symbol codec; matrices survive saturation/extraction (no sentinel) |
 | **20. WebUI Provenance** | `maxima-web` | ✅ **Complete** | `GET /api/rules`, `provenance` operation, live "Maxima coverage" panel, new example chips |
+| **21. Documentation & Verification** | all | ✅ **Complete** | Coverage report, glossary/session-log updates, final `fmt`/`clippy -D warnings`/`test` |
 
 > **Rule**: This `README.md` file is actively updated upon the completion of every phase.
 
@@ -47,7 +48,7 @@ The detailed requirements live in [`agents.md`](file:///e:/Rust/Max/agents.md).
 | 18 | Parity | ✅ Complete | 1:1 rules citing `nrat4.lisp` (ratsimp) and `sfacts.lisp` (factorial) |
 | 19 | Parity | ✅ Complete | Matrix fidelity through the e-graph (structured symbol encoding) |
 | 20 | WebUI | ✅ Complete | `GET /api/rules` + "Maxima coverage" panel in the UI |
-| 21 | Docs | ⬜ Planned | Coverage report, glossary/session-log updates, final green verification |
+| 21 | Docs | ✅ Complete | Coverage report, glossary/session-log updates, final green verification |
 
 ---
 
@@ -127,6 +128,24 @@ The workspace is designed with modular feature gates to keep compile times fast 
 [dependencies]
 maxima-rs = { version = "0.1", default-features = false, features = ["diff"] }
 ```
+
+---
+
+## Maxima 1:1 Rule Coverage
+
+Every rewrite rule carries `RuleProvenance { source_file, source_fn, identity, fast_math_only }`.
+Current registry: **92 rules across 7 Maxima LISP files** (also exposed live via `GET /api/rules`).
+
+| Maxima source | Rules | Cited routines |
+|---------------|-------|----------------|
+| `simp.lisp` | 34 | `simpplus`, `simptimes`, `simpexpt` |
+| `trigi.lisp` | 27 | `simp-%sin/cos/tan`, `simp-%asin/acos/atan`, `trigsimp` |
+| `sinh.lisp` | 10 | `simp-%sinh`, `simp-%cosh`, `simp-%tanh` |
+| `nrat4.lisp` | 8 | `$ratsimp`, `$nrat` |
+| `logarc.lisp` | 7 | `sp1log` |
+| `sfacts.lisp` | 5 | `factcomb` |
+| `combin.lisp` | 1 | `factor` |
+| **Total** | **92** | |
 
 ---
 

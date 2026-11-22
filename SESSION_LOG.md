@@ -15,7 +15,7 @@ saturation engine that generates zero-overhead optimized Rust code via procedura
 
 | File | Purpose |
 |------|---------|
-| [`agents.md`](file:///e:/Rust/Max/agents.md) | Full phased implementation plan (Phases 1–12) |
+| [`agents.md`](file:///e:/Rust/Max/agents.md) | Full phased implementation plan (Phases 1–21) |
 | [`GLOSSARY.md`](file:///e:/Rust/Max/GLOSSARY.md) | Canonical domain vocabulary (20 terms) |
 | [`docs/adr/`](file:///e:/Rust/Max/docs/adr) | 5 Architecture Decision Records (ADR-0003 superseded by ADR-0005) |
 | [`References/maxima-master.zip`](file:///e:/Rust/Max/References/maxima-master.zip) | Maxima Common Lisp reference source |
@@ -79,7 +79,7 @@ When starting a new session, instruct the AI:
 | `macros` | Phase 9 | Yes | `sym_fn!` and `sym_eval!` proc-macros |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **All Phases (1–12) Complete ✅**
+### Current Phase: **All Phases (1–21) Complete ✅**
 
 ### Phase Completion Tracker
 
@@ -97,6 +97,15 @@ When starting a new session, instruct the AI:
 | 10. Facade Crate & Prelude | `full` | ✅ Completed | `maxima-rs` facade crate with re-exports and `prelude` module |
 | 11. Testing Infrastructure & Coverage | all | ✅ Completed | 9 integration suites, 2 proptest suites, 1:1 citation coverage check (52 rules) |
 | 12. Ergonomics & Polish | all | ✅ Completed | Zero clippy warnings across workspace (`-D warnings`), rustfmt clean, zero runtime overhead verified |
+| 13. Advanced Math & Calculus | `core`/`parser` | ✅ Completed | Tensor/Matrix/Derivative/Integral/Sum AST nodes, LaTeX calculus parsing |
+| 14. WebUI Correctness | `maxima-web` | ✅ Completed | Fixed pane `<main>` layout, `copyText()` syntax error, copy wiring, `simplify`/`optimize` |
+| 15. Advanced AST Nodes | `core` | ✅ Completed | `sinh/cosh/tanh`, `asin/acos/atan`, `%pi`/`%e`, factorial across all passes |
+| 16. Maxima Parser Parity | `parser` | ✅ Completed | Constants, `!`, hyperbolic/inverse trig, `diff`/`integrate`/`sum`/`matrix` |
+| 17. Rule Expansion I | `egraph` | ✅ Completed | `sinh.lisp` + deeper `trigi.lisp`; registry 79 rules |
+| 18. Rule Expansion II | `egraph` | ✅ Completed | `nrat4.lisp` rational + `sfacts.lisp` factorial; registry 92 rules |
+| 19. Matrix E-Graph Fidelity | `egraph` | ✅ Completed | Lossless matrix symbol codec; no sentinel |
+| 20. WebUI Provenance | `maxima-web` | ✅ Completed | `GET /api/rules`, `provenance` op, coverage panel |
+| 21. Documentation & Verification | all | ✅ Completed | Coverage report, glossary, final fmt/clippy/test |
 
 ---
 
@@ -266,4 +275,33 @@ When starting a new session, instruct the AI:
 - Tests: 7 web tests (incl. catalog shape + provenance op).
 - Live verification (fresh binary): `GET /api/rules` → `92` rules across 7 files;
   `sinh(x)^2 - cosh(x)^2` → `(-1)`; `5!` → `120`; matrix round-trip preserved.
+
+
+### Phase 21 — Documentation, Coverage Report & Final Verification ✅
+- `README.md`: status → **Phase 21 Complete**, Phase 3 noted as the initial 52-rule baseline,
+  new "Maxima 1:1 Rule Coverage" table (92 rules / 7 files), `/api/rules` documented,
+  Phases 14–21 roadmap all ✅.
+- `GLOSSARY.md`: added Hyperbolic Function Node, Inverse Trigonometric Node, Factorial
+  Simplification, Rational Normalization, Named Constant, Matrix Symbol Encoding, Rule Coverage API.
+- `agents.md`: Phase 21 marked complete.
+- Final verification (2026-11-22):
+  - `cargo fmt --all` — clean.
+  - `cargo clippy --workspace --all-targets --all-features -- -D warnings` — clean.
+  - `cargo test --workspace --all-features` — all suites green (sym-core 104 unit tests,
+    integration suites incl. new `rational_factorial`, `matrix_fidelity`, 7 web tests, doctests).
+  - Live WebUI check — 92 rules / 7 files; `sinh(x)^2 - cosh(x)^2` → `(-1)`; `5!` → `120`;
+    `matrix([1,2],[3,4])` preserved; `/api/operations` includes `provenance`.
+
+### Phases 14–21 — Final Status
+
+| Phase | Status |
+|-------|--------|
+| 14 — WebUI correctness | ✅ |
+| 15 — Advanced AST nodes | ✅ |
+| 16 — Maxima parser parity | ✅ |
+| 17 — Rule expansion I | ✅ |
+| 18 — Rule expansion II | ✅ |
+| 19 — Matrix e-graph fidelity | ✅ |
+| 20 — WebUI provenance | ✅ |
+| 21 — Docs & verification | ✅ |
 

@@ -92,4 +92,32 @@ _Avoid_: Syntax mode, encoding, input language
 A doc comment and `RuleProvenance` entry tracing a rewrite rule to its exact Maxima Common LISP source file and function name, maintaining systematic 1:1 correspondence.
 _Avoid_: Reference, attribution, credit
 
+**Hyperbolic Function Node**:
+An `Expr` variant (`Sinh`, `Cosh`, `Tanh`) representing hyperbolic sine/cosine/tangent, simplified by rules citing `sinh.lisp` (`simp-%sinh`, `simp-%cosh`, `simp-%tanh`).
+_Avoid_: Trig function, transcendental
+
+**Inverse Trigonometric Node**:
+An `Expr` variant (`Asin`, `Acos`, `Atan`) representing principal-branch inverse trig functions, simplified by rules citing `trigi.lisp` (`simp-%asin`, `simp-%acos`, `simp-%atan`).
+_Avoid_: Reciprocal trig, arc function
+
+**Factorial Simplification**:
+Rewriting and constant folding of `n!` using `sfacts.lisp` (`factcomb`) recurrences; exact integer arguments fold during e-graph analysis.
+_Avoid_: Gamma expansion, product notation
+
+**Rational Normalization**:
+The `ratsimp`-style merging of quotients (common denominators, sign normalization, quotient-of-quotient) implemented by rules citing `nrat4.lisp` (`$ratsimp`, `$nrat`).
+_Avoid_: Fraction reduction, division cleanup
+
+**Named Constant**:
+An irrational symbolic constant (`%pi`, `%e`) kept symbolic in the AST and encoded as `MathLang::NamedConst` in the e-graph; evaluated or emitted as `f64`/`f32` constants only at the leaves of the pipeline.
+_Avoid_: Float literal, numeric constant
+
+**Matrix Symbol Encoding**:
+A lossless prefix-token serialization of `Expr::Matrix` into a single e-graph symbol, allowing matrices to survive saturation and extraction without an opaque sentinel.
+_Avoid_: Matrix flattening, matrix placeholder
+
+**Rule Coverage API**:
+The `GET /api/rules` endpoint and WebUI "Maxima coverage" panel exposing the provenanced rule catalog and per-Lisp-file counts.
+_Avoid_: Rule listing, provenance dump
+
 
