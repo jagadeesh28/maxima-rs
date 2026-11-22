@@ -23,6 +23,7 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 | **11. Testing Infrastructure & Coverage** | all | ✅ **Complete** | Golden regression suite, `proptest`, and automated 1:1 Maxima citation coverage verification |
 | **12. Ergonomics & Polish** | all | ✅ **Complete** | Zero clippy warnings across workspace, formatted, zero-overhead validation |
 | **13. Tensor & Matrix Calculus** | `tensor` | ✅ **Complete** | Ricci calculus foundations, Covariant/Contravariant index types, AST & E-Graph support |
+| **14. WebUI Correctness** | `maxima-web` | ✅ **Complete** | Fixed pane layout, JS syntax/copy wiring, `simplify`/`optimize` API contract, service tests |
 
 > **Rule**: This `README.md` file is actively updated upon the completion of every phase.
 
@@ -33,7 +34,7 @@ The detailed requirements live in [`agents.md`](file:///e:/Rust/Max/agents.md).
 
 | Phase | Workstream | Status | Summary |
 |-------|-----------|--------|---------|
-| 14 | WebUI | ⬜ Planned | Fix broken `<main>` layout, `copyText()` script bug, and `simplify`/`optimize` API contract |
+| 14 | WebUI | ✅ Complete | Fixed broken `<main>` layout, `copyText()` script bug, and `simplify`/`optimize` API contract |
 | 15 | Parity | ⬜ Planned | AST nodes for `sinh/cosh/tanh`, `asin/acos/atan`, `%pi`, `%e`, factorial + full plumbing |
 | 16 | Parity | ⬜ Planned | `parse_maxima` parity: constants, factorial, hyperbolic/inverse trig, calculus & matrix forms |
 | 17 | Parity | ⬜ Planned | 1:1 rules citing `sinh.lisp` + deeper `trigi.lisp` |
@@ -217,7 +218,7 @@ Then open **[http://localhost:3000](http://localhost:3000)** in your browser.
 - **Zero-Overhead Rust Codegen**: Inspect and copy compilable Rust function bodies.
 - **Math Formats**: Interactive rendering with KaTeX supporting Maxima syntax and LaTeX inputs.
 - **REST API Endpoints**:
-  - `POST /api/compute`: Accepts `{ "expr": "...", "format": "maxima"|"latex", "operation": "optimize"|"derivative"|"gradient"|"cse"|"rust_code"|"evaluate" }`
+  - `POST /api/compute`: Accepts `{ "expression": "...", "input_format": "maxima"|"latex", "operation": "simplify" (alias "optimize") | "differentiate" | "gradient" | "jacobian" | "hessian" | "cse" | "rust_code" | "evaluate", "variables": [...], "env": { "x": "1" } }`
   - `GET /api/operations`: Lists all supported operations and metadata.
   - `GET /api/health`: Health status and engine version.
 

@@ -464,6 +464,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 - Two-pane layout renders side-by-side; copy buttons copy raw result / Rust code.
 - Both `simplify` and `optimize` requests return successful responses.
 
+**Status**: ✅ Completed — `index.html` `<main>` wrapper restored, `app.js` passes `node --check`, copy buttons wired, 5 service tests added.
+
 ---
 
 ## Phase 15 — Advanced AST Nodes & Full-Pipeline Plumbing

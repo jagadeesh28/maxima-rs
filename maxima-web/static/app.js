@@ -22,7 +22,9 @@ const els = {
   errorBox: document.getElementById('errorBox'),
   errorMsg: document.getElementById('errorMsg'),
   themeToggle: document.getElementById('themeToggle'),
-  statusBadge: document.getElementById('statusBadge')
+  statusBadge: document.getElementById('statusBadge'),
+  copyResultBtn: document.getElementById('copyResultBtn'),
+  copyCodeBtn: document.getElementById('copyCodeBtn')
 };
 
 const OP_NEEDS_VARS = new Set(['differentiate','gradient','jacobian','hessian','rust_code']);
@@ -73,11 +75,14 @@ function escapeHtml(s) {
 }
 
 function copyText(text, btn) {
+  if (!text) return;
   navigator.clipboard.writeText(text).then(() => {
     const old = btn.innerHTML;
     btn.innerHTML = '<svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M22 11c0-1.2-1.074-2.167-2-2.388V7c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-1.612c.926.221 2 1.188 2 2.388 0 1.21-.854 2.237-2 2.438V21c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2v-1.562c-1.145-.201-2-1.228-2-2.438 0-1.2 1.074-2.167 2-2.388V7c0-1.1.9-2 2-2h6.612C19.926 8.833 22 9.796 22 11m-7-8a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>';
     setTimeout(() => btn.innerHTML = old, 1200);
-  });
+  }).catch(err => console.warn('clipboard unavailable', err));
+}
+
 async function fetchOperations() {
   try {
     const res = await fetch(API + '/operations');
@@ -123,6 +128,9 @@ els.themeToggle.addEventListener('click', () => {
 });
 
 els.operation.addEventListener('change', setVarsVisibility);
+
+els.copyResultBtn.addEventListener('click', (e) => copyText(els.rawResult.textContent, e.currentTarget));
+els.copyCodeBtn.addEventListener('click', (e) => copyText(els.rustCode.textContent, e.currentTarget));
 
 document.querySelectorAll('.exampleChip').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -257,5 +265,3 @@ fetchOperations();
 checkHealth();
 setInterval(checkHealth, 30000);
 initTheme();
-
-}

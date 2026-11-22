@@ -171,4 +171,28 @@ When starting a new session, instruct the AI:
 ---
 
 ## Architecture & Skill Reference
-- [/grafify](.agents/skills/grafify/SKILL.md) � Authoritative dependency graph, module call graph, and function-level cross-module interdependency matrix for continuous reference and maintenance.
+- [/grafify](.agents/skills/grafify/SKILL.md) � Authoritative dependency graph, module call graph, and function-level cross-module interdependency matrix for continuous reference and maintenance.
+
+---
+
+## Session 6 — Phases 14–21: WebUI Restoration & 1:1 Maxima Parity
+
+**Date**: 2026-11-22
+**Scope**: Restore the `maxima-web` UI and deepen 1:1 Maxima LISP rule/AST/parser parity.
+
+### Plan (committed first)
+- Added `Roadmap — Phases 14–21` to `agents.md` and a matching roadmap table to `README.md`.
+- Commit: `docs(plan): add Phases 14-21 roadmap for WebUI restoration and Maxima parity`.
+
+### Phase 14 — WebUI Correctness ✅
+- `maxima-web/static/index.html`: added the missing `<main class="flex-1 flex overflow-hidden">`
+  opening tag around the input/output panes and deleted the stray `<main>` emitted after `</html>`
+  (the two panes previously stacked vertically).
+- `maxima-web/static/app.js`: fixed the unterminated `copyText()` function and the stray trailing
+  brace that made the whole script a syntax error (`node --check` now passes); wired
+  `copyResultBtn` / `copyCodeBtn`.
+- `maxima-web/src/service.rs`: accepted the `optimize` alias for `simplify`; added 5 unit tests
+  (simplify, optimize alias, differentiate, evaluate, unknown operation).
+- `README.md`: corrected the `/api/compute` payload documentation.
+- Verification: `cargo test -p maxima-web` (5 passed), `cargo clippy -p maxima-web --all-targets -- -D warnings` clean.
+

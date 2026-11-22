@@ -15,28 +15,28 @@ use crate::api::ComputeResponse;
 
 /// Run a single compute operation, mutating [`ComputeResponse`] in place.
 /// Returns a `String` error on failure; the caller decides how to report it.
-fn run_operation(req: &crate::api::ComputeRequest, resp: &mut ComputeResponse) -> Result<(), String> {
+fn run_operation(
+    req: &crate::api::ComputeRequest,
+    resp: &mut ComputeResponse,
+) -> Result<(), String> {
     let start = Instant::now();
     let expr = parse_input(req)?;
     let detected: Vec<String> = expr.variables();
 
     match req.operation.as_str() {
-        "simplify" => {
+        "simplify" | "optimize" => {
             let opt = optimize(&expr, &SaturationConfig::default());
             resp.extra.insert("result".into(), opt.to_string().into());
             resp.extra.insert("result_latex".into(), latex(&opt).into());
-            resp.extra.insert(
-                "variables".into(),
-                serde_json::to_value(&detected).unwrap(),
-            );
+            resp.extra
+                .insert("variables".into(), serde_json::to_value(&detected).unwrap());
         }
         "parse_maxima" | "parse_latex" => {
             resp.extra.insert("result".into(), expr.to_string().into());
-            resp.extra.insert("result_latex".into(), latex(&expr).into());
-            resp.extra.insert(
-                "variables".into(),
-                serde_json::to_value(&detected).unwrap(),
-            );
+            resp.extra
+                .insert("result_latex".into(), latex(&expr).into());
+            resp.extra
+                .insert("variables".into(), serde_json::to_value(&detected).unwrap());
         }
         "differentiate" => {
             let vars = resolve_vars(req, &detected);
@@ -55,11 +55,10 @@ fn run_operation(req: &crate::api::ComputeRequest, resp: &mut ComputeResponse) -
                     })
                 })
                 .collect();
-            resp.extra.insert("results".into(), serde_json::to_value(&out).unwrap());
-            resp.extra.insert(
-                "variables".into(),
-                serde_json::to_value(&detected).unwrap(),
-            );
+            resp.extra
+                .insert("results".into(), serde_json::to_value(&out).unwrap());
+            resp.extra
+                .insert("variables".into(), serde_json::to_value(&detected).unwrap());
         }
         "gradient" => {
             let vars = resolve_vars(req, &detected);
@@ -79,19 +78,15 @@ fn run_operation(req: &crate::api::ComputeRequest, resp: &mut ComputeResponse) -
                     })
                 })
                 .collect();
-            resp.extra.insert("results".into(), serde_json::to_value(&out).unwrap());
-            resp.extra.insert(
-                "variables".into(),
-                serde_json::to_value(&detected).unwrap(),
-            );
+            resp.extra
+                .insert("results".into(), serde_json::to_value(&out).unwrap());
+            resp.extra
+                .insert("variables".into(), serde_json::to_value(&detected).unwrap());
         }
         "jacobian" | "hessian" => {
             let vars = resolve_vars(req, &detected);
             if vars.len() < 2 {
-                return Err(format!(
-                    "{} requires at least two variables",
-                    req.operation
-                ));
+                return Err(format!("{} requires at least two variables", req.operation));
             }
             let var_refs: Vec<&str> = vars.iter().map(|s| s.as_str()).collect();
             let matrix = match req.operation.as_str() {
@@ -111,13 +106,13 @@ fn run_operation(req: &crate::api::ComputeRequest, resp: &mut ComputeResponse) -
                         .collect::<Vec<_>>()
                 })
                 .collect();
-            resp.extra.insert("matrix".into(), serde_json::to_value(&rows).unwrap());
-            resp.extra.insert(
-                "variables".into(),
-                serde_json::to_value(&detected).unwrap(),
-            );
-            resp.extra.insert("vars".into(), serde_json::to_value(&vars).unwrap());
-        },
+            resp.extra
+                .insert("matrix".into(), serde_json::to_value(&rows).unwrap());
+            resp.extra
+                .insert("variables".into(), serde_json::to_value(&detected).unwrap());
+            resp.extra
+                .insert("vars".into(), serde_json::to_value(&vars).unwrap());
+        }
         "cse" => {
             let opt = optimize(&expr, &SaturationConfig::default());
             let cse = eliminate_common_subexprs(&[opt]);
@@ -131,20 +126,18 @@ fn run_operation(req: &crate::api::ComputeRequest, resp: &mut ComputeResponse) -
                 })
                 .collect();
             let outputs: Vec<String> = cse.outputs.iter().map(|e| e.to_string()).collect();
-            resp.extra.insert("bindings".into(), serde_json::to_value(&bindings).unwrap());
-            resp.extra.insert("outputs".into(), serde_json::to_value(&outputs).unwrap());
+            resp.extra
+                .insert("bindings".into(), serde_json::to_value(&bindings).unwrap());
+            resp.extra
+                .insert("outputs".into(), serde_json::to_value(&outputs).unwrap());
             resp.extra.insert(
                 "outputs_latex".into(),
-                serde_json::to_value(
-                    cse.outputs.iter().map(latex).collect::<Vec<_>>(),
-                )
-                .unwrap(),
+                serde_json::to_value(cse.outputs.iter().map(latex).collect::<Vec<_>>()).unwrap(),
             );
-            resp.extra.insert("result".into(), outputs.join(", ").into());
-            resp.extra.insert(
-                "variables".into(),
-                serde_json::to_value(&detected).unwrap(),
-            );
+            resp.extra
+                .insert("result".into(), outputs.join(", ").into());
+            resp.extra
+                .insert("variables".into(), serde_json::to_value(&detected).unwrap());
         }
         "rust_code" => {
             let float_type = parse_float_type(&req.float_type);
@@ -155,19 +148,20 @@ fn run_operation(req: &crate::api::ComputeRequest, resp: &mut ComputeResponse) -
             resp.rust_code = Some(code);
             resp.extra.insert("result".into(), opt.to_string().into());
             resp.extra.insert("result_latex".into(), latex(&opt).into());
-            resp.extra.insert("variables".into(), serde_json::to_value(&vars).unwrap());
+            resp.extra
+                .insert("variables".into(), serde_json::to_value(&vars).unwrap());
         }
         "evaluate" => {
             let env = parse_env(&req.env)?;
-            let val = expr
-                .eval(&env)
-                .ok_or_else(|| "evaluation failed (undefined variable or domain error)".to_string())?;
-            resp.extra.insert("result".into(), format!("{:.10}", val).into());
-            resp.extra.insert("result_latex".into(), latex_const(val).into());
-            resp.extra.insert(
-                "variables".into(),
-                serde_json::to_value(&detected).unwrap(),
-            );
+            let val = expr.eval(&env).ok_or_else(|| {
+                "evaluation failed (undefined variable or domain error)".to_string()
+            })?;
+            resp.extra
+                .insert("result".into(), format!("{:.10}", val).into());
+            resp.extra
+                .insert("result_latex".into(), latex_const(val).into());
+            resp.extra
+                .insert("variables".into(), serde_json::to_value(&detected).unwrap());
         }
         other => return Err(format!("unknown operation: {other}")),
     }
@@ -213,9 +207,9 @@ fn parse_float_type(s: &str) -> FloatType {
 fn parse_env(env: &HashMap<String, String>) -> Result<HashMap<String, f64>, String> {
     let mut out = HashMap::new();
     for (k, v) in env {
-        let f: f64 = v.parse().map_err(|_| {
-            format!("invalid numeric value for variable '{}': {}", k, v)
-        })?;
+        let f: f64 = v
+            .parse()
+            .map_err(|_| format!("invalid numeric value for variable '{}': {}", k, v))?;
         out.insert(k.clone(), f);
     }
     Ok(out)
@@ -243,9 +237,7 @@ fn emit_rust_fn(expr: &Expr, vars: &[&str], fn_name: &str, float_type: FloatType
         .collect::<Vec<_>>()
         .join(", ");
 
-    format!(
-        "pub fn {fn_name}({params}) -> {ty} {{\n{bindings}        {ret_ts}\n    }}"
-    )
+    format!("pub fn {fn_name}({params}) -> {ty} {{\n{bindings}        {ret_ts}\n    }}")
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -315,12 +307,7 @@ fn term(e: &Expr) -> String {
         Expr::Matrix(mat) => {
             let rows: Vec<String> = mat
                 .iter()
-                .map(|row| {
-                    row.iter()
-                        .map(render)
-                        .collect::<Vec<_>>()
-                        .join(" & ")
-                })
+                .map(|row| row.iter().map(render).collect::<Vec<_>>().join(" & "))
                 .collect::<Vec<_>>();
             format!("\\begin{{matrix}} {}\\end{{matrix}}", rows.join(" \\\\ "))
         }
@@ -351,4 +338,85 @@ fn escape_latex(s: &str) -> String {
         .replace('^', "\\^{}")
         .replace('{', "\\{")
         .replace('}', "\\}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::ComputeRequest;
+
+    fn request(expression: &str, operation: &str) -> ComputeRequest {
+        ComputeRequest {
+            expression: expression.into(),
+            input_format: "maxima".into(),
+            operation: operation.into(),
+            variables: Vec::new(),
+            variable: String::new(),
+            float_type: "f64".into(),
+            env: HashMap::new(),
+        }
+    }
+
+    fn result_of(resp: &ComputeResponse) -> &str {
+        resp.extra
+            .get("result")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn test_simplify_operation() {
+        let resp = compute(&request("sin(x)^2 + cos(x)^2", "simplify"));
+        assert!(resp.success, "error: {:?}", resp.error);
+        assert_eq!(result_of(&resp), "1");
+    }
+
+    #[test]
+    fn test_optimize_alias_operation() {
+        let resp = compute(&request("x + 0", "optimize"));
+        assert!(resp.success, "error: {:?}", resp.error);
+        assert_eq!(result_of(&resp), "x");
+    }
+
+    #[test]
+    fn test_differentiate_operation() {
+        let mut req = request("x^2", "differentiate");
+        req.variables = vec!["x".into()];
+        let resp = compute(&req);
+        assert!(resp.success, "error: {:?}", resp.error);
+        let results = resp
+            .extra
+            .get("results")
+            .and_then(|v| v.as_array())
+            .expect("results array");
+        assert_eq!(results.len(), 1);
+        let derivative = results[0]
+            .get("result")
+            .and_then(|v| v.as_str())
+            .expect("derivative string");
+        assert!(
+            derivative.contains('x'),
+            "unexpected derivative: {derivative}"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_operation() {
+        let mut req = request("x + 1", "evaluate");
+        req.env.insert("x".into(), "2".into());
+        let resp = compute(&req);
+        assert!(resp.success, "error: {:?}", resp.error);
+        assert!(
+            result_of(&resp).starts_with('3'),
+            "unexpected value: {}",
+            result_of(&resp)
+        );
+    }
+
+    #[test]
+    fn test_unknown_operation_is_error() {
+        let resp = compute(&request("x", "does-not-exist"));
+        assert!(!resp.success);
+        assert!(resp.error.is_some());
+    }
 }
