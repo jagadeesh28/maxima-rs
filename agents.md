@@ -412,3 +412,185 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 | `sym-core/src/diff.rs` | `diff` | ✅ Completed | Matrix element-wise differentiation, nested unevaluated derivatives |
 | `sym-core/src/parser/latex.rs` | `parser` | ✅ Completed | Extended `winnow` combinators to parse `\int`, `\sum`, `\begin{pmatrix}`, `\frac{\partial f}{\partial x}`, and Greek tensor notation |
 | `tests/integration/parser_latex.rs`| `parser` | ✅ Completed | Golden tests for advanced math syntax |
+
+---
+
+# Roadmap — Phases 14–21: WebUI Restoration & 1:1 Maxima Parity
+
+> **Status legend**: ⬜ Not started · 🟨 In progress · ✅ Completed
+>
+> **Protocol**: This plan was committed *before* implementation. Each phase is
+> implemented, verified (`cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`,
+> `cargo test`), documented in `README.md` + `SESSION_LOG.md`, and committed individually.
+
+## Workstream A — 1:1 Maxima Source Parity
+
+| Gap | Current State | Target |
+|-----|---------------|--------|
+| Rule coverage | 52 rules across `simp.lisp`, `trigi.lisp`, `combin.lisp`, `logarc.lisp` | Add `sinh.lisp`, `nrat4.lisp`, `sfacts.lisp`, `matrix.lisp` citations + deeper `trigi.lisp` |
+| AST surface | `sin/cos/tan/exp/ln/sqrt` only | Add `sinh/cosh/tanh`, `asin/acos/atan`, `%pi`, `%e`, factorial |
+| Maxima parser | Arithmetic + 6 functions | Constants, factorial, hyperbolic/inverse trig, calculus & matrix syntax |
+| Matrix in e-graph | Flattened to `"matrix_unsupported_in_egraph"` (data loss) | Structured encode/decode round-trip |
+| Provenance visibility | Engine-only (`all_rule_provenances`) | Exposed through `GET /api/rules` + WebUI panel |
+
+## Workstream B — WebUI Improvements
+
+| Gap | Current State | Target |
+|-----|---------------|--------|
+| Layout | Stray `<main>` after `</html>`; panes stack vertically | Correct flex-row two-pane layout |
+| Script integrity | `copyText()` missing closing brace; copy buttons unwired | Valid script + working copy buttons |
+| API contract | README says `optimize`, service only accepts `simplify` | Both accepted, docs aligned |
+| Provenance UI | Absent | Rules/coverage panel with per-file counts |
+
+---
+
+## Phase 14 — WebUI Correctness & Layout Restoration
+
+**Goal**: Make the existing `maxima-web` UI run, lay out, and copy correctly, and align the API contract.
+
+### Requirements
+- `maxima-web/static/index.html`: replace the stray `<main class="flex-1 flex overflow-hidden">`
+  emitted after `</html>` with a correct wrapper enclosing the input (`.w-2/5`) and
+  output (`.flex-1`) `<section>` panes.
+- `maxima-web/static/app.js`: close `copyText()`; bind `copyResultBtn` and `copyCodeBtn`;
+  guard clipboard errors.
+- `maxima-web/src/service.rs`: accept both `"simplify"` and `"optimize"` operation ids.
+- `maxima-web/src/main.rs`: keep `/api/operations` authoritative for the frontend.
+- Add `#[cfg(test)]` coverage for `service::compute` (simplify, differentiate, evaluate).
+- Update `README.md` API examples to use the canonical `simplify` id.
+
+### Acceptance Criteria
+- `cargo build -p maxima-web` and `cargo test -p maxima-web` succeed.
+- Two-pane layout renders side-by-side; copy buttons copy raw result / Rust code.
+- Both `simplify` and `optimize` requests return successful responses.
+
+---
+
+## Phase 15 — Advanced AST Nodes & Full-Pipeline Plumbing
+
+**Goal**: Introduce the elementary functions and constants required for parity, threaded through every pipeline pass.
+
+### Requirements
+- `Expr` variants + constructors: `Sinh`, `Cosh`, `Tanh`, `Asin`, `Acos`, `Atan`, `Pi`, `E`, `Factorial(Box<Expr>)`.
+- Update `Display`, `eval`, `variables`, `node_count` in `expr.rs`.
+- Derivatives in `diff.rs` (incl. chain rule); `Pi`/`E` constants differentiate to 0.
+- `lang.rs`: add `MathLang` nodes, `MathAnalysis` folding, `to_recexpr`/`from_recexpr` round-trip.
+- `cost.rs`: FLOP weights (hyperbolic/inverse trig = transcendentals; factorial = iterative cost).
+- `cse.rs`: traversal + substitution for new nodes.
+- `codegen.rs`: emit `.sinh()`, `.cosh()`, `.tanh()`, `.asin()`, `.acos()`, `.atan()`, `PI`/`E`, factorial closure.
+- `maxima-web/src/service.rs`: `latex()` rendering for the new nodes.
+- Unit tests in every touched module.
+
+### Acceptance Criteria
+- `cargo test --workspace` green; round-trip tests for all new variants.
+- `--no-default-features` and `--all-features` both build.
+
+---
+
+## Phase 16 — Maxima String Parser Parity
+
+**Goal**: Bring `parse_maxima` to feature parity with `parse_latex`, including the new nodes.
+
+### Requirements
+- Parse `%pi`, `%e`, factorial `!` (postfix, tighter than `*`), `sinh/cosh/tanh`, `asin/acos/atan`.
+- Parse Maxima calculus/matrix forms: `diff(f,x)`, `integrate(f,x)`, `sum(f,i,lo,hi)`, `matrix([a,b],[c,d])`.
+- Keep `%`-prefixed constants from being treated as variables; support `log` as `ln`.
+- Extend `tests/integration/parser_maxima.rs` golden tests; add round-trip tests (`parse → Display`).
+
+### Acceptance Criteria
+- New golden tests pass; symmetrical constructs parse in both parsers.
+
+---
+
+## Phase 17 — 1:1 Rule Expansion I: Hyperbolic, Inverse Trig, Deeper Trig
+
+**Goal**: Add provenanced rewrite rules for new functions and deepen `trigi.lisp` coverage.
+
+### Requirements
+- New `sym-core/src/rules/hyperbolic.rs` citing `sinh.lisp` (`simp-%sinh`, `simp-%cosh`, `simp-%tanh`)
+  and `trigi.lisp` (`simp-%asin`, `simp-%acos`, `simp-%atan`): zero/parity/inverse-cancellation rules.
+- Extend `rules/trigonometric.rs`: angle-sum, double-angle, `1 + tan² = sec²`.
+- Register in `rules/mod.rs`; update `tests/integration/maxima_coverage.rs` expected counts.
+- Every new rule carries a non-empty `RuleProvenance`.
+
+### Acceptance Criteria
+- `maxima_coverage` passes with the increased count; provenance invariants hold.
+
+---
+
+## Phase 18 — 1:1 Rule Expansion II: Rational Normalization & Factorial
+
+**Goal**: Add `ratsimp`-style rational normalization and factorial simplification.
+
+### Requirements
+- New `sym-core/src/rules/rational.rs` citing `nrat4.lisp` (`$ratsimp`/`$nrat`):
+  common-denominator merges, `(- a)/(- b) -> a/b`, `1/(1/x) -> x`, fraction addition.
+- Factorial rules citing `sfacts.lisp` (`factcomb`): `0! -> 1`, `(n+1)! -> (n+1)*n!`, `n!/(n-1)! -> n`.
+- Register + update coverage test.
+
+### Acceptance Criteria
+- Golden simplification tests pass; coverage count updated; provenance intact.
+
+---
+
+## Phase 19 — E-Graph Fidelity for Matrices
+
+**Goal**: Preserve matrix contents through saturation/extraction instead of collapsing to a sentinel.
+
+### Requirements
+- Add structured `encode_matrix_symbol`/`decode_matrix_symbol` (mirroring `tensor.rs`).
+- `lang.rs`: `to_recexpr`/`from_recexpr` use the structured encoding; remove
+  `"matrix_unsupported_in_egraph"`.
+- Add `matrix.lisp`-cited element-wise `+` / scalar `*` rules where the single-symbol
+  representation permits (documented limitations otherwise).
+- Round-trip test: `Matrix → saturate → extract` preserves shape and entries.
+
+### Acceptance Criteria
+- Matrix round-trip test passes; no sentinel string remains in `sym-core`.
+
+---
+
+## Phase 20 — WebUI Provenance & Maxima Coverage Surfacing
+
+**Goal**: Surface the engine's Maxima parity data in the UI and API.
+
+### Requirements
+- New `GET /api/rules` returning `{ total, by_file: [{file, count}], rules: [{name, source_file, source_fn, identity, fast_math_only}] }`.
+- Add `provenance` operation metadata to `/api/operations`.
+- Frontend: a "Maxima coverage" panel (per-file counts table + rule list), new example chips
+  for `sinh(x)`, `atan(x)`, `5!`.
+- Tests for the rules payload shape.
+
+### Acceptance Criteria
+- `cargo test -p maxima-web` green; panel renders counts; layout remains correct.
+
+---
+
+## Phase 21 — Documentation, Coverage Report & Final Verification
+
+**Goal**: Final polish and green-workspace verification.
+
+### Requirements
+- `GLOSSARY.md`: add hyperbolic/inverse-trig/factorial/rational-normalization terms.
+- `README.md`: status table → Phase 21 complete, updated rule counts/files, `/api/rules` docs.
+- `SESSION_LOG.md`: Sessions for Phases 14–21.
+- Final `cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --workspace`.
+
+### Acceptance Criteria
+- Zero clippy warnings, formatted, all tests pass, docs consistent with coverage numbers.
+
+---
+
+## Phase 14–21 Deliverables Summary
+
+| Phase | Primary Files | Feature Gates |
+|-------|---------------|---------------|
+| 14 | `maxima-web/static/index.html`, `maxima-web/static/app.js`, `maxima-web/src/service.rs` | — |
+| 15 | `sym-core/src/{expr,diff,lang,cost,cse,codegen}.rs` | `core`,`diff`,`egraph`,`cse`,`codegen` |
+| 16 | `sym-core/src/parser/maxima.rs`, `tests/integration/parser_maxima.rs` | `parser` |
+| 17 | `sym-core/src/rules/{hyperbolic.rs,trigonometric.rs,mod.rs}` | `egraph` |
+| 18 | `sym-core/src/rules/{rational.rs,factorial.rs,mod.rs}` | `egraph` |
+| 19 | `sym-core/src/{matrix.rs,lang.rs}`, `sym-core/src/tensor.rs` | `core`,`egraph` |
+| 20 | `maxima-web/src/{api.rs,main.rs}`, `maxima-web/static/*` | — |
+| 21 | `README.md`, `AGENTS.md`, `GLOSSARY.md`, `SESSION_LOG.md` | — |
+

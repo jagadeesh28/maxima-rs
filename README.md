@@ -26,6 +26,22 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 
 > **Rule**: This `README.md` file is actively updated upon the completion of every phase.
 
+### Roadmap: Phases 14–21 (planned)
+
+The next workstream restores the WebUI and deepens **1:1 parity with Maxima LISP sources**.
+The detailed requirements live in [`agents.md`](file:///e:/Rust/Max/agents.md).
+
+| Phase | Workstream | Status | Summary |
+|-------|-----------|--------|---------|
+| 14 | WebUI | ⬜ Planned | Fix broken `<main>` layout, `copyText()` script bug, and `simplify`/`optimize` API contract |
+| 15 | Parity | ⬜ Planned | AST nodes for `sinh/cosh/tanh`, `asin/acos/atan`, `%pi`, `%e`, factorial + full plumbing |
+| 16 | Parity | ⬜ Planned | `parse_maxima` parity: constants, factorial, hyperbolic/inverse trig, calculus & matrix forms |
+| 17 | Parity | ⬜ Planned | 1:1 rules citing `sinh.lisp` + deeper `trigi.lisp` |
+| 18 | Parity | ⬜ Planned | 1:1 rules citing `nrat4.lisp` (ratsimp) and `sfacts.lisp` (factorial) |
+| 19 | Parity | ⬜ Planned | Matrix fidelity through the e-graph (structured symbol encoding) |
+| 20 | WebUI | ⬜ Planned | `GET /api/rules` + "Maxima coverage" panel in the UI |
+| 21 | Docs | ⬜ Planned | Coverage report, glossary/session-log updates, final green verification |
+
 ---
 
 ## Overview & Vision
