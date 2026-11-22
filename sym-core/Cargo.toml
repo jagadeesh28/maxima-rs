@@ -15,7 +15,7 @@ codegen = ["dep:proc-macro2", "dep:quote"]
 parser = ["dep:winnow", "dep:thiserror"]
 pipeline = ["diff", "egraph", "cse", "codegen"]
 poly = []
-integrate = ["poly", "diff"]
+integrate = ["poly", "diff", "limit"]
 series = ["poly", "diff"]
 limit = ["series", "poly"]
 

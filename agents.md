@@ -925,8 +925,8 @@ and an automated check comparing our `RuleProvenance` registry against Maxima LI
 
 | File | Feature Gate | Status | Purpose |
 |------|--------------|--------|---------|
-| `sym-core/src/integrate/defint.rs` | `integrate` | ⬜ Not started | `defint(expr, var, a, b)` with Sturm root pole scanning and FTC evaluation |
-| `tests/integration/integrate_defint.rs` | `integrate` | ⬜ Not started | Proper and improper definite integrals ($\int_0^1 x^2 dx = 1/3$, $\int_0^\infty e^{-x} dx = 1$) |
+| `sym-core/src/integrate/defint.rs` | `integrate` | ✅ Completed | `defint(expr, var, a, b)` with Sturm root pole scanning and FTC evaluation |
+| `tests/integration/integrate_defint.rs` | `integrate` | ✅ Completed | Proper and improper definite integrals ($\int_0^1 x^2 dx = 1/3$, $\int_0^\infty e^{-x} dx = 1$) |
 
 ### Acceptance Criteria
 - Rejects application of naive FTC across real denominator poles (e.g. $\int_{-1}^1 \frac{1}{x} dx$ marked divergent).

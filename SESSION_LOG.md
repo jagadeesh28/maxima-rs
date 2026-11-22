@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phases 1–27 Complete ✅ — Phases 28–33 Planned (CAS Expansion) ⬜**
+### Current Phase: **Phases 1–28 Complete ✅ — Phases 29–33 Planned (CAS Expansion) ⬜**
 
 ### Phase Completion Tracker
 
@@ -118,7 +118,7 @@ When starting a new session, instruct the AI:
 | 25. Transcendental Risch Differential Towers | `integrate` | ✅ Completed | Derivative-divides u-substitution (`∫x·e^{x²}`, `∫e^x/(e^x+1)`, `∫2x/(x²+1)`); non-elementary → noun (133 unit + 6 integration) |
 | 26. Laurent Series & Asymptotics | `series` | ✅ Completed | Truncated `Series { center, valuation, coeffs, order }` arithmetic + sin/cos/exp/1/(1-x)/1/sin expansions (133 unit + 9 integration) |
 | 27. Gruntz Limits Engine | `limit` | ✅ Completed | MRV enumeration, series-based limits, log-transform for `Pow`, numeric convergence fallback (138 unit + 6 integration) |
-| 28. Definite Integration & Pole Scanning | `integrate` | ⬜ Planned | Sturm pole scanning, FTC evaluation, improper limits via Gruntz |
+| 28. Definite Integration & Pole Scanning | `integrate` | ✅ Completed | Rational pole scanner + FTC evaluation + improper limits (138 unit + 4 integration) |
 | 29. Closed-Form Algebraic Solvers | `solve` | ⬜ Planned | Degrees 1-4 formulas, factor-and-split, transcendental variable isolation, `AlgebraicSolutions` |
 | 30. ODE Solvers | `solve` | ⬜ Planned | 1st-order standard forms (separable, linear, Bernoulli, exact) + 2nd-order constant coeffs (`OdeSolution`) |
 | 31. Maxima Parser CAS Syntax & Facade | `cas`/`parser` | ⬜ Planned | Maxima CAS commands parsing (`expand`, `factor`, `ratsimp`, `partfrac`, `integrate`, `limit`, `ode2`), facade & prelude |
@@ -473,6 +473,27 @@ When starting a new session, instruct the AI:
 
 ### Known limitation
 - Non-analytic/essential limits outside the handled patterns rely on the numeric convergence fallback; a full Gruntz MRV tower replaces this incrementally.
+
+---
+
+## Session 13 — Phase 28: Definite Integration & Pole Scanning ✅
+
+**Date**: 2026-11-22
+**Scope**: `defint` on top of `integrate` + `limit` (Phase 28).
+
+### Deliverables
+- `sym-core/src/integrate/defint.rs`: `defint(expr, var, a, b) -> DefiniteResult { Value | Divergent | Unevaluated }` — rational pole scanner (interior roots ⇒ `Divergent`), FTC evaluation via `limit(F, b) - limit(F, a)`, constant folding.
+- `test/integration/integrate_defint.rs` (4 tests) registered in `tests/Cargo.toml`.
+- `integrate` feature now depends on `limit` (for improper bounds).
+
+### Verification
+- `cargo test -p sym-core --lib`: 138 passed.
+- `cargo test -p maxima-tests --test integrate_defint`: 4 passed (`∫_0^1 x²=1/3`, `∫_0^1 x=1/2`, `∫_0^∞ e^{-x}=1`, `∫_{-1}^1 1/x` divergent).
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean; `cargo fmt --all`: applied.
+
+### Known limitation
+- Pole scanning covers rational (distinct rational-root) poles; irrational/complex-singularity detection is a refinement.
+
 
 
 

@@ -5,6 +5,7 @@
 //! guarded integration by parts. When no rule applies it returns the unevaluated
 //! `Expr::integral` noun form. Results are exact (no floats).
 
+pub mod defint;
 pub mod hermite;
 pub mod ibp;
 pub mod lrt;
