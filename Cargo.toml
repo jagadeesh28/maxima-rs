@@ -18,3 +18,11 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 winnow = "0.7"
 thiserror = "2"
 proptest = "1"
+dashu-float = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+panic = "unwind"
+strip = true
+codegen-units = 1

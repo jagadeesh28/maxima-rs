@@ -1,0 +1,305 @@
+This is maxima.info, produced by makeinfo version 6.5 from maxima.texi.
+
+Este é o Manual do Maxima no formato Texinfo
+
+Copyright 1994, 2001 William F. Schelter
+
+START-INFO-DIR-ENTRY
+* Maxima: (maxima).     Um sistema de álgebra computacional.
+END-INFO-DIR-ENTRY
+
+
+Indirect:
+maxima.info-1: 265
+maxima.info-2: 353051
+maxima.info-3: 604483
+maxima.info-4: 914821
+maxima.info-5: 1200845
+maxima.info-6: 1500277
+
+Tag Table:
+(Indirect)
+Node: Top265
+Node: Introdução ao Maxima11577
+Node: Detecção e Relato de Erros17930
+Node: Definições para Detecção e Relato de Erros18165
+Node: Ajuda21075
+Node: Lisp e Maxima21291
+Node: Descartando25596
+Node: Documentação26419
+Node: Definições para Ajuda27501
+Node: Linha de Comandos34336
+Node: Introdução a Linha de Comandos34554
+Node: Definições para Linha de Comandos44136
+Node: Operadores73286
+Node: N-Argumentos73585
+Node: Operador não fixado74239
+Node: Operador Pósfixado74864
+Node: Operador Préfixado75414
+Node: Operadores Aritméticos75858
+Node: Operadores Relacionais84694
+Node: Operadores Geral84978
+Node: Expressões146499
+Node: Introdução a Expressões146814
+Node: Complexo148510
+Node: Substantivos e Verbos149249
+Node: Identificadores151940
+Node: Sequências de caracteres154340
+Node: Desigualdade157346
+Node: Sintaxe157663
+Node: Definições para Expressões162176
+Node: Simplificação227607
+Node: Definições para Simplificação227796
+Node: Criação de Gráficos250642
+Node: Definições para Criação de Gráficos250856
+Node: Entrada e Saída282968
+Node: Comentários283197
+Node: Ficheiros284675
+Node: Definições para Entrada e Saída285247
+Node: Ponto Flutuante353051
+Node: Definições para ponto Flutuante353236
+Node: Contextos358278
+Node: Definições para Contextos358440
+Node: Polinómios372583
+Node: Introdução a Polinómios372776
+Node: Definições para Polinómios376108
+Node: Constantes432362
+Node: Definições para Constantes432523
+Node: Logaritmos436336
+Node: Definições para Logaritmos436499
+Node: Trigonometria445856
+Node: Introdução ao Pacote Trigonométrico446080
+Node: Definições para Trigonometria447243
+Node: Funções Especiais457409
+Node: Introdução a Funções Especiais457655
+Node: Definições para Funções Especiais459350
+Node: Funções Elípticas474845
+Node: Introdução a Funções Elípticas e Integrais475143
+Node: Definições para Funções Elípticas478994
+Node: Definições para Integrais Elípticas481791
+Ref: elliptic_f482002
+Ref: elliptic_e482219
+Ref: elliptic_eu482451
+Ref: elliptic_kc483068
+Ref: elliptic_ec483375
+Node: Limites483679
+Node: Definições para Limites483842
+Node: Diferenciação486719
+Node: Definições para Diferenciação486896
+Node: Integração512675
+Node: Introdução a Integração512937
+Node: Definições para Integração513991
+Node: Introdução a QUADPACK537924
+Ref: Introdução a QUADPACK-Footnote-1541702
+Ref: Introdução a QUADPACK-Footnote-2541768
+Ref: Introdução a QUADPACK-Footnote-3541834
+Ref: Introdução a QUADPACK-Footnote-4541877
+Ref: Introdução a QUADPACK-Footnote-5541939
+Ref: Introdução a QUADPACK-Footnote-6541976
+Ref: Introdução a QUADPACK-Footnote-7542015
+Node: Definições para QUADPACK542198
+Node: Equações561394
+Node: Definições para Equações561567
+Node: Equações Diferenciais604483
+Node: Introdução às Equações Diferenciais604737
+Node: Definições para Equações Diferenciais605404
+Node: Numérico614005
+Node: Introdução a Numérico614262
+Node: Pacotes de Fourier614435
+Node: Definições para Numérico615126
+Node: Definições para Séries de Fourier630410
+Node: Arrays634009
+Node: Definições para Arrays634168
+Node: Matrizes e Álgebra Linear655656
+Node: Introdução a Matrizes e Álgebra Linear655926
+Node: Ponto656251
+Node: Vetores657811
+Node: auto658880
+Node: Definições para Matrizes e Álgebra Linear659715
+Node: Funções Afins712195
+Node: Definições para Funções Afins712386
+Node: itensor718520
+Node: Introdução a itensor718697
+Node: Definições para itensor731400
+Node: ctensor805557
+Node: Introdução a ctensor805733
+Node: Definições para ctensor810355
+Node: Pacote atensor873918
+Node: Introdução ao Pacote atensor874125
+Node: Definições para o Pacote atensor878374
+Node: Séries884459
+Node: Introdução a Séries884646
+Node: Definições para Séries885229
+Node: Teoria dos Números914821
+Node: Definições para Teoria dos Números915012
+Node: Simetrias933893
+Node: Definições para Simetrias934054
+Node: Grupos973533
+Node: Definições para Grupos973697
+Node: Ambiente em Tempo de Execução975638
+Node: Introdução a Ambiente em Tempo de Execução975953
+Node: Interrupções977253
+Node: Definições para Ambiente em Tempo de Execução978567
+Node: Opções Diversas984403
+Node: Introdução a Opções Diversas984671
+Node: Compartilhado985104
+Node: Definições para Opções Diversas985929
+Node: Regras e Modelos1001682
+Node: Introdução a Regras e Modelos1001905
+Node: Definições para Regras e Modelos1003090
+Node: Listas1051167
+Node: Introdução a Listas1051342
+Node: Definições para Listas1052262
+Node: Conjuntos1065495
+Node: Introdução a Conjuntos1065689
+Node: Definições para Conjuntos1076499
+Ref: adjoin1076670
+Ref: belln1077199
+Ref: cardinality1078270
+Ref: cartesian_product1078837
+Ref: disjoin1079593
+Ref: disjointp1080330
+Ref: divisors1080744
+Ref: elementp1082506
+Ref: emptyp1082921
+Ref: equiv_classes1083258
+Ref: every1084616
+Ref: extremal_subset1087702
+Ref: flatten1088472
+Ref: full_listify1091148
+Ref: fullsetify1091749
+Ref: identity1092458
+Ref: integer_partitions1092759
+Ref: intersect1094806
+Ref: intersection1094931
+Ref: listify1100464
+Ref: lreduce1100937
+Ref: makeset1102397
+Ref: moebius1104077
+Ref: multinomial_coeff1105367
+Ref: num_distinct_partitions1106690
+Ref: num_partitions1107590
+Ref: partition_set1108584
+Ref: permutations1109381
+Ref: powerset1109988
+Ref: rreduce1111172
+Ref: setdifference1112799
+Ref: setequalp1113690
+Ref: setify1114366
+Ref: setp1114974
+Ref: set_partitions1115617
+Ref: some1117461
+Ref: stirling11120689
+Ref: stirling21122788
+Ref: subset1125252
+Ref: subsetp1125911
+Ref: symmdifference1126341
+Ref: tree_reduce1127457
+Ref: union1128947
+Ref: xreduce1129950
+Node: Definição de Função1131845
+Node: Introdução a Definição de Função1132126
+Node: Função1132356
+Node: Macros1137838
+Node: Definições para Definição de Função1146881
+Node: Fluxo de Programa1200845
+Node: Introdução a Fluxo de Programa1201084
+Node: Definições para Fluxo de Programa1201424
+Node: Depuração1230224
+Node: Depuração do Código Fonte1230463
+Node: Comandos Palavra Chave1234711
+Node: Definições para Depuração1237511
+Node: augmented_lagrangian1248015
+Node: Definições para augmented_lagrangian1248210
+Node: bode1250888
+Node: Definições para bode1251035
+Node: descriptive1254349
+Node: Introdução ao pacote descriptive1254724
+Node: Definições para manipulação da dados1260469
+Node: Definições para estatística descritiva1269459
+Node: Definições específicas para estatística descritiva de várias variáveis1288274
+Node: Definições para gráficos estatísticos1298993
+Node: diag1312035
+Node: Definições para diag1312169
+Node: distrib1329308
+Node: Introdução a distrib1329542
+Node: Definições para distribuições contínuas1337714
+Node: Definições para distribuições discretas1400045
+Node: dynamics1427314
+Node: O pacote dynamics1427540
+Node: Análise gráfica de sistemas dinâmicos discretos1428189
+Node: Visualização usando VTK1439371
+Node: eval_string1439865
+Node: Definições para eval_string1440020
+Node: f901441988
+Node: Definições para f901442114
+Node: ggf1443937
+Node: Definições para ggf1444059
+Node: impdiff1446012
+Node: Definições para impdiff1446151
+Node: interpol1446786
+Node: Introdução a interpol1446958
+Node: Definições para interpol1447358
+Node: lbfgs1457280
+Node: Introdução a lbfgs1457442
+Node: Definições para lbfgs1458580
+Node: lindstedt1464177
+Node: Definições para lindstedt1464331
+Node: linearalgebra1465941
+Node: Introdução a linearalgebra1466143
+Node: Definições para linearalgebra1470941
+Node: lsquares1500277
+Node: Definições para lsquares1500478
+Node: makeOrders1509977
+Node: Definições para makeOrders1510132
+Node: mnewton1511158
+Node: Definições para mnewton1511307
+Node: numericalio1513116
+Node: Introdução a numericalio1513305
+Node: Definições para numericalio1516244
+Node: opsubst1520374
+Node: Definições para opsubst1520523
+Node: orthopoly1523060
+Node: Introdução a polinómios ortogonais1523264
+Ref: Avaliação em Ponto Flutuante1534736
+Node: Definições para polinómios ortogonais1542559
+Node: plotdf1550686
+Node: Introdução a plotdf1550852
+Node: Definições para plotdf1552382
+Node: romberg1562520
+Node: Definições para romberg1562661
+Node: simplex1570255
+Node: Introdução a simplex1570431
+Node: Definições para simplex1570902
+Node: simplification1575072
+Node: Introdução a simplification1575278
+Node: Definições para simplification1575683
+Node: solve_rec1597851
+Node: Introdução a solve_rec1598082
+Node: Definições para solve_rec1598816
+Node: stats1607745
+Node: Introdução a stats1607994
+Node: Definições para inference_result1609283
+Node: Definições para stats1614390
+Node: Definições para distribuições especiais1644950
+Node: stirling1646265
+Node: Definições para stirling1646412
+Node: stringproc1648411
+Node: Introdução a manipulação de sequências de caracteres1648712
+Node: Definições para entrada e saída1653975
+Node: Definições para caracteres1660894
+Node: Definições para sequências de caracteres1664620
+Node: unit1680173
+Node: Introdução a Units1680335
+Node: Definições para Units1684580
+Node: zeilberger1705093
+Node: Introdução a zeilberger1705300
+Node: Definições para zeilberger1707547
+Node: Índice de Funções e Variáveis1714051
+
+End Tag Table
+
+
+Local Variables:
+coding: utf-8
+End:

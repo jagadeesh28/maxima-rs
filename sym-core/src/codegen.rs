@@ -53,6 +53,16 @@ pub fn emit_expr(expr: &Expr, config: &CodegenConfig) -> TokenStream {
             let lit_tokens: TokenStream = lit_str.parse().unwrap_or_else(|_| quote!(0.0));
             quote!(#lit_tokens)
         }
+        #[cfg(feature = "bfloat")]
+        Expr::Bfloat(b) => {
+            let v = b.to_f64();
+            let lit_str = match config.float_type {
+                FloatType::F64 => format!("{v:?}"),
+                FloatType::F32 => format!("{:?}f32", v as f32),
+            };
+            let lit_tokens: TokenStream = lit_str.parse().unwrap_or_else(|_| quote!(0.0));
+            quote!(#lit_tokens)
+        }
         Expr::Add(a, b) => {
             let ea = emit_expr(a, config);
             let eb = emit_expr(b, config);
@@ -138,6 +148,11 @@ pub fn emit_expr(expr: &Expr, config: &CodegenConfig) -> TokenStream {
             let ty = config.float_type.type_tokens();
             quote!(#ty::consts::E)
         }
+        #[cfg(feature = "complex")]
+        Expr::I => {
+            // Emits complex imaginary unit (0.0, 1.0)
+            quote!((0.0, 1.0))
+        }
         Expr::Factorial(a) => {
             let ea = emit_expr(a, config);
             let ty = config.float_type.type_tokens();
@@ -192,6 +207,12 @@ pub fn emit_expr(expr: &Expr, config: &CodegenConfig) -> TokenStream {
             }
             // Emits a 2D array: [[a, b], [c, d]]
             quote!([#(#rows),*])
+        }
+        #[cfg(feature = "specfn")]
+        Expr::SpecialFn(kind, args) => {
+            let fn_name = format_ident!("{}", kind.as_str());
+            let emitted_args: Vec<_> = args.iter().map(|a| emit_expr(a, config)).collect();
+            quote!(#fn_name(#(#emitted_args),*))
         }
     }
 }

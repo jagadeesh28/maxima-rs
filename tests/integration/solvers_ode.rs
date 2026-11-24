@@ -36,6 +36,33 @@ fn test_first_order_linear() {
 }
 
 #[test]
+fn test_first_order_linear_with_distinct_coefficients() {
+    // y' + 2*y = 0 -> y = _C1 * exp(-2*x)
+    let ode = Expr::add(yprime(), Expr::mul(Expr::int(2), Expr::var("y")));
+    let sol = ode2(&ode, "y", "x").expect("solution");
+    assert_eq!(sol.constants, vec!["_C1".to_string()]);
+    let residual = Expr::add(
+        differentiate(&sol.solution, "x"),
+        Expr::mul(Expr::int(2), sol.solution.clone()),
+    );
+    let v = eval_with(&residual, &[("x", 0.5), ("_C1", 1.0)]);
+    assert!(v.abs() < 1e-9, "residual {v}");
+
+    // 2*y' + 5*y = 0 -> y = _C1 * exp(-5/2*x)
+    let ode2_expr = Expr::add(
+        Expr::mul(Expr::int(2), yprime()),
+        Expr::mul(Expr::int(5), Expr::var("y")),
+    );
+    let sol2 = ode2(&ode2_expr, "y", "x").expect("solution");
+    let residual2 = Expr::add(
+        Expr::mul(Expr::int(2), differentiate(&sol2.solution, "x")),
+        Expr::mul(Expr::int(5), sol2.solution.clone()),
+    );
+    let v2 = eval_with(&residual2, &[("x", 0.3), ("_C1", 1.0)]);
+    assert!(v2.abs() < 1e-9, "residual {v2}");
+}
+
+#[test]
 fn test_second_order_oscillator() {
     // y'' + w^2 y = 0
     let w = Expr::var("w");

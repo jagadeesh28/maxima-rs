@@ -144,4 +144,81 @@ _Avoid_: Complex log expansion, heuristic integration
 An asymptotic limit algorithm for exp-log functions that isolates Most Rapidly Varying (MRV) subexpression sets and expands generalized series around $\omega \to 0$.
 _Avoid_: L'Hopital's rule, naive Taylor limit
 
+**Typed Web Dispatch**:
+An API routing pattern where mathematical operations and their typed parameters are submitted explicitly via structured request payloads (`POST /api/compute`) rather than parsed from string command calls.
+_Avoid_: Command string parsing, query execution
+
+**Precedence-Aware LaTeX Formatter**:
+A recursive symbolic expression printer that inserts parentheses and math delimiters only when operator precedence requires them, producing clean mathematical typesetting.
+_Avoid_: Naive LaTeX printer, AST tree dump
+
+**Offline-First WebUI**:
+A web interface packaged with embedded static vendor assets (CSS, KaTeX, fonts) capable of full operation on air-gapped networks with zero external HTTP requests.
+_Avoid_: CDN frontend, online dashboard
+
+**Self-Contained Embedded Assets**:
+Static web assets (HTML, JS, vendor CSS, KaTeX WOFF2 fonts) embedded into the server executable at compile time using `rust-embed` for standalone distribution.
+_Avoid_: External asset directory, dynamic static serving
+
+**Notebook Interaction Model**:
+An interface paradigm presenting sequential mathematical inputs and outputs as an appendable history of numbered cells (`In[n]` / `Out[n]`), enabling chaining, re-execution, and session persistence.
+_Avoid_: Single-shot form, stateless calculator
+
+**Compute Isolation**:
+The containment of CPU-heavy symbolic workloads inside dedicated blocking worker threads bounded by wall-clock timeouts, panic boundaries, and concurrency semaphores to protect asynchronous web services from thread starvation or crashes.
+_Avoid_: Direct async execution, unconstrained compute
+
+**Core Mathematical Parity**:
+The scope definition for 1:1 parity with Maxima 5.50 targeting the mathematical transformation, calculus, and solver routines in `src/` rather than the Common Lisp interpreter runtime (`meval`).
+_Avoid_: Lisp parity, runtime emulation, dialect port
+
+**Bfloat (Arbitrary-Precision Float)**:
+An arbitrary-precision floating-point number implemented in pure Rust via `dashu-float` with user-configurable precision, matching Maxima's `bfloat` and `fpprec` while preserving zero-dependency compilation.
+_Avoid_: BigFloat, hardware float, mpfr float
+
+**Bareiss Algorithm**:
+A fraction-free matrix elimination algorithm computing exact symbolic determinants and adjoint inverses in $O(n^3)$ operations without polynomial division swell, citing Maxima's `newdet.lisp`.
+_Avoid_: Gaussian elimination, Laplace expansion
+
+**Complex Rectangular Form (rectform)**:
+The canonical decomposition of a symbolic expression $z$ into explicit real and imaginary components $u + i \cdot v$ where $u, v$ are purely real expressions.
+_Avoid_: Real-imag split, Cartesian form
+
+**Imaginary Unit Atom (Expr::I)**:
+The first-class symbolic AST variant representing the imaginary unit $i = \sqrt{-1}$ satisfying $i^2 = -1$.
+_Avoid_: "%i" variable, imaginary constant
+
+**Special Function Node (Expr::SpecialFn)**:
+The consolidated symbolic AST variant representing non-elementary special functions (`SpecialFnKind`) of arbitrary arity, dispatched via table-driven differentiation, asymptotic series, and evaluation registries citing `specfn.lisp`.
+_Avoid_: Custom function node, dynamic function
+
+**Operational Laplace Transform**:
+Symbolic forward and inverse Laplace transform algorithms combining operational calculus properties, partial fraction pole decomposition (`partfrac`), and table matching citing `laplac.lisp`.
+_Avoid_: Numerical Bromwich integral, FFT transform
+
+**Scoped Assumptions Context**:
+An immutable, cloneable inequality graph and property database (`Assumptions`) passed to CAS routines to evaluate relational queries (`is`, `asksign`, `csign`) without global mutable locks, citing `compar.lisp`.
+_Avoid_: Global assumption database, mutable facts table
+
+**Tri-State Symbolic Outcome**:
+A domain result distinguishing between three analytical outcomes: `Solved(Expr)`, `ProvenNonElementary`, and `Unsupported(reason)`.
+_Avoid_: Binary option, silent failure, unhandled fallback
+
+**Honesty Invariant**:
+The architectural mandate that verification flags (`verified: true`) are set strictly when evaluated against dynamic algorithmic or numeric oracles, and documentation badges truthfully reflect implemented algorithm scopes.
+_Avoid_: Hard-coded verification, simulated accuracy
+
+**Recursion Depth Guard**:
+A hard recursion ceiling (e.g. 256) enforced during expression parsing and tree traversal that halts stack growth with a structured error, preventing thread stack overflows.
+_Avoid_: Unbounded recursion, stack exhaustion
+
+**Independent Test Oracle**:
+An external source of truth (such as Maxima 5.50 reference test suites, SymPy differential testing, or exact algebraic identities) used to validate mathematical algorithms independently of the implementer's unit tests.
+_Avoid_: Tautological test, self-referential assertion
+
+**Print-Parse Round-Trip Invariant**:
+The invariant that formatting any symbolic `Expr` to a string or LaTeX and parsing it back yields an AST numerically and structurally equivalent to the original.
+_Avoid_: One-way formatting, lossy serialization
+
+
 

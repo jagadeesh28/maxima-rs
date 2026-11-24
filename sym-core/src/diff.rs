@@ -61,6 +61,8 @@ pub fn differentiate(expr: &Expr, var: &str) -> Expr {
             }
         }
         Expr::Const(_) => Expr::int(0),
+        #[cfg(feature = "bfloat")]
+        Expr::Bfloat(_) => Expr::int(0),
         Expr::Add(a, b) => {
             let da = differentiate(a, var);
             let db = differentiate(b, var);
@@ -201,8 +203,10 @@ pub fn differentiate(expr: &Expr, var: &str) -> Expr {
             let denom = smart_add(Expr::int(1), a_sq);
             smart_div(da, denom)
         }
-        // π and e are constants with respect to any variable.
+        // π, e, and i are constants with respect to any variable.
         Expr::Pi | Expr::E => Expr::int(0),
+        #[cfg(feature = "complex")]
+        Expr::I => Expr::int(0),
         // Factorials are integer-valued; treat as locally constant (Maxima parity).
         Expr::Factorial(_) => Expr::int(0),
         Expr::Tensor(name, _indices) => {
@@ -238,6 +242,8 @@ pub fn differentiate(expr: &Expr, var: &str) -> Expr {
                 .collect();
             Expr::Matrix(d_mat)
         }
+        #[cfg(feature = "specfn")]
+        Expr::SpecialFn(kind, args) => crate::specfn::diff_special_fn(*kind, args, var),
     }
 }
 

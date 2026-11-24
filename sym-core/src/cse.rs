@@ -81,6 +81,8 @@ fn count_subexprs(expr: &Expr, counts: &mut HashMap<Expr, usize>) {
 
     match expr {
         Expr::Var(_) | Expr::Const(_) => {}
+        #[cfg(feature = "bfloat")]
+        Expr::Bfloat(_) => {}
         Expr::Add(a, b) | Expr::Sub(a, b) | Expr::Mul(a, b) | Expr::Div(a, b) | Expr::Pow(a, b) => {
             count_subexprs(a, counts);
             count_subexprs(b, counts);
@@ -102,6 +104,8 @@ fn count_subexprs(expr: &Expr, counts: &mut HashMap<Expr, usize>) {
             count_subexprs(a, counts);
         }
         Expr::Pi | Expr::E => {}
+        #[cfg(feature = "complex")]
+        Expr::I => {}
         Expr::Tensor(_, _) => {}
         Expr::Derivative(a, b) | Expr::Integral(a, b) => {
             count_subexprs(a, counts);
@@ -120,6 +124,12 @@ fn count_subexprs(expr: &Expr, counts: &mut HashMap<Expr, usize>) {
                 }
             }
         }
+        #[cfg(feature = "specfn")]
+        Expr::SpecialFn(_, args) => {
+            for arg in args {
+                count_subexprs(arg, counts);
+            }
+        }
     }
 }
 
@@ -130,6 +140,8 @@ fn substitute_bindings(expr: &Expr, binding_map: &HashMap<Expr, String>) -> Expr
 
     match expr {
         Expr::Var(_) | Expr::Const(_) => expr.clone(),
+        #[cfg(feature = "bfloat")]
+        Expr::Bfloat(_) => expr.clone(),
         Expr::Add(a, b) => Expr::add(
             substitute_bindings(a, binding_map),
             substitute_bindings(b, binding_map),
@@ -166,6 +178,8 @@ fn substitute_bindings(expr: &Expr, binding_map: &HashMap<Expr, String>) -> Expr
         Expr::Factorial(a) => Expr::factorial(substitute_bindings(a, binding_map)),
         Expr::Pi => Expr::Pi,
         Expr::E => Expr::E,
+        #[cfg(feature = "complex")]
+        Expr::I => Expr::I,
         Expr::Tensor(name, indices) => Expr::tensor(name, indices.clone()),
         Expr::Derivative(a, b) => Expr::derivative(
             substitute_bindings(a, binding_map),
@@ -192,6 +206,13 @@ fn substitute_bindings(expr: &Expr, binding_map: &HashMap<Expr, String>) -> Expr
             }
             Expr::Matrix(new_mat)
         }
+        #[cfg(feature = "specfn")]
+        Expr::SpecialFn(kind, args) => Expr::SpecialFn(
+            *kind,
+            args.iter()
+                .map(|a| substitute_bindings(a, binding_map))
+                .collect(),
+        ),
     }
 }
 

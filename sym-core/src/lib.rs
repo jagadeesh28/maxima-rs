@@ -10,9 +10,14 @@
 //! build scripts, CLI tools, or programmatic symbolic computation.
 
 pub mod expr;
+pub mod latex;
 pub mod matrix;
 pub mod rational;
 pub mod tensor;
+
+pub use expr::Expr;
+pub use latex::to_latex;
+pub use rational::{BigRational, Rat};
 
 #[cfg(feature = "diff")]
 pub mod diff;
@@ -61,3 +66,39 @@ pub mod limit;
 
 #[cfg(feature = "solve")]
 pub mod solve;
+
+#[cfg(feature = "bfloat")]
+pub mod bfloat;
+
+#[cfg(feature = "bfloat")]
+pub use bfloat::{BfloatContext, BfloatWrapper, DEFAULT_FPPREC, bfloat, bfloat_from_str};
+
+#[cfg(feature = "complex")]
+pub mod complex;
+
+#[cfg(feature = "complex")]
+pub use complex::{
+    cabs, carg, conjugate, imagpart, polarform, polarform_expr, realpart, rectform, rectform_expr,
+    residue,
+};
+
+#[cfg(feature = "specfn")]
+pub mod specfn;
+
+#[cfg(feature = "specfn")]
+pub use specfn::SpecialFnKind;
+
+#[cfg(feature = "transform")]
+pub mod transform;
+
+#[cfg(feature = "transform")]
+pub use transform::{bc2, bc2_ode, ic1, ic1_ode, ic2, ic2_ode, ilt, laplace};
+
+#[cfg(feature = "assume")]
+pub mod assume;
+
+#[cfg(feature = "assume")]
+pub use assume::{
+    Assumptions, Comparison, Fact, PredicateResult, PropertyKind, Sign, asksign, assume, csign,
+    forget, is,
+};

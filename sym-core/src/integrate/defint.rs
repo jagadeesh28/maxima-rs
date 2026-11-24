@@ -67,6 +67,7 @@ fn fold_const(e: Expr) -> Expr {
             let a = fold_const(*a);
             match a {
                 Expr::Const(r) => Expr::constant(-r),
+                Expr::Neg(inner) => *inner,
                 other => Expr::Neg(Box::new(other)),
             }
         }
@@ -75,6 +76,8 @@ fn fold_const(e: Expr) -> Expr {
             let b = fold_const(*b);
             match (&a, &b) {
                 (Expr::Const(x), Expr::Const(y)) => Expr::constant(x + y),
+                (Expr::Const(x), other) if x.is_zero() => other.clone(),
+                (other, Expr::Const(y)) if y.is_zero() => other.clone(),
                 _ => Expr::Add(Box::new(a), Box::new(b)),
             }
         }
@@ -83,25 +86,74 @@ fn fold_const(e: Expr) -> Expr {
             let b = fold_const(*b);
             match (&a, &b) {
                 (Expr::Const(x), Expr::Const(y)) => Expr::constant(x - y),
+                (Expr::Const(x), other) if x.is_zero() => match other {
+                    Expr::Neg(inner) => *inner.clone(),
+                    _ => Expr::Neg(Box::new(other.clone())),
+                },
+                (other, Expr::Const(y)) if y.is_zero() => other.clone(),
                 _ => Expr::Sub(Box::new(a), Box::new(b)),
             }
         }
         Expr::Mul(a, b) => {
             let a = fold_const(*a);
             let b = fold_const(*b);
+            let one = num_rational::BigRational::from_integer(num_bigint::BigInt::from(1));
             match (&a, &b) {
                 (Expr::Const(x), Expr::Const(y)) => Expr::constant(x * y),
+                (Expr::Const(x), _) if x.is_zero() => Expr::int(0),
+                (_, Expr::Const(y)) if y.is_zero() => Expr::int(0),
+                (Expr::Const(x), other) if *x == one => other.clone(),
+                (other, Expr::Const(y)) if *y == one => other.clone(),
                 _ => Expr::Mul(Box::new(a), Box::new(b)),
             }
         }
         Expr::Div(a, b) => {
             let a = fold_const(*a);
             let b = fold_const(*b);
+            let one = num_rational::BigRational::from_integer(num_bigint::BigInt::from(1));
             match (&a, &b) {
                 (Expr::Const(x), Expr::Const(y)) if !y.is_zero() => Expr::constant(x / y),
+                (other, Expr::Const(y)) if *y == one => other.clone(),
                 _ => Expr::Div(Box::new(a), Box::new(b)),
             }
         }
+        other => other,
+    }
+}
+
+fn flip_ln_if_negative(e: Expr, var: &str, test_val: f64) -> Expr {
+    match e {
+        Expr::Ln(inner) => {
+            let mut env = std::collections::HashMap::new();
+            env.insert(var.to_string(), test_val);
+            if let Some(val) = inner.eval(&env)
+                && val < 0.0
+            {
+                return Expr::ln(Expr::neg(*inner));
+            }
+            Expr::Ln(inner)
+        }
+        Expr::Add(a, b) => Expr::add(
+            flip_ln_if_negative(*a, var, test_val),
+            flip_ln_if_negative(*b, var, test_val),
+        ),
+        Expr::Sub(a, b) => Expr::sub(
+            flip_ln_if_negative(*a, var, test_val),
+            flip_ln_if_negative(*b, var, test_val),
+        ),
+        Expr::Mul(a, b) => Expr::mul(
+            flip_ln_if_negative(*a, var, test_val),
+            flip_ln_if_negative(*b, var, test_val),
+        ),
+        Expr::Div(a, b) => Expr::div(
+            flip_ln_if_negative(*a, var, test_val),
+            flip_ln_if_negative(*b, var, test_val),
+        ),
+        Expr::Neg(a) => Expr::neg(flip_ln_if_negative(*a, var, test_val)),
+        Expr::Pow(a, b) => Expr::pow(
+            flip_ln_if_negative(*a, var, test_val),
+            flip_ln_if_negative(*b, var, test_val),
+        ),
         other => other,
     }
 }
@@ -111,10 +163,19 @@ pub fn defint(expr: &Expr, var: &str, a: &Expr, b: &Expr) -> DefiniteResult {
     if has_interior_pole(expr, var, a, b) {
         return DefiniteResult::Divergent;
     }
-    let f = integrate(expr, var);
+    let mut f = integrate(expr, var);
     if matches!(f, Expr::Integral(_, _)) {
         return DefiniteResult::Unevaluated;
     }
+
+    if let (Some(af), Some(bf)) = (point_f64(a), point_f64(b))
+        && af < 0.0
+        && bf <= 0.0
+    {
+        let mid = (af + bf) / 2.0;
+        f = flip_ln_if_negative(f, var, mid);
+    }
+
     let ub = match crate::limit::limit(&f, var, b) {
         Some(v) => v,
         None => return DefiniteResult::Unevaluated,
@@ -123,5 +184,10 @@ pub fn defint(expr: &Expr, var: &str, a: &Expr, b: &Expr) -> DefiniteResult {
         Some(v) => v,
         None => return DefiniteResult::Unevaluated,
     };
+    if matches!(&ub, Expr::Var(v) if v == "inf" || v == "minf")
+        || matches!(&lb, Expr::Var(v) if v == "inf" || v == "minf")
+    {
+        return DefiniteResult::Divergent;
+    }
     DefiniteResult::Value(fold_const(Expr::sub(ub, lb)))
 }

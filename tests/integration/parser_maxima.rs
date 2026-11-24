@@ -95,3 +95,58 @@ fn test_parse_maxima_display_roundtrip() {
         assert!(reparsed.is_ok(), "display roundtrip failed for {s}");
     }
 }
+
+#[test]
+fn test_parse_operator_precedence_negative_power() {
+    // -x^2 at x=3 must equal -9 (never 9)
+    let e = parse_maxima("-x^2").expect("parse -x^2");
+    assert_eq!(e, Expr::neg(Expr::pow(Expr::var("x"), Expr::int(2))));
+    let mut env = std::collections::HashMap::new();
+    env.insert("x".to_string(), 3.0);
+    assert_eq!(e.eval(&env), Some(-9.0));
+
+    // -2^2 == -4
+    let e2 = parse_maxima("-2^2").expect("parse -2^2");
+    assert_eq!(e2, Expr::neg(Expr::pow(Expr::int(2), Expr::int(2))));
+    assert_eq!(e2.eval(&Default::default()), Some(-4.0));
+
+    // 2^-1 == 0.5
+    let e3 = parse_maxima("2^-1").expect("parse 2^-1");
+    assert_eq!(e3, Expr::pow(Expr::int(2), Expr::neg(Expr::int(1))));
+    assert_eq!(e3.eval(&Default::default()), Some(0.5));
+
+    // -x! == -(x!)
+    let e4 = parse_maxima("-x!").expect("parse -x!");
+    assert_eq!(e4, Expr::neg(Expr::factorial(Expr::var("x"))));
+
+    // (-x)^2 == x^2 at x=3 is 9
+    let e5 = parse_maxima("(-x)^2").expect("parse (-x)^2");
+    assert_eq!(e5, Expr::pow(Expr::neg(Expr::var("x")), Expr::int(2)));
+    assert_eq!(e5.eval(&env), Some(9.0));
+
+    // exp(-x^2) == Exp(Neg(Pow(x, 2)))
+    let e6 = parse_maxima("exp(-x^2)").expect("parse exp(-x^2)");
+    assert_eq!(
+        e6,
+        Expr::exp(Expr::neg(Expr::pow(Expr::var("x"), Expr::int(2))))
+    );
+}
+
+#[test]
+fn test_parse_scientific_notation() {
+    let e1 = parse_maxima("1e-3").expect("parse 1e-3");
+    assert_eq!(e1.eval(&Default::default()), Some(0.001));
+
+    let e2 = parse_maxima("2.5e+4").expect("parse 2.5e+4");
+    assert_eq!(e2.eval(&Default::default()), Some(25000.0));
+}
+
+#[test]
+fn test_parse_recursion_depth_guard() {
+    let deep_expr = format!("{}x{}", "(".repeat(3000), ")".repeat(3000));
+    let res = parse_maxima(&deep_expr);
+    assert_eq!(
+        res,
+        Err(maxima_rs::parser::ParseError::RecursionLimitExceeded)
+    );
+}

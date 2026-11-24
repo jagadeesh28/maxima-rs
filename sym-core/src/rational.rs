@@ -12,7 +12,7 @@
 //! once, during final code generation.
 
 use num_bigint::BigInt;
-use num_rational::BigRational;
+pub use num_rational::BigRational;
 use num_traits::{One, Signed, ToPrimitive, Zero};
 
 /// Utility namespace for [`BigRational`] operations.

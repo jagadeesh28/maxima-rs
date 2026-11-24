@@ -11,10 +11,21 @@ pub use ode::{OdeSolution, ode2};
 use crate::expr::Expr;
 
 /// A set of exact algebraic solutions for an equation.
+/// The second element indicates whether the factorization/solution was complete.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AlgebraicSolutions(pub Vec<Expr>);
+pub struct AlgebraicSolutions(pub Vec<Expr>, pub bool);
 
 impl AlgebraicSolutions {
+    /// Create a new solution set.
+    pub fn new(roots: Vec<Expr>, is_complete: bool) -> Self {
+        Self(roots, is_complete)
+    }
+
+    /// Whether all roots were found (factorization completed).
+    pub fn is_complete(&self) -> bool {
+        self.1
+    }
+
     /// Number of solutions found.
     pub fn len(&self) -> usize {
         self.0.len()
@@ -33,11 +44,11 @@ impl AlgebraicSolutions {
 
 /// Solve the equation `expr = 0` for `var`, returning exact roots.
 pub fn solve(expr: &Expr, var: &str) -> AlgebraicSolutions {
-    if let Some(roots) = alg::solve_polynomial(expr, var) {
-        return AlgebraicSolutions(roots);
+    if let Some((roots, is_complete)) = alg::solve_polynomial(expr, var) {
+        return AlgebraicSolutions::new(roots, is_complete);
     }
     if let Some(root) = isolate::isolate(expr, var) {
-        return AlgebraicSolutions(vec![root]);
+        return AlgebraicSolutions::new(vec![root], true);
     }
-    AlgebraicSolutions(Vec::new())
+    AlgebraicSolutions::new(Vec::new(), false)
 }

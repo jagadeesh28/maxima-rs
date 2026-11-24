@@ -9,13 +9,14 @@ use num_rational::BigRational;
 use num_traits::{One, Zero};
 
 /// Solve a univariate polynomial equation `expr = 0`.
-pub(crate) fn solve_polynomial(expr: &Expr, var: &str) -> Option<Vec<Expr>> {
+/// Returns the found roots and whether the factorization was complete (`cur.degree() == 0`).
+pub(crate) fn solve_polynomial(expr: &Expr, var: &str) -> Option<(Vec<Expr>, bool)> {
     let p = Poly::from_expr(expr).ok()?;
     if p.vars().iter().any(|v| v != var) {
         return None;
     }
     if p.is_zero() {
-        return Some(Vec::new());
+        return Some((Vec::new(), true));
     }
     let mut cur = p.clone();
     let mut roots: Vec<Expr> = Vec::new();
@@ -26,12 +27,9 @@ pub(crate) fn solve_polynomial(expr: &Expr, var: &str) -> Option<Vec<Expr>> {
                 break;
             }
             let lin = linear_poly(&r, &cur.ctx);
-            match poly_div_exact(&cur, &lin) {
-                Some(q) => {
-                    cur = q;
-                    roots.push(Expr::constant(r));
-                }
-                None => break,
+            while let Some(q) = poly_div_exact(&cur, &lin) {
+                cur = q;
+                roots.push(Expr::constant(r.clone()));
             }
         }
     }
@@ -43,13 +41,21 @@ pub(crate) fn solve_polynomial(expr: &Expr, var: &str) -> Option<Vec<Expr>> {
             let b = coeff(&cur, 0);
             if !a.is_zero() {
                 roots.push(Expr::constant(-&b / &a));
+                cur = Poly::constant(BigRational::one(), cur.ctx.clone());
             }
         }
-        2 => roots.extend(quadratic_roots(&cur)),
+        2 => {
+            let q_roots = quadratic_roots(&cur);
+            if !q_roots.is_empty() {
+                roots.extend(q_roots);
+                cur = Poly::constant(BigRational::one(), cur.ctx.clone());
+            }
+        }
         _ => {}
     }
 
-    Some(roots)
+    let is_complete = cur.degree() == 0;
+    Some((roots, is_complete))
 }
 
 fn coeff(p: &Poly, exp: u32) -> BigRational {

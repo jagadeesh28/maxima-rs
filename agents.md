@@ -1,1117 +1,511 @@
-# maxima-rs — Phased Implementation Plan
+# Agent Operating Guidelines: maxima-rs
 
-> A compile-time symbolic mathematics and code optimization engine in Rust.
-> Converts legacy Maxima algebraic knowledge into an `egg`-powered e-graph engine
-> that generates zero-overhead optimized Rust code via procedural macros.
->
-> **Session continuity**: See [`SESSION_LOG.md`](file:///e:/Rust/Max/SESSION_LOG.md) for
-> cross-session context, decision history, and phase completion tracker.
-> Always read `SESSION_LOG.md` first when resuming work.
->
-> **Architecture & Call Graph Reference**: See [`/grafify`](file:///e:/Rust/Max/.agents/skills/grafify/SKILL.md)
-> for the comprehensive interdependency matrix and function-level trace across all crates and modules.
->
-> **Protocol Rule**: Always update [`README.md`](file:///e:/Rust/Max/README.md) after completing each phase
-> to reflect the updated status table, deliverables, and API examples.
+> **Target Environment:** Antigravity IDE + Gemini 3.8 Flash (Medium)  
+> **Workspace:** `maxima-rs` Symbolic Computation Engine Workspace (`sym-core`, `sym-macros`, `maxima-rs`, `maxima-web`, `tests`)  
+> **Session Continuity:** Always consult [`SESSION_LOG.md`](SESSION_LOG.md) for cross-session context, decision history, and completion tracking before initiating work.  
+> **Architecture & Call Graph Reference:** Consult [`/grafify`](.agents/skills/grafify/SKILL.md) for the authoritative module call graph and cross-crate interdependency matrix.
+
+This document serves as the canonical operating manual and technical specification for autonomous AI coding agents collaborating on the `maxima-rs` codebase. Every instruction, negative constraint, and passing gate is optimized for deterministic execution under **Gemini 3.8 Flash (Medium)**.
 
 ---
 
-## Global Testing Gates & Pre-Implementation Protocol
+## 1. Project Mission & North Star
 
-> **Rule**: No phase may begin implementation until **Gate 0** is green. Each phase's
-> `### Testing Gates (Pre-Implementation)` block then defines Gates 1–3 that must pass
-> *during* and *before* marking the phase ✅. Phases 1–13 (already complete) are
-> retroactively governed by this protocol and were verified green in
-> [`SESSION_LOG.md`](file:///e:/Rust/Max/SESSION_LOG.md).
+`maxima-rs` is a high-performance, compile-time symbolic mathematics and code optimization engine written in 100% Safe Rust. It bridges legacy symbolic algebraic knowledge from Maxima 5.50 with an `egg`-powered e-graph equality saturation engine, high-speed procedural CAS algorithms, and procedural macros that generate zero-overhead, vectorizable native Rust code.
 
-### Gate 0 — Baseline (run before writing any code)
-- Confirm a clean tree: `git status --porcelain` (empty) and record the starting commit
-  (`git rev-parse HEAD`) in `SESSION_LOG.md`.
-- `cargo fmt --all -- --check`
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- `cargo test --workspace --all-features`
-- Feature-matrix builds: `cargo build --workspace --no-default-features` and
-  `cargo build --workspace --all-features`
+### Core Component Breakdown
 
-### Gate 1 — Unit / Module (in phase)
-- `cargo test -p sym-core --features <FEATURE>` (unit tests inside the new module files)
-- Feature-isolated build: `cargo build -p sym-core --no-default-features --features <FEATURE>`
-
-### Gate 2 — Integration / Proptest (in phase)
-- Register every new test file with a `[[test]]` entry in [`tests/Cargo.toml`](file:///e:/Rust/Max/tests/Cargo.toml).
-- `cargo test -p maxima-tests --test <name>`
-- Integration/proptest files must be feature-gated (`#![cfg(feature = "...")]`) to the phase's
-  feature so they skip cleanly when it is off.
-
-### Gate 3 — Completion (before marking a phase ✅)
-- `cargo fmt --all`
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
-- `cargo test --workspace --all-features` (zero regressions across all 13 pre-existing suites)
-- `cargo test -p sym-core --all-features --doc` (doctests)
-- Update [`README.md`](file:///e:/Rust/Max/README.md) status table + [`SESSION_LOG.md`](file:///e:/Rust/Max/SESSION_LOG.md).
-
-### Additional Completeness Instructions
-1. **Feature-flag prerequisite:** Phases 22–31 require new `poly`, `integrate`, `series`,
-   `limit`, `solve`, and `cas` features in [`sym-core/Cargo.toml`](file:///e:/Rust/Max/sym-core/Cargo.toml)
-   (wired per `agents_instructions.md`, `full` extended) and mirrored in
-   [`maxima-rs/Cargo.toml`](file:///e:/Rust/Max/maxima-rs/Cargo.toml). Gate 1 commands are
-   invalid until these exist, so add the flags first.
-2. **Test registration:** a new test file without a `[[test]]` entry never runs — always register it.
-3. **No-regression rule:** the 13 existing suites (`basic_arithmetic`, `trigonometric`,
-   `differentiation`, `cse`, `parser_maxima`, `parser_latex`, `pipeline_api`, `macro_expansion`,
-   `maxima_coverage`, `rational_factorial`, `matrix_fidelity`, `numerical_equivalence`,
-   `diff_correctness`) must stay green at every gate.
-4. **Proptest determinism:** fixed seed, bounded `cases` (e.g. 256), `prop_assume` guards for
-   degenerate inputs; Phase 32 invariants must hold over ≥10³ random expressions.
-5. **Doctest rule:** every new public CAS API needs a `/// ```rust` example that compiles.
-6. **No unconstrained extraction:** procedural CAS output must never be routed through
-   `extract.rs` with an AST-size cost (see Guardrail 1) — assert this in a unit test where relevant.
+| Component | Crate / Directory | Primary Role & Capabilities |
+| :--- | :--- | :--- |
+| **Core Symbolic Engine** | `sym-core` | AST representation (`Expr`), exact rational arithmetic (`BigRational`), analytical differentiation (`diff`), 1:1 Maxima e-graph rewrite rules (`rules`), FLOP cost extraction (`cost`), common subexpression elimination (`cse`), procedural CAS engines (`poly`, `integrate`, `series`, `limit`, `solve`), multi-format parsers (`winnow`), and precedence-aware LaTeX formatting. |
+| **Procedural Macros** | `sym-macros` | `sym_fn!` and `sym_eval!` compile-time proc-macros transforming high-level math definitions directly into optimized native Rust functions, gradients, Jacobians, and Hessians. |
+| **Public Facade** | `maxima-rs` | Ergonomic facade crate exposing unified re-exports, fluent `Pipeline` builder, and comprehensive `prelude`. |
+| **Offline Web Service** | `maxima-web` | Air-gapped, zero-CDN interactive notebook service featuring embedded KaTeX assets (`rust-embed`), typed CAS web dispatch (`/api/compute`), compute isolation, concurrency limits, and live preview (`/api/parse`). |
+| **Verification & Benchmarks** | `tests` | Comprehensive integration suites, proptest invariant engines (differentiate-integral round-trips, solver back-substitution), and upstream Maxima 5.50 golden test fixtures. |
 
 ---
 
-## Architecture Overview
+## 2. Core Operating Principles & Execution Model
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   User Rust Source Code                         │
-│   sym_fn! { fn f(x,y) -> ... { expr: ..., gradient: [x,y] } } │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │ (compile-time)
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│  sym-macros  (proc-macro crate) [feature = "macros"]         │
-│  ┌────────┐   ┌──────────┐   ┌───────────┐                  │
-│  │ parse  │──▶│ validate │──▶│ expand    │                   │
-│  │ (syn)  │   │ (spans)  │   │ (codegen) │                   │
-│  └────────┘   └──────────┘   └─────┬─────┘                  │
-└────────────────────────────────────┼─────────────────────────┘
-                                     │ calls sym-core
-                                     ▼
-┌──────────────────────────────────────────────────────────────┐
-│  sym-core  (library crate)                                   │
-│                                                              │
-│  ┌────────┐   ┌──────┐   ┌─────────┐   ┌──────┐   ┌──────┐ │
-│  │  Expr  │──▶│ Diff │──▶│ E-Graph │──▶│ Cost │──▶│ CSE  │ │
-│  │  AST   │   │      │   │ + Rules │   │Extract│   │ Pass │ │
-│  └────────┘   └──────┘   └─────────┘   └──────┘   └──────┘ │
-│    [core]      [diff]     [egraph]     [egraph]    [cse]   │
-│       │                      │                               │
-│       │              RuleProvenance                          │
-│       │         (1:1 Maxima LISP Citations)                  │
-│       │                      │                               │
-│       │              Rational Constants                      │
-│       └──────────────────────┼───────────────────────┘       │
-│                              │                               │
-│                      ┌───────▼───────┐                       │
-│                      │   Codegen     │ [codegen]             │
-│                      │ (TokenStream) │                       │
-│                      └───────────────┘                       │
-│                              ▲                               │
-│                      ┌───────┴───────┐                       │
-│                      │  Parsers/API  │ [parser]              │
-│                      │ Maxima/LaTeX  │                       │
-│                      │ + Pipeline    │                       │
-│                      └───────────────┘                       │
-└──────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│  maxima-rs  (facade crate)                                   │
-│  pub use sym_core::*;  #[cfg(feature="macros")] pub use ...; │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Pipeline Execution Order
-
-```
-Input Expression (Rust syntax, or string/LaTeX via parse_maxima / parse_latex)
-      │
-      ▼
- 1. Parse (syn tokenstream or winnow string/LaTeX → Expr AST) [macros / parser]
-      │
-      ▼
- 2. Analytical Differentiation (Expr → derivative Expr)       [diff]
-      │
-      ▼
- 3. Inject all Exprs (value + derivatives) into EGraph        [egraph]
-      │ (Rewrite rules tracked with 1:1 Maxima LISP RuleProvenance)
-      ▼
- 4. Equality Saturation (apply rewrite rules until limits)    [egraph]
-      │
-      ▼
- 5. Cost-Optimal Extraction (FLOP-weighted CostFunction)      [egraph]
-      │
-      ▼
- 6. CSE Post-Pass (identify shared subterms → let bindings)   [cse]
-      │
-      ▼
- 7. Codegen (emit TokenStream → plain fn with bindings)       [codegen]
-```
+1. **Hybrid E-Graph & Procedural Architecture (ADR-0006)**:
+   - Use `egg` equality saturation strictly for algebraic simplification, trigonometric/hyperbolic identities, and FLOP cost extraction.
+   - Execute procedural CAS algorithms (`expand`, `poly_gcd`, `ratsimp`, `factor`, `integrate`, `defint`, `series`, `limit`, `solve`, `ode2`) as deterministic, directed AST transformations outside the e-graph to avoid state-space combinatorial explosion.
+2. **64-Bit Native Architecture & Memory Scale**:
+   - Target 64-bit address spaces natively. Use packed 64-bit exponent vectors for multivariate monomials (`poly::monomial`).
+   - Eliminate heap allocations in critical numerical hot loops.
+3. **Cross-Compilation & Ubiquitous Portability**:
+   - 100% Safe, pure Rust. Zero external C or C++ unmanaged dependencies (e.g. no GMP, MPFR, or FLINT).
+   - Ensure seamless compilation to `x86_64`, `aarch64`, and `wasm32-unknown-unknown`.
+4. **Evidence-Based Engineering & 1:1 Maxima Citations (ADR-0005)**:
+   - Every e-graph rewrite rule must include structured `RuleProvenance` metadata citing the upstream Maxima Common LISP file, function, and equation line.
+   - Validate mathematical algorithms against independent reference oracles (Maxima 5.50 test files in `References/maxima-5.50.0/tests/` and SymPy differential testing).
+5. **Extreme Performance & Resource Bounds**:
+   - Guard against unbounded recursion. All AST parsers and tree traversals must enforce a strict **Recursion Depth Guard** (maximum depth 256).
+   - Isolate CPU-heavy CAS operations inside dedicated worker threads with wall-clock timeouts and owned concurrency semaphore permits.
+6. **Strict Crate Isolation & Zero Warnings**:
+   - `sym-core` must never depend on web, UI, or proc-macro crates.
+   - All crates must compile with zero warnings under `cargo check` and `cargo clippy --workspace --all-targets --all-features -- -D warnings`. Never suppress warnings with unprincipled `#[allow(...)]`.
+7. **Pure, Idiomatic Rust (Zero-Unwrap Policy)**:
+   - **Zero tolerance for `.unwrap()`, `.expect()`, or `panic!()` in non-test paths.**
+   - Propagate strongly typed errors using `thiserror` in libraries and `anyhow`/`miette` in application binaries.
+8. **Verification Honesty & Tri-State Outcomes (ADR-0012)**:
+   - Never mark an operation `verified: true` unless verified dynamically at runtime via analytical back-substitution or numerical quadrature.
+   - Return structured tri-state outcomes (`Solved(T)`, `ProvenNonElementary`, `Unsupported(reason)`) rather than conflating missing features with mathematical impossibility.
+9. **Verify, Never Assume (Ripgrep Discipline)**:
+   - Before claiming any function, variable, or CSS class is unused or dead, run `rg` across the entire workspace to check all call sites, dynamic usages, and references.
+   - Always prefer `rg` over `grep` or recursive find for millisecond multi-threaded searches and `.gitignore` compliance.
+10. **Surgical Edits Only**:
+    - Make focused, surgical edits using exact search-and-replace blocks. Never overwrite, truncate, or rewrite complete files from scratch.
+11. **Single-Phase Discipline & Hard Passing Gates**:
+    - Execute exactly **one phase at a time**.
+    - **HARD STOP:** Never advance to Phase $N+1$ until every Passing Gate command in Phase $N$ exits with code `0`.
+12. **Architectural Decision Record (ADR) Compliance**:
+    - Strictly preserve decisions codified in `docs/adr/`. Do not read all ADRs up front; consult relevant ADRs on demand when modifying their specific domain.
 
 ---
 
-## Cargo Feature Architecture & Phase Grouping
+## 3. Workspace Architecture & Boundaries
 
-The codebase is organized into modular Cargo features so users can pull only the components they need:
-
-| Feature | Default | Corresponds to | Gated Modules & Capabilities | Additional Dependencies Activated |
-|---------|---------|----------------|------------------------------|-----------------------------------|
-| **`core`** (base) | Always | **Phase 1** | `expr`, `rational`: AST, exact rational arithmetic, evaluation, display | `num-rational`, `num-bigint`, `num-traits` |
-| **`diff`** | Yes | **Phase 2** | `diff`: Analytical differentiation, gradient, Jacobian, Hessian | *(None — pure AST calculus)* |
-| **`egraph`** | Yes | **Phases 3 & 4** | `lang`, `rules/*`, `cost`, `saturate`, `extract`, `provenance`: Saturation, FLOP extraction, 1:1 Maxima source citations | `egg = "0.9"` (optional) |
-| **`cse`** | Yes | **Phase 5** | `cse`: Common subexpression elimination DAG pass | *(None — pure AST DAG)* |
-| **`codegen`** | Yes | **Phase 6** | `codegen`: Conversion of expressions to `proc_macro2::TokenStream` | `proc-macro2`, `quote` (optional) |
-| **`parser`** | Yes | **Phase 7** | `parser/*`: Multi-format parsers (Maxima string & LaTeX scalar math syntax) | `winnow = "0.7"` (optional) |
-| **`macros`** | Yes | **Phases 8 & 9** | Procedural macros `sym_fn!` and `sym_eval!` in `sym-macros` | `syn`, `quote`, `proc-macro2` |
-| **`poly`** | Yes | **Phases 22 & 23** | `poly/*`: Sparse distributed multivariate polynomials, 64-bit packed exponents, grevlex, Monagan-Pearce heap, `expand`, `ratsimp`, `gcd`, `factor`, `partfrac` | *(None — pure arithmetic over Rat)* |
-| **`integrate`** | Yes | **Phases 24, 25, 28** | `integrate/*`: Symbolic integration (SIN, Hermite reduction, LRT real ln/atan, Bronstein Risch transcendental field towers, FTC definite integration) | Activated with `poly`, `diff` |
-| **`series`** | Yes | **Phase 26** | `series`: Truncated Laurent series arithmetic and asymptotic expansion | Activated with `poly`, `diff` |
-| **`limit`** | Yes | **Phase 27** | `limit/*`: Dominik Gruntz's MRV asymptotic limits engine + 3-tier zero-equivalence decider | Activated with `series`, `poly` |
-| **`solve`** | Yes | **Phases 29 & 30** | `solve/*`: Closed-form algebraic solvers (deg 1-4, factor-and-split) + ODE solver (1st-order standard & 2nd-order constant coeffs) | Activated with `poly`, `integrate`, `diff` |
-| **`cas`** | Yes | **Phases 22–32** | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` | All CAS dependencies |
-| **`full`** | Yes | **All Phases** | Convenience bundle activating `["diff", "egraph", "cse", "codegen", "parser", "macros", "cas"]` | All dependencies |
-
----
-
-## Complete File Tree (Final State)
+### ASCII Directory Tree
 
 ```
 e:\Rust\Max\
-├── Cargo.toml                          # Workspace root
-├── GLOSSARY.md                         # Domain vocabulary
-├── SESSION_LOG.md                      # Persistent cross-session continuity log
-├── agents.md                           # This file — implementation plan
+├── Cargo.toml                       # Workspace root manifest
+├── GLOSSARY.md                      # Canonical domain vocabulary
+├── SESSION_LOG.md                   # Persistent cross-session continuity tracker
+├── AGENTS.md                        # This operational manual
 ├── References/
-│   └── maxima-master.zip               # Maxima Common Lisp reference source
+│   ├── maxima-master.zip            # Maxima reference repository
+│   ├── maxima-master/               # Uncompressed Maxima master source tree
+│   └── maxima-5.50.0/               # Uncompressed upstream Maxima 5.50.0 source tree (`src/`, `tests/`)
 ├── docs/
-│   └── adr/
-│       ├── 0001-egraph-engine-over-lisp-port.md
-│       ├── 0002-configurable-fast-math-default.md
-│       ├── 0003-hand-curated-rewrite-rules.md (superseded)
-│       ├── 0004-rational-constant-representation.md
-│       ├── 0005-systematic-maxima-rule-coverage.md (active)
-│       └── 0006-hybrid-egraph-and-procedural-cas.md (active)
-│
-├── sym-core/                           # Core symbolic engine library
-│   ├── Cargo.toml                      # Features: diff, egraph, cse, codegen, parser, poly, integrate, series, limit, solve, cas, full
-│   └── src/
-│       ├── lib.rs                      # Public API surface, feature-gated re-exports
-│       ├── expr.rs                     # [core] Symbolic Expression AST enum
-│       ├── rational.rs                 # [core] Rational constant wrapper (BigRational)
-│       ├── diff.rs                     # [feature="diff"] Analytical differentiation
-│       ├── lang.rs                     # [feature="egraph"] egg Language definition
-│       ├── provenance.rs               # [feature="egraph"] RuleProvenance metadata & registry
-│       ├── rules/                      # [feature="egraph"] 1:1 Maxima LISP rules with citations
-│       │   ├── mod.rs                  # Rule aggregator, fast-math gating, provenance query
-│       │   ├── arithmetic.rs           # simp.lisp (simpplus, simptimes, simpexpt)
-│       │   ├── trigonometric.rs        # trigi.lisp (sin, cos, tan identities)
-│       │   ├── exponential.rs          # logarc.lisp / simp.lisp (exp, pow identities)
-│       │   └── logarithmic.rs          # logarc.lisp (ln identities)
-│       ├── cost.rs                     # [feature="egraph"] FLOP-weighted CostFunction
-│       ├── saturate.rs                 # [feature="egraph"] Runner config, saturation limits
-│       ├── extract.rs                  # [feature="egraph"] Extraction + multi-output
-│       ├── cse.rs                      # [feature="cse"] Common subexpression elimination
-│       ├── codegen.rs                  # [feature="codegen"] Expr → proc_macro2::TokenStream
-│       ├── parser/                     # [feature="parser"]
-│       │   ├── mod.rs                  # Parser interface & error types
-│       │   ├── maxima.rs               # Maxima string syntax parser (winnow)
-│       │   └── latex.rs                # LaTeX scalar math formula parser (winnow)
-│       ├── poly/                       # [feature="poly"] Sparse distributed multivariate polynomials
-│       │   ├── mod.rs                  # Poly struct, Expr <-> Poly converters
-│       │   ├── monomial.rs             # 64-bit packed exponents & grevlex ordering
-│       │   ├── heap.rs                 # Monagan-Pearce heap multiplication & division
-│       │   ├── expand.rs               # expand() product & multinomial expansion
-│       │   ├── gcd.rs                  # Subresultant PRS & modular F_p GCD
-│       │   ├── rat.rs                  # ratsimp() canonical quotient reduction
-│       │   ├── factor.rs               # Yun square-free + Berlekamp & Hensel lifting
-│       │   └── partfrac.rs             # Partial fraction decomposition
-│       ├── integrate/                  # [feature="integrate"] Symbolic integration engine
-│       │   ├── mod.rs                  # integrate() & defint() orchestrator
-│       │   ├── sin.rs                  # Moses' SIN heuristics & u-substitutions
-│       │   ├── hermite.rs              # Hermite reduction for rational poles
-│       │   ├── lrt.rs                  # Lazard-Rioboo-Trager real ln/atan integration
-│       │   ├── risch.rs                # Bronstein transcendental Risch field towers
-│       │   ├── ibp.rs                  # Guarded integration by parts
-│       │   └── defint.rs               # FTC + real pole scanner + improper limits
-│       ├── series.rs                   # [feature="series"] Truncated Laurent series arithmetic
-│       ├── limit/                      # [feature="limit"] Dominik Gruntz's MRV limits
-│       │   ├── mod.rs                  # gruntz() limits engine
-│       │   ├── mrv.rs                  # Most Rapidly Varying comparability sets
-│       │   └── zero.rs                 # 3-tier zero-equivalence decider
-│       ├── solve/                      # [feature="solve"] Algebraic & ODE solvers
-│       │   ├── mod.rs                  # Solver public types & entry points
-│       │   ├── alg.rs                  # Analytic degree 1-4, factor-and-split, isolation
-│       │   └── ode.rs                  # 1st-order standard forms & 2nd-order constant coeffs
-│       └── pipeline.rs                 # Ergonomic high-level API & Pipeline builder
-│
-├── sym-macros/                         # Procedural macro crate [feature="macros"]
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs                      # #[proc_macro] entry points
-│       ├── parse_sym_fn.rs             # syn parser for sym_fn! syntax
-│       ├── parse_sym_eval.rs           # syn parser for sym_eval! syntax
-│       ├── config.rs                   # Macro attribute parsing (fast_math, float_type, limits)
-│       └── expand.rs                   # Orchestrator: parse → diff → saturate → extract → CSE → codegen
-│
-├── maxima-rs/                          # User-facing facade crate
-│   ├── Cargo.toml                      # Features: diff, egraph, cse, codegen, parser, macros, full
-│   └── src/
-│       ├── lib.rs                      # Re-exports from sym-core + optional sym-macros
-│       └── prelude.rs                  # Ergonomic prelude for common usage
-│
-└── tests/                              # Integration & property tests
-    ├── integration/
-    │   ├── basic_arithmetic.rs         # Golden tests: arithmetic simplification & provenance
-    │   ├── trigonometric.rs            # Golden tests: trig identities & provenance
-    │   ├── differentiation.rs          # Golden tests: known derivatives
-    │   ├── cse.rs                      # Golden tests: CSE extraction
-    │   ├── parser_maxima.rs            # Golden tests: Maxima string parser
-    │   ├── parser_latex.rs             # Golden tests: LaTeX formula parser
-    │   ├── pipeline_api.rs             # Golden tests: optimize() and Pipeline builder
-    │   └── macro_expansion.rs          # Golden tests: sym_fn! / sym_eval! output
-    └── proptest/
-        ├── numerical_equivalence.rs    # Proptest: eval(original) ≈ eval(optimized)
-        └── diff_correctness.rs         # Proptest: symbolic diff vs finite diff
+│   ├── adr/                         # Architectural Decision Records (0001–0012)
+│   ├── audits/                      # Phase sign-off and verification reports
+│   └── recommendations/             # Upstream multi-model audits & recommendations
+├── sym-core/                        # Foundational symbolic computation engine
+│   ├── src/
+│   │   ├── lib.rs                   # Public API surface & feature gates
+│   │   ├── expr.rs                  # AST enum (Expr) & node constructors
+│   │   ├── rational.rs              # Exact BigRational constant wrapper
+│   │   ├── bfloat.rs                # [feature="bfloat"] Arbitrary-precision float (dashu)
+│   │   ├── latex.rs                 # Precedence-aware LaTeX formatter
+│   │   ├── diff.rs                  # Analytical calculus (diff, grad, jacobian, hessian)
+│   │   ├── lang.rs                  # egg::Language AST mapping (MathLang)
+│   │   ├── provenance.rs            # RuleProvenance registry & LISP citations
+│   │   ├── rules/                   # 1:1 Maxima rewrite rules (simp, trigi, logarc, etc.)
+│   │   ├── cost.rs                  # FLOP-weighted AST extraction cost model
+│   │   ├── saturate.rs              # Saturation limits runner & e-graph orchestrator
+│   │   ├── extract.rs               # Cost-optimal extraction & multi-output extraction
+│   │   ├── cse.rs                   # Common Subexpression Elimination DAG pass
+│   │   ├── codegen.rs               # proc_macro2::TokenStream code generator
+│   │   ├── parser/                  # winnow parsers (Maxima strings & LaTeX)
+│   │   ├── poly/                    # Multivariate polynomials, GCD, ratsimp, factor
+│   │   ├── integrate/               # Symbolic integration (SIN, Hermite, LRT, Risch, defint)
+│   │   ├── series.rs                # Truncated Laurent series arithmetic
+│   │   ├── limit/                   # Gruntz MRV limits & zero-equivalence decider
+│   │   ├── solve/                   # Algebraic & ODE solvers
+│   │   ├── matrix/                  # [feature="matrix"] Bareiss fraction-free linear algebra
+│   │   ├── complex/                 # [feature="complex"] rectform, polarform, residue
+│   │   ├── specfn/                  # [feature="specfn"] Gamma, Bessel, Airy, Orthopolynomials
+│   │   ├── transform/               # [feature="transform"] Laplace & inverse Laplace transforms
+│   │   ├── assume/                  # [feature="assume"] Scoped inequality DAG & deductive inference
+│   │   └── pipeline.rs              # Fluent Pipeline builder API
+├── sym-macros/                      # Procedural macro crate (sym_fn!, sym_eval!)
+├── maxima-rs/                       # Facade crate, prelude, high-level re-exports
+├── maxima-web/                      # Offline web service, embedded assets, notebook API
+│   ├── src/                         # Service isolation, config, routing, dispatch
+│   └── static/                      # Embedded HTML, CSS, vanilla JS modules, vendored KaTeX
+└── tests/                           # Integration suites, proptests, and parity benchmarks
+```
+
+### Directed Dependency Flow Graph
+
+```
+┌────────────────────────────────────────────────────────┐
+│                      maxima-rs                         │
+│                    (Facade Crate)                      │
+└───────────────┬────────────────────────┬───────────────┘
+                │                        │
+                ▼                        ▼
+┌────────────────────────┐      ┌────────────────────────┐
+│       sym-macros       │      │       maxima-web       │
+│   (Procedural Macros)  │      │     (Web Service)      │
+└───────────────┬────────┘      └────────┬───────────────┘
+                │                        │
+                └───────────┬────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                       sym-core                         │
+│        (Core Symbolic Engine & CAS Algorithms)         │
+└────────────────────────────────────────────────────────┘
+                            ▲
+                            │
+┌───────────────────────────┴────────────────────────────┐
+│                        tests                           │
+│     (Integration, Proptest & Parity Verification)      │
+└────────────────────────────────────────────────────────┘
+```
+
+### Strict Crate & Layer Invariants
+
+- **`sym-core` Invariants**: Pure library. Must NEVER depend on `sym-macros`, `maxima-web`, `tokio`, or web frameworks. Must compile with no default features.
+- **`sym-macros` Invariants**: Proc-macro library. Interacts with `sym-core` exclusively at compile time. Emits purely deterministic, vectorizable Rust code without runtime overhead.
+- **`maxima-web` Invariants**: High-level web service. Isolates compute using `tokio::task::spawn_blocking` with explicit thread stack allocation, wall-clock timeouts, and owned concurrency semaphores. Serves 100% self-contained embedded assets (`rust-embed`) with zero external CDN dependencies.
+- **`tests` Invariants**: Must test through public interfaces. Every integration test must be feature-gated to compile cleanly under feature isolation.
+
+---
+
+## 4. Engineering & Toolchain Standards
+
+1. **Rust Toolchain**: Rust 2021/2024 edition, compatible with current stable compiler (`cargo 1.85+`).
+2. **Error Handling Architecture**:
+   - `sym-core` and libraries: Strongly-typed, granular domain error enums using `thiserror`. Every error must carry precise source attribution or error spans.
+   - Applications (`maxima-web`): Top-level reporting using `anyhow` or structured HTTP response payloads (`Status::Error`, HTTP 400 with populated `error` text and `error_span`).
+3. **Data Parsing & Lexing**:
+   - Multi-format combinators built with `winnow = "0.7"`.
+   - **Operator Precedence Rule**: Exponentiation (`^`) binds tighter than unary minus (`-`). `-x^2` must evaluate to `-(x^2)`.
+   - **Scientific Notation Rule**: Recognize exponent notation (`1e-3`, `2.5e+4`).
+   - **Recursion Depth Limit**: Enforce a hard recursion limit of 256. Abort deeply nested expressions (`((((...x...))))`) with `ParseError::RecursionLimitExceeded`.
+4. **Testing Rigor & Determinism**:
+   - Fast, reproducible tests. Property-based testing (`proptest`) must use bounded iterations (e.g. 256 cases) and fixed seeds.
+   - Mandatory round-trip testing: For any expression $e$, assert `parse(to_latex(e)) == e` and `parse(to_string(e)) == e`.
+
+---
+
+## 5. Reference Map & Primary Sources
+
+All upstream Maxima source references cite **Maxima 5.50.0** directly from the decompressed source tree at `References/maxima-5.50.0/` (with auxiliary master tree at `References/maxima-master/`).
+
+| Feature / Domain | Primary Reference Source (Maxima 5.50.0 / Papers) | Key Topics Covered |
+| :--- | :--- | :--- |
+| **Algebraic Simplification** | Maxima 5.50.0 `src/simp.lisp` | `simpplus`, `simptimes`, `simpexpt`, canonical zero folding, rational exponents. |
+| **Trigonometric & Hyperbolic** | Maxima 5.50.0 `src/trigi.lisp`, `src/sinh.lisp` | `simp-%sin`, `simp-%cos`, `simp-%sinh`, `simp-%cosh`, Pythagorean and angle-sum identities. |
+| **Logarithmic & Exponential** | Maxima 5.50.0 `src/logarc.lisp` | Logarithmic expansions, log of powers, complex branch cuts. |
+| **Rational Normalization** | Maxima 5.50.0 `src/nrat4.lisp` | `$ratsimp`, `$nrat`, quotient merging, common denominators. |
+| **Factorials & Combinatorics** | Maxima 5.50.0 `src/sfacts.lisp` | `factcomb`, factorial recurrences, gamma-factorial relations. |
+| **Arbitrary Precision Float** | Maxima 5.50.0 `src/float.lisp` | `bfloat`, `fpprec`, arbitrary-precision floating point conversion and arithmetic. |
+| **Polynomial Expansion & Heap** | Monagan & Pearce (2007) | Sparse distributed multivariate polynomials, 64-bit packed grevlex heap arithmetic. |
+| **Symbolic Integration (Heuristic)** | Joel Moses (1967) SIN | Derivative-divides ($u$-substitution), linearity, elementary integral tables. |
+| **Rational Pole Reduction** | Hermite (1872), Lazard-Rioboo-Trager (1991) | Pole reduction without factoring; real $\ln/\text{atan}$ antiderivatives via Sturm sequences. |
+| **Transcendental Integration** | Manuel Bronstein (2005) *Symbolic Integration I* | Differential field towers, Risch logarithmic/exponential extensions. |
+| **Asymptotic Limits** | Dominik Gruntz (1996) PhD Thesis | Most Rapidly Varying (MRV) sets, asymptotic series, zero-equivalence deciders. |
+| **Linear Algebra & Determinants** | Erwin Bareiss (1968), Maxima 5.50.0 `src/newdet.lisp` | Fraction-free Gaussian elimination, exact polynomial determinants, adjoint matrix inverse. |
+| **Complex Decomposition** | Maxima 5.50.0 `src/rpart.lisp` | `rectform`, `polarform`, `carg`, `conjugate`, Laurent series residues. |
+| **Special Functions** | Maxima 5.50.0 `src/specfn.lisp`, `src/bessel.lisp` | $\Gamma, \beta, \text{erf}$, Bessel $J/Y/I/K$, Airy $Ai/Bi$, orthogonal polynomials. |
+| **Operational Transforms** | Maxima 5.50.0 `src/laplac.lisp` | Forward Laplace `laplace(f, t, s)` and inverse `ilt(F, s, t)`. |
+| **Deductive Assumptions** | Maxima 5.50.0 `src/compar.lisp`, `src/askp.lisp` | Inequality DAG inference, `assume`, `forget`, `is`, `asksign`, `csign`. |
+| **Verification & Golden Tests** | Maxima 5.50.0 `tests/rtest*.mac` | Upstream golden test suites for integration, limits, series, ODEs, special functions. |
+
+---
+
+## 6. Architectural Decision Records (ADRs)
+
+Architectural Decision Records are located in `docs/adr/`. **Do NOT review all ADRs up front.** Only consult a specific ADR on demand when actively implementing or modifying that specific functional domain:
+
+| Functional Domain / Task Context | Relevant ADR | Scope & Core Invariants |
+| :--- | :--- | :--- |
+| **E-Graph Engine Architecture** | [`0001-egraph-engine-over-lisp-port.md`](docs/adr/0001-egraph-engine-over-lisp-port.md) | Chose `egg` equality saturation over a direct LISP port for compile-time code generation. |
+| **Fast-Math Semantics** | [`0002-configurable-fast-math-default.md`](docs/adr/0002-configurable-fast-math-default.md) | Default real-number equivalence; configurable IEEE-754 strict mode per invocation. |
+| **Rewrite Rule Strategy** | [`0005-systematic-maxima-rule-coverage.md`](docs/adr/0005-systematic-maxima-rule-coverage.md) | Systematic 1:1 mapping with Maxima LISP citations; supersedes ADR-0003. |
+| **Exact Constant Representation** | [`0004-rational-constant-representation.md`](docs/adr/0004-rational-constant-representation.md) | Arbitrary-precision `BigRational` constants throughout e-graph; float literal emission at codegen. |
+| **CAS Algorithm Partitioning** | [`0006-hybrid-egraph-and-procedural-cas.md`](docs/adr/0006-hybrid-egraph-and-procedural-cas.md) | Strict split: e-graph for local simplification; procedural AST modules for heavy CAS algorithms. |
+| **Web API Dispatch & Offline UI** | [`0007-webui-cas-typed-dispatch-and-offline-architecture.md`](docs/adr/0007-webui-cas-typed-dispatch-and-offline-architecture.md) | Typed JSON dispatch (`POST /api/compute`), embedded offline assets (`rust-embed`), zero-CDN KaTeX. |
+| **Service Concurrency & Compute Isolation** | [`0008-compute-isolation-and-service-concurrency.md`](docs/adr/0008-compute-isolation-and-service-concurrency.md) | Bounded worker threads, wall-clock timeouts, owned semaphore permits, payload size limits. |
+| **Arbitrary Precision Float (`bfloat`)** | [`0009-maxima-5-50-core-parity-and-dashu-bfloat.md`](docs/adr/0009-maxima-5-50-core-parity-and-dashu-bfloat.md) | Scope restricted to core `src/`; pure-Rust `dashu-float` for arbitrary precision floating point. |
+| **Complex Atoms & Bareiss Linear Algebra** | [`0010-ast-complex-atom-bfloat-and-bareiss-linear-algebra.md`](docs/adr/0010-ast-complex-atom-bfloat-and-bareiss-linear-algebra.md) | Zero-allocation `Expr::I` atom, canonical `rectform`, and fraction-free Bareiss $O(n^3)$ elimination. |
+| **Special Functions & Scoped Assumptions** | [`0011-special-functions-laplace-and-scoped-assumptions.md`](docs/adr/0011-special-functions-laplace-and-scoped-assumptions.md) | `Expr::SpecialFn` table dispatch, operational Laplace transforms, immutable `Assumptions` context. |
+| **Outcomes, Honesty & Resource Safety** | [`0012-tri-state-symbolic-outcomes-and-verification-honesty.md`](docs/adr/0012-tri-state-symbolic-outcomes-and-verification-honesty.md) | Tri-state outcomes (`Solved`/`ProvenNonElementary`/`Unsupported`), zero-fake-verification, depth limit 256. |
+
+---
+
+## 7. Mandatory Edge-Case Test Matrix
+
+Every newly audited or implemented module MUST include unit, integration, or property tests covering all applicable categories below:
+
+| Category | Required Test Fixtures & Edge Cases |
+| :--- | :--- |
+| **Numerical & Constants** | `f64::NAN`, `f64::INFINITY`, `f64::NEG_INFINITY`, `-0.0`, subnormals, division by zero (`1/0`), exact rational zero (`0/1`), negative exponents (`2^-1`, `-x^-2`), scientific notation (`1e-3`, `2.5e+4`). |
+| **Operator Precedence** | `-x^2` at $x=3$ must equal `-9` (never `9`), `-2^2 == -4`, `2^-1 == 0.5`, `-x! == -(x!)`, `(-x)^2 == x^2`, `exp(-x^2) == Exp(Neg(Pow(x, 2)))`. |
+| **Cardinality & Boundaries** | Polynomial degree `0` (constant), degree `1` (linear), degree `2` (quadratic), empty expression list, single variable, $\ge 8$ variables (transition from packed 64-bit to dynamic vector), order `0` series. |
+| **Domain Algorithms** | Irreducible quadratics ($x^2+1$), non-elementary integrands ($e^{-x^2}, e^{x^2}$ returning `ProvenNonElementary`), branch cuts ($\ln(-1)$), damped 2nd-order ODEs ($y''+3y'+2y=0$), singular Jacobians. |
+| **Parsers & I/O Safety** | Deeply nested parentheses (`((((...x...))))` 3000 levels returning `ParseError::RecursionLimitExceeded`), UTF-8 BOM, CRLF vs LF line endings, trailing delimiters, malformed input (`x+`), empty string. |
+| **Concurrency & Timeouts** | Timeout cancellation (killing thread execution or releasing owned semaphore permit), concurrent compute saturation (HTTP 503 on exhausted semaphore), body size overflow (>64 KB returning HTTP 413). |
+| **WebUI & Frontend** | Complete operations catalog populated in palette, dynamic parameter form generation, HTML/JS CSS class parity (zero undefined Tailwind classes), KaTeX font caching headers. |
+
+---
+
+## 8. Historical Project Status (Phases 1–45)
+
+Historical milestones completed across previous engineering sessions:
+
+| Phase | Description | Status | Scope & Capabilities |
+| :---: | :--- | :---: | :--- |
+| **1–12** | Core Engine, E-Graph, Diff, CSE, Codegen & Facade | ✅ Complete | Exact rational AST, analytical diff, 52 1:1 Maxima rules, FLOP extraction, CSE pass, syn/quote codegen, winnow parsers. |
+| **13–21** | Advanced Math, Parser Parity & Rule Expansion | ✅ Complete | Tensors, matrices, calculus AST, 92 1:1 rules across 7 Maxima files (`sinh.lisp`, `nrat4.lisp`, `sfacts.lisp`), web provenance API. |
+| **22–23** | Sparse Multivariate Polynomials & Rational Algebra | ◐ Partial | 64-bit packed exponents, Monagan-Pearce heap, `expand()`, univariate GCD, `ratsimp()`. (*Known boundary: factor and partfrac limited to rational roots*). |
+| **24–25** | Symbolic Integration (Elementary & Transcendental) | ◐ Partial | Linearity, elementary table, derivative-divides $u$-substitution (`∫x·e^{x²}`). (*Known boundary: full Risch differential towers deferred*). |
+| **26–28** | Laurent Series, Gruntz Limits & Definite Integration | ◐ Partial | Laurent series arithmetic, series-based limits, rational pole scanner, FTC definite integrals. (*Known boundary: MRV tower fallback to numerical check*). |
+| **29–30** | Algebraic & Differential Equation Solvers | ◐ Partial | Closed-form linear/quadratic, rational root factor-and-split, 1st/2nd-order constant coefficient ODEs. (*Known boundary: cubic/quartic radicals deferred*). |
+| **31–33** | CAS Parser Syntax, Facade & Recursive Composer | ✅ Complete | `parse_maxima_cas`, prelude re-exports, interactive recursive expression composer, E2E test suite. |
+| **34–38** | CAS Web Dispatch, Offline WebUI & Hardening | ✅ Complete | Typed `/api/compute`, offline KaTeX assets, CLI config, containerization. |
+| **38A–38C** | P0 Hardening, WebUI Restoration & Honesty | ✅ Complete | Precedence `-x^2 == -9`, recursion limit 256, scientific notation, palette restoration, ODE/defint verification. |
+| **39** | Arbitrary-Precision Float (`bfloat`) | ✅ Complete | Pure-Rust `dashu-float` with Maxima `$fpprec` precision control and scientific notation. |
+| **40** | Symbolic Linear Algebra & Bareiss Algorithm | ✅ Complete | Bareiss $O(n^3)$ determinant, adjoint inverse, charpoly, trace, eigenvalues. |
+| **41** | Complex Analysis, Rectangular Form & Residues | ✅ Complete | `Expr::I` atom, canonical `rectform`, polarform, branch cuts, residue calculus. |
+| **42** | Special Functions & Table Dispatch | ✅ Complete | $\Gamma, \beta, \text{erf}$, Bessel $J/Y/I/K$, Airy $Ai/Bi$, orthogonal polynomials $P_n, T_n, U_n, H_n, L_n$. |
+| **43** | Operational Laplace Transforms & ODE Initial Values | ✅ Complete | Forward/inverse Laplace transforms, operational theorems, and IVP/BVP solvers (`ic1`, `ic2`, `bc2`). |
+| **44** | Scoped Deductive Inference & Assumptions Context | ✅ Complete | Thread-safe `Assumptions` context, inequality DAG, interval bounds, sign deduction (`csign`, `asksign`). |
+| **45** | Maxima 5.50 Parity Test Suite & Golden Verification | ✅ Complete | Golden test suites ported from Maxima 5.50 (`rtest_integrate`, `rtest_limit`, `rtest_taylor`, etc.), 100% test pass rate. |
+
+---
+
+## 9. Phased Audit & Improvement Roadmap
+
+> **Rule:** No phase may begin implementation until **Gate 0** is green. Every phase's passing gate must exit with code `0`.
+
+---
+
+### Phase 38A: P0 Safety, Correctness & Resource Hardening
+**Objective:** Remediate critical parser operator precedence bugs, process aborts via stack overflow, and thread leakage.
+
+- **Tasks:**
+  1. Fix operator precedence in `sym-core/src/parser/maxima.rs` and `sym-core/src/parser/latex.rs`: bind exponentiation (`^`) strictly tighter than unary minus/plus. Ensure `-x^2` parses as `-(x^2)`.
+  2. Implement `RecursionDepthGuard` (limit 256) in both parsers, returning `ParseError::RecursionLimitExceeded` to prevent thread stack overflows.
+  3. Add scientific notation parsing (`1e-3`, `2.5e+4`) in `sym-core/src/parser/maxima.rs`.
+  4. Fix HTTP 400 error bodies in `maxima-web/src/app.rs`: map `result.error` (not `result.result`) into JSON response and include `error_span`.
+  5. Move `OwnedSemaphorePermit` into `spawn_blocking` compute closures in `maxima-web/src/app.rs` to guarantee concurrency permits are freed only when the thread finishes.
+  6. Add print-parse round-trip property tests in `tests/proptest/print_parse_roundtrip.rs`.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo check --workspace --all-targets
+  cargo test -p sym-core --test parser_maxima
+  cargo test -p maxima-tests --test web_hardening
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  ```
+- **HARD STOP:** Verify `-x^2` evaluates to `-9` at $x=3$ and 3000 parentheses return HTTP 400 before proceeding.
+
+---
+
+### Phase 38B: WebUI Wiring & Styling Restoration
+**Objective:** Restore operation palette rendering, CAS parameter dispatch, and eliminate undefined CSS classes.
+
+- **Tasks:**
+  1. Fix palette initialization in `maxima-web/static/js/palette.js` and `main.js`: handle array responses from `/api/operations` and eliminate Temporal Dead Zone reference errors.
+  2. Wire embedded CAS commands in `maxima-web/src/service.rs`: dispatch `parse_maxima_cas` parameters directly without ignoring arguments.
+  3. Eradicate ~60 undefined utility classes from `maxima-web/static/index.html` and JS modules by expanding `maxima-web/static/vendor/app.css` to define all required layout, spacing, and typography classes.
+  4. Display CSE let-bindings (`extra.bindings`) in `maxima-web/static/js/notebook.js`.
+  5. Add HTTP caching headers (`Cache-Control: public, max-age=31536000, immutable`) for embedded KaTeX font assets.
+  6. Add a CI verification script checking for zero undefined CSS classes.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo test -p maxima-web
+  cargo test -p maxima-tests --test webui_e2e
+  python -c "import re, glob; css = open('maxima-web/static/vendor/app.css').read(); defined = set(re.findall(r'\.([A-Za-z_][\w\-]*)', css)); used = set(); [used.update(m.split()) for f in ['maxima-web/static/index.html'] + glob.glob('maxima-web/static/js/*.js') for m in re.findall(r'class(?:Name)?\s*=\s*[\"\'`]([^\"\'`$]+)[\"\'`]', open(f).read())]; missing = [u for u in used if u not in defined and not u.startswith('fa-')]; assert not missing, f'Missing CSS classes: {missing}'"
+  ```
+- **HARD STOP:** Verify all operation buttons render in the UI palette before proceeding.
+
+---
+
+### Phase 38C: Engine Honesty, Dynamic Verification & Defect Remediation
+**Objective:** Remediate mathematical errors in ODE solvers and definite integrals, implement tri-state integration outcomes, and enforce dynamic runtime verification.
+
+- **Tasks:**
+  1. Fix first-order ODE coefficient extraction in `sym-core/src/solve/ode.rs`: properly assign `a = coeffs[1]` and `b = coeffs[0]` (resolves wrong coefficients in `diff(y, x) + 2*y`).
+  2. Implement dynamic runtime verification in `maxima-web/src/service.rs`: substitute proposed ODE solutions back into original ODEs; substitute algebraic roots into equations; verify definite integrals against numerical quadrature. Hardcoded `verified: true` is strictly prohibited.
+  3. Implement tri-state integration results in `sym-core/src/integrate/`: return `Solved(Expr)`, `ProvenNonElementary`, or `Unsupported(String)`.
+  4. Fix absolute value in logarithmic antiderivatives: $\int \frac{1}{x} dx = \ln|x|$.
+  5. Remediate Taylor series off-by-one truncation and order labeling in `sym-core/src/series.rs`.
+  6. Return complete root sets in `sym-core/src/solve/alg.rs` and mark incomplete factorizations as `Status::Partial`.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo test -p sym-core --test solvers_ode
+  cargo test -p sym-core --test integrate_defint
+  cargo test -p maxima-tests --test maxima_cas_parity
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  ```
+- **HARD STOP:** Verify ODE `diff(y,x) + 2*y = 0` yields $y = C_1 e^{-2x}$ with dynamic verification passing before proceeding.
+
+---
+
+### Phase 39: Pure-Rust Arbitrary-Precision Float (`bfloat`) [Feature: `bfloat`]
+**Objective:** Implement arbitrary-precision floating-point arithmetic with configurable `fpprec`, citing Maxima's `float.lisp` (ADR-0009).
+
+- **Tasks:**
+  1. Add `bfloat` feature flag to `sym-core/Cargo.toml` and `maxima-rs/Cargo.toml` activating `dashu-float = "0.4"`.
+  2. Create `sym-core/src/bfloat.rs` wrapping `dashu::float::DBig` with precision contexts matching Maxima's `fpprec` (default 16 decimal digits).
+  3. Extend `Expr` AST with `Expr::Bfloat(BfloatWrapper)`.
+  4. Implement `bfloat()` conversion function parsing strings and evaluating expressions to bigfloats.
+  5. Add unit and integration tests in `tests/integration/bfloat.rs`.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo test -p sym-core --features bfloat --lib
+  cargo test -p maxima-tests --test bfloat
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  ```
+
+---
+
+### Phase 40: Symbolic Linear Algebra & Bareiss Algorithm [Feature: `matrix`]
+**Objective:** Implement fraction-free Bareiss matrix determinants, adjoint inverses, and characteristic polynomials, citing Maxima's `newdet.lisp` (ADR-0010).
+
+- **Tasks:**
+  1. Add `matrix` feature flag to `sym-core/Cargo.toml` and `maxima-rs/Cargo.toml`.
+  2. Create `sym-core/src/matrix/bareiss.rs` implementing Bareiss $O(n^3)$ fraction-free LU determinant algorithm.
+  3. Implement matrix adjoint inverse, characteristic polynomial (`charpoly`), trace, and eigenvalues.
+  4. Wire matrix operations into `maxima-web/src/service.rs`.
+  5. Add integration tests in `tests/integration/matrix_bareiss.rs`.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo test -p sym-core --features matrix --lib
+  cargo test -p maxima-tests --test matrix_bareiss
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  ```
+
+---
+
+### Phase 41: Complex Analysis, Rectangular Form & Residues [Feature: `complex`]
+**Objective:** Add first-class imaginary unit `Expr::I` atom, canonical complex decompositions (`rectform`, `polarform`, `carg`, `conjugate`), and Laurent residues, citing Maxima's `rpart.lisp` (ADR-0010).
+
+- **Tasks:**
+  1. Add `complex` feature flag; extend `Expr` with `Expr::I` satisfying $I^2 = -1$.
+  2. Implement `rectform(expr: &Expr) -> (Expr, Expr)` returning real and imaginary components.
+  3. Implement `polarform`, `carg`, `conjugate`, and Laurent series residue extraction.
+  4. Add integration tests in `tests/integration/complex_analysis.rs`.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo test -p sym-core --features complex --lib
+  cargo test -p maxima-tests --test complex_analysis
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  ```
+
+---
+
+### Phase 42: Special Functions & Table Dispatch [Feature: `specfn`]
+**Objective:** Implement non-elementary special functions ($\Gamma, \beta, \text{erf}$, Bessel, Airy, orthogonal polynomials) with table-driven differentiation and limits, citing Maxima's `specfn.lisp` and `bessel.lisp` (ADR-0011).
+
+- **Tasks:**
+  1. Add `specfn` feature flag; create `Expr::SpecialFn(SpecialFnKind, Vec<Expr>)`.
+  2. Create `sym-core/src/specfn/` modules for Gamma, Bessel ($J, Y, I, K$), Airy ($Ai, Bi$), and orthogonal polynomials (Legendre, Chebyshev, Hermite, Laguerre).
+  3. Wire analytical derivatives into `sym-core/src/diff.rs` via table dispatch.
+  4. Add integration tests in `tests/integration/specfn.rs`.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo test -p sym-core --features specfn --lib
+  cargo test -p maxima-tests --test specfn
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  ```
+
+---
+
+### Phase 43: Operational Laplace Transforms & ODE Initial Values [Feature: `transform`]
+**Objective:** Implement forward/inverse Laplace transforms and ODE initial/boundary condition solvers, citing Maxima's `laplac.lisp` (ADR-0011).
+
+- **Tasks:**
+  1. Add `transform` feature flag; create `sym-core/src/transform/laplace.rs`.
+  2. Implement `laplace(f, t, s)` using operational linearity, frequency shift, and transform tables.
+  3. Implement `ilt(F, s, t)` using partial fraction pole decomposition and inverse transform tables.
+  4. Implement `ic1`, `ic2`, `bc2` initial/boundary condition solvers in `sym-core/src/transform/bvp.rs`.
+  5. Add integration tests in `tests/integration/transform_laplace.rs`.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo test -p sym-core --features transform --lib
+  cargo test -p maxima-tests --test transform_laplace
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  ```
+
+---
+
+### Phase 44: Scoped Deductive Inference & Assumptions Context [Feature: `assume`]
+**Objective:** Implement thread-safe, immutable assumptions context with inequality DAG inference, citing Maxima's `compar.lisp` and `askp.lisp` (ADR-0011).
+
+- **Tasks:**
+  1. Add `assume` feature flag; create `sym-core/src/assume/mod.rs`.
+  2. Implement `Assumptions` context containing an inequality DAG and sign database.
+  3. Implement `assume`, `forget`, `is`, `asksign`, `csign`.
+  4. Thread `Option<&Assumptions>` into integration and limit routines.
+  5. Add integration tests in `tests/integration/assume_deduction.rs`.
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo test -p sym-core --features assume --lib
+  cargo test -p maxima-tests --test assume_deduction
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  ```
+
+---
+
+### Phase 45: Maxima 5.50 Parity Test Suite & Golden Verification
+**Objective:** Execute full upstream Maxima 5.50 golden verification suite against reference tests in `References/maxima-5.50.0/tests/`.
+
+- **Tasks:**
+  1. Port benchmark test cases from `rtest_integrate.mac`, `rtest_limit.mac`, `rtest_taylor.mac`, `rtest_solve.mac`, `rtest_laplace.mac`, `rtest_bessel.mac`.
+  2. Implement multi-feature isolation matrix build verification in CI.
+  3. Ensure 100% test pass rate across all suites.
+  4. Final documentation update (`README.md`, `SESSION_LOG.md`).
+
+- **Passing Gate (ALL must pass with exit code 0):**
+  ```bash
+  cargo fmt --all -- --check
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  cargo test --workspace --all-features
+  cargo test -p sym-core --all-features --doc
+  ```
+
+---
+
+## 10. Phase Sign-Off Report Template
+
+At the conclusion of each phase, the agent must generate a standardized sign-off report at `docs/audits/PHASE{N}_REPORT.md` before requesting review:
+
+```markdown
+# Phase {N} Sign-Off Report: {PHASE_TITLE}
+
+## 1. Summary of Deliverables & Changes
+- `[file/path.rs]`: Concise description of deliverables, fixes, or algorithms added.
+
+## 2. Issues & Audit Findings Remediated
+| Defect ID | File / Crate | Defect Type | Root Cause | Fix & Verification Test |
+| :--- | :--- | :--- | :--- | :--- |
+| P{N}-01 | `...` | Precedence / Stack / UI | `...` | `...` |
+
+## 3. Mandatory Edge-Case Coverage Checklist
+- [ ] Numerical (`NaN`, `Inf`, `-0.0`, scientific notation)
+- [ ] Operator Precedence (`-x^2 == -9` at $x=3$)
+- [ ] Cardinality (`0`, `1`, `2`, constant/duplicate)
+- [ ] Domain Algorithms (singular Jacobians, branch cuts, non-elementary integrands)
+- [ ] Parsers & I/O (recursion depth limit 256, empty input, CRLF)
+- [ ] Concurrency & Timeouts (owned semaphore permits, timeout thread termination)
+- [ ] WebUI & Persistence (palette rendering, CSS class parity)
+
+## 4. Passing Gate Verification
+| Command | Expected Exit Code | Actual Exit Code | Result Summary |
+| :--- | :---: | :---: | :--- |
+| `cargo check --workspace --all-targets` | `0` | `0` | Passed |
+| `cargo test --workspace --all-targets` | `0` | `0` | X passed; 0 failed |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | `0` | `0` | 0 warnings |
 ```
 
 ---
 
-## Phase 1 — Workspace Skeleton & Expression AST [Feature: Core (Always)]
-
-**Goal**: Establish the Cargo workspace, define the foundational `Expr` AST enum,
-and implement `Display` / parsing utilities. Always compiled with zero feature flags.
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`Cargo.toml`](file:///e:/Rust/Max/Cargo.toml) | None | ✅ Completed | Workspace manifest |
-| [`sym-core/Cargo.toml`](file:///e:/Rust/Max/sym-core/Cargo.toml) | None | ✅ Completed | Core library manifest with features |
-| [`sym-core/src/lib.rs`](file:///e:/Rust/Max/sym-core/src/lib.rs) | None | ✅ Completed | Library root |
-| [`sym-core/src/expr.rs`](file:///e:/Rust/Max/sym-core/src/expr.rs) | Core | ✅ Completed | Expression AST + unit tests |
-| [`sym-core/src/rational.rs`](file:///e:/Rust/Max/sym-core/src/rational.rs) | Core | ✅ Completed | Rational constant utilities + unit tests |
-
----
-
-## Phase 2 — Analytical Differentiation [Feature: diff]
-
-**Goal**: Implement the deterministic differentiation pre-pass on `Expr`.
-Gated under `feature = "diff"`. Requires no external dependencies beyond core AST.
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`sym-core/src/diff.rs`](file:///e:/Rust/Max/sym-core/src/diff.rs) | `diff` | ✅ Completed | Differentiation engine + unit & doc tests |
-
----
-
-## Phase 3 — E-Graph Language, 1:1 Maxima Rules & Provenance [Feature: egraph]
-
-**Goal**: Define the `egg` `Language` for mathematical expressions, implement
-systematic 1:1 rewrite rules mapped from Maxima Common LISP simplification routines,
-and wire up structured `RuleProvenance` metadata with source citations.
-Gated under `feature = "egraph"`, activates optional `egg` dependency.
-
-### Maxima LISP Source Mapping Reference
-
-Every rule implemented must cite its corresponding function in Maxima Lisp source (`References/maxima-master.zip`):
-- `simp.lisp`: `simpplus`, `simptimes`, `simpexpt` (identities for 0, 1, distribution, power rules)
-- `trigi.lisp`: `simp-%sin`, `simp-%cos`, `simp-%tan` (Pythagorean identities, angle sums)
-- `combin.lisp`: integer combinations, factorings
-- `logarc.lisp`: `sp1log`, `log-exp` cancellations
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`sym-core/src/lang.rs`](file:///e:/Rust/Max/sym-core/src/lang.rs) | `egraph` | ✅ Completed | `egg` Language + Analysis for `Expr` |
-| [`sym-core/src/provenance.rs`](file:///e:/Rust/Max/sym-core/src/provenance.rs) | `egraph` | ✅ Completed | `RuleProvenance` struct and citation registry |
-| [`sym-core/src/rules/mod.rs`](file:///e:/Rust/Max/sym-core/src/rules/mod.rs) | `egraph` | ✅ Completed | Rule aggregator + config + provenance lookup |
-| [`sym-core/src/rules/arithmetic.rs`](file:///e:/Rust/Max/sym-core/src/rules/arithmetic.rs) | `egraph` | ✅ Completed | Rules citing `simp.lisp` and `combin.lisp` |
-| [`sym-core/src/rules/trigonometric.rs`](file:///e:/Rust/Max/sym-core/src/rules/trigonometric.rs) | `egraph` | ✅ Completed | Rules citing `trigi.lisp` |
-| [`sym-core/src/rules/exponential.rs`](file:///e:/Rust/Max/sym-core/src/rules/exponential.rs) | `egraph` | ✅ Completed | Rules citing `logarc.lisp` / `simp.lisp` |
-| [`sym-core/src/rules/logarithmic.rs`](file:///e:/Rust/Max/sym-core/src/rules/logarithmic.rs) | `egraph` | ✅ Completed | Rules citing `logarc.lisp` |
-
----
-
-## Phase 4 — Cost Model, Saturation Runner & Extraction [Feature: egraph]
-
-**Goal**: Implement FLOP-weighted cost extraction, configure `egg::Runner`
-with bounded saturation limits, and handle multi-output extraction.
-Gated under `feature = "egraph"`.
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`sym-core/src/cost.rs`](file:///e:/Rust/Max/sym-core/src/cost.rs) | `egraph` | ✅ Completed | FLOP cost function |
-| [`sym-core/src/saturate.rs`](file:///e:/Rust/Max/sym-core/src/saturate.rs) | `egraph` | ✅ Completed | Runner + saturation limits |
-| [`sym-core/src/extract.rs`](file:///e:/Rust/Max/sym-core/src/extract.rs) | `egraph` | ✅ Completed | Multi-root extraction |
-
----
-
-## Phase 5 — Common Subexpression Elimination (CSE) [Feature: cse]
-
-**Goal**: Post-extraction pass scanning expressions, identifying shared subterms,
-and producing a sequence of `let` bindings. Gated under `feature = "cse"`. Pure AST DAG algorithm.
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`sym-core/src/cse.rs`](file:///e:/Rust/Max/sym-core/src/cse.rs) | `cse` | ✅ Completed | CSE extraction pass |
-
----
-
-## Phase 6 — Code Generation (TokenStream) [Feature: codegen]
-
-**Goal**: Convert `CseResult` into `proc_macro2::TokenStream` that represents
-a complete, compilable Rust function body.
-Gated under `feature = "codegen"`, activates `proc-macro2` and `quote`.
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`sym-core/src/codegen.rs`](file:///e:/Rust/Max/sym-core/src/codegen.rs) | `codegen` | ✅ Completed | Expr → TokenStream emitter |
-
----
-
-## Phase 7 — Multi-Format Parsers (Maxima & LaTeX) [Feature: parser]
-
-**Goal**: Implement robust, ergonomic string parsers for both Maxima mathematical syntax
-and LaTeX scalar formula notation using `winnow`.
-Gated under `feature = "parser"`, activates `winnow`.
-
-### Syntax Scope
-- **Maxima string format**: `(sin(x)^2 + cos(x)^2) / 2`, `exp(x) * ln(y)`
-- **LaTeX scalar math format**: `\frac{\sin(x)^2 + \cos(x)^2}{2}`, `\sqrt{x + 1}`, `\exp{x}` (Core scalar scope now; extended math mode in future iterations)
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`sym-core/src/parser/mod.rs`](file:///e:/Rust/Max/sym-core/src/parser/mod.rs) | `parser` | ✅ Completed | Parser module root and parse error types |
-| [`sym-core/src/parser/maxima.rs`](file:///e:/Rust/Max/sym-core/src/parser/maxima.rs) | `parser` | ✅ Completed | Maxima expression string parser (`parse_maxima`) |
-| [`sym-core/src/parser/latex.rs`](file:///e:/Rust/Max/sym-core/src/parser/latex.rs) | `parser` | ✅ Completed | LaTeX formula parser (`parse_latex`) |
-
----
-
-## Phase 8 — High-Level Ergonomic API & Pipeline Builder
-
-**Goal**: Provide friendly one-call free functions (`optimize`, `optimize_gradient`)
-and a fluent `Pipeline` builder connecting parsing, calculus, saturation, and CSE.
-
-```rust
-// High-level free function
-let opt = optimize(&expr, &OptimizeConfig::default())?;
-
-// Fluent Pipeline
-let res = Pipeline::new()
-    .from_latex(r"\frac{\sin(x)^2 + \cos(x)^2}{x}")?
-    .differentiate(&["x"])
-    .optimize()?
-    .to_rust_fn("eval_df", FloatType::F64)?;
-```
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`sym-core/src/pipeline.rs`](file:///e:/Rust/Max/sym-core/src/pipeline.rs) | `full` / conditional | ✅ Completed | `optimize()`, `optimize_gradient()`, and `Pipeline` builder |
-
----
-
-## Phase 9 — Procedural Macro Crate (`sym-macros`) [Feature: macros]
-
-**Goal**: Compile-time procedural macros `sym_fn!` and `sym_eval!` with span-aware diagnostics.
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`sym-macros/Cargo.toml`](file:///e:/Rust/Max/sym-macros/Cargo.toml) | None | ✅ Completed | Macro crate manifest |
-| [`sym-macros/src/lib.rs`](file:///e:/Rust/Max/sym-macros/src/lib.rs) | None | ✅ Completed | `sym_fn!` + `sym_eval!` macros |
-| [`sym-macros/src/parse_sym_fn.rs`](file:///e:/Rust/Max/sym-macros/src/parse_sym_fn.rs) | None | ✅ Completed | `sym_fn!` syn parser |
-| [`sym-macros/src/parse_sym_eval.rs`](file:///e:/Rust/Max/sym-macros/src/parse_sym_eval.rs) | None | ✅ Completed | `sym_eval!` syn parser |
-| [`sym-macros/src/config.rs`](file:///e:/Rust/Max/sym-macros/src/config.rs) | None | ✅ Completed | Attribute config parser |
-| [`sym-macros/src/expand.rs`](file:///e:/Rust/Max/sym-macros/src/expand.rs) | None | ✅ Completed | Pipeline orchestrator |
-
----
-
-## Phase 10 — Facade Crate (`maxima-rs`) & Prelude
-
-**Goal**: User-facing facade crate with feature forwarding and ergonomic prelude (`maxima_rs::prelude::*`).
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| [`maxima-rs/Cargo.toml`](file:///e:/Rust/Max/maxima-rs/Cargo.toml) | None | ✅ Completed | Facade crate manifest |
-| [`maxima-rs/src/lib.rs`](file:///e:/Rust/Max/maxima-rs/src/lib.rs) | None | ✅ Completed | Re-exports + documentation |
-| [`maxima-rs/src/prelude.rs`](file:///e:/Rust/Max/maxima-rs/src/prelude.rs) | None | ✅ Completed | Convenient imports and helpers |
-
----
-
-## Phase 11 — Testing Infrastructure & Maxima Coverage Verification
-
-**Goal**: Comprehensive golden regression suite, proptest property-based tests,
-and an automated check comparing our `RuleProvenance` registry against Maxima LISP sources.
-
-### Deliverables & Status
-
-| File | Feature Requirements | Purpose |
-|------|----------------------|---------|
-| [`tests/integration/basic_arithmetic.rs`](file:///e:/Rust/Max/tests/integration/basic_arithmetic.rs) | `egraph` | Arithmetic simplification golden tests (Passed) |
-| [`tests/integration/trigonometric.rs`](file:///e:/Rust/Max/tests/integration/trigonometric.rs) | `egraph` | Trig golden tests (Passed) |
-| [`tests/integration/differentiation.rs`](file:///e:/Rust/Max/tests/integration/differentiation.rs) | `diff`, `egraph` | Differentiation golden tests (Passed) |
-| [`tests/integration/cse.rs`](file:///e:/Rust/Max/tests/integration/cse.rs) | `cse` | CSE golden tests (Passed) |
-| [`tests/integration/parser_maxima.rs`](file:///e:/Rust/Max/tests/integration/parser_maxima.rs) | `parser` | Maxima string parsing golden tests (Passed) |
-| [`tests/integration/parser_latex.rs`](file:///e:/Rust/Max/tests/integration/parser_latex.rs) | `parser` | LaTeX formula parsing golden tests (Passed) |
-| [`tests/integration/macro_expansion.rs`](file:///e:/Rust/Max/tests/integration/macro_expansion.rs) | `macros` | Macro expansion tests (Passed) |
-| [`tests/integration/maxima_coverage.rs`](file:///e:/Rust/Max/tests/integration/maxima_coverage.rs) | `egraph` | Maxima 1:1 rule citation coverage verification (52 rules mapped, Passed) |
-| [`tests/proptest/numerical_equivalence.rs`](file:///e:/Rust/Max/tests/proptest/numerical_equivalence.rs) | `egraph` | Proptest: numerical equivalence (Passed) |
-| [`tests/proptest/diff_correctness.rs`](file:///e:/Rust/Max/tests/proptest/diff_correctness.rs) | `diff` | Proptest: symbolic diff vs finite diff (Passed) |
-
----
-
-## Phase 12 — Ergonomics, Polish & Documentation
-
-**Goal**: Final transparency polish, span errors, benchmark comparisons, and Maxima 1:1 rule coverage reports. All workspace tests, clippy checks, and formatting verified.
-
-- **Status**: ✅ Completed
-
----
-
-## Phase 13 — Advanced Math & Calculus [Feature: Core/Parser]
-
-**Goal**: Extend the core engine and LaTeX parser to support advanced mathematical constructs including calculus (derivatives, integrals, limits/sums), matrices, and basic tensor notation (subscripts/superscripts), maintaining the 1:1 Maxima rules engine compatibility.
-
-### Deliverables & Status
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/tensor.rs` | Core | ✅ Completed | `Index` type, `IndexType` (Covariant/Contravariant) |
-| `sym-core/src/expr.rs` | Core | ✅ Completed | Added `Tensor`, `Matrix`, `Derivative`, `Integral`, `Sum` to AST enum |
-| `sym-core/src/lang.rs` | `egraph` | ✅ Completed | `egg` `MathLang` updates for new AST nodes (Matrix opaque serialization) |
-| `sym-core/src/diff.rs` | `diff` | ✅ Completed | Matrix element-wise differentiation, nested unevaluated derivatives |
-| `sym-core/src/parser/latex.rs` | `parser` | ✅ Completed | Extended `winnow` combinators to parse `\int`, `\sum`, `\begin{pmatrix}`, `\frac{\partial f}{\partial x}`, and Greek tensor notation |
-| `tests/integration/parser_latex.rs`| `parser` | ✅ Completed | Golden tests for advanced math syntax |
-
----
-
-# Roadmap — Phases 14–21: WebUI Restoration & 1:1 Maxima Parity
-
-> **Status legend**: ⬜ Not started · 🟨 In progress · ✅ Completed
->
-> **Protocol**: This plan was committed *before* implementation. Each phase is
-> implemented, verified (`cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`,
-> `cargo test`), documented in `README.md` + `SESSION_LOG.md`, and committed individually.
-
-## Workstream A — 1:1 Maxima Source Parity
-
-| Gap | Current State | Target |
-|-----|---------------|--------|
-| Rule coverage | 52 rules across `simp.lisp`, `trigi.lisp`, `combin.lisp`, `logarc.lisp` | Add `sinh.lisp`, `nrat4.lisp`, `sfacts.lisp`, `matrix.lisp` citations + deeper `trigi.lisp` |
-| AST surface | `sin/cos/tan/exp/ln/sqrt` only | Add `sinh/cosh/tanh`, `asin/acos/atan`, `%pi`, `%e`, factorial |
-| Maxima parser | Arithmetic + 6 functions | Constants, factorial, hyperbolic/inverse trig, calculus & matrix syntax |
-| Matrix in e-graph | Flattened to `"matrix_unsupported_in_egraph"` (data loss) | Structured encode/decode round-trip |
-| Provenance visibility | Engine-only (`all_rule_provenances`) | Exposed through `GET /api/rules` + WebUI panel |
-
-## Workstream B — WebUI Improvements
-
-| Gap | Current State | Target |
-|-----|---------------|--------|
-| Layout | Stray `<main>` after `</html>`; panes stack vertically | Correct flex-row two-pane layout |
-| Script integrity | `copyText()` missing closing brace; copy buttons unwired | Valid script + working copy buttons |
-| API contract | README says `optimize`, service only accepts `simplify` | Both accepted, docs aligned |
-| Provenance UI | Absent | Rules/coverage panel with per-file counts |
-
----
-
-## Phase 14 — WebUI Correctness & Layout Restoration
-
-**Goal**: Make the existing `maxima-web` UI run, lay out, and copy correctly, and align the API contract.
-
-### Requirements
-- `maxima-web/static/index.html`: replace the stray `<main class="flex-1 flex overflow-hidden">`
-  emitted after `</html>` with a correct wrapper enclosing the input (`.w-2/5`) and
-  output (`.flex-1`) `<section>` panes.
-- `maxima-web/static/app.js`: close `copyText()`; bind `copyResultBtn` and `copyCodeBtn`;
-  guard clipboard errors.
-- `maxima-web/src/service.rs`: accept both `"simplify"` and `"optimize"` operation ids.
-- `maxima-web/src/main.rs`: keep `/api/operations` authoritative for the frontend.
-- Add `#[cfg(test)]` coverage for `service::compute` (simplify, differentiate, evaluate).
-- Update `README.md` API examples to use the canonical `simplify` id.
-
-### Acceptance Criteria
-- `cargo build -p maxima-web` and `cargo test -p maxima-web` succeed.
-- Two-pane layout renders side-by-side; copy buttons copy raw result / Rust code.
-- Both `simplify` and `optimize` requests return successful responses.
-
-**Status**: ✅ Completed — `index.html` `<main>` wrapper restored, `app.js` passes `node --check`, copy buttons wired, 5 service tests added.
-
----
-
-## Phase 15 — Advanced AST Nodes & Full-Pipeline Plumbing
-
-**Goal**: Introduce the elementary functions and constants required for parity, threaded through every pipeline pass.
-
-### Requirements
-- `Expr` variants + constructors: `Sinh`, `Cosh`, `Tanh`, `Asin`, `Acos`, `Atan`, `Pi`, `E`, `Factorial(Box<Expr>)`.
-- Update `Display`, `eval`, `variables`, `node_count` in `expr.rs`.
-- Derivatives in `diff.rs` (incl. chain rule); `Pi`/`E` constants differentiate to 0.
-- `lang.rs`: add `MathLang` nodes, `MathAnalysis` folding, `to_recexpr`/`from_recexpr` round-trip.
-- `cost.rs`: FLOP weights (hyperbolic/inverse trig = transcendentals; factorial = iterative cost).
-- `cse.rs`: traversal + substitution for new nodes.
-- `codegen.rs`: emit `.sinh()`, `.cosh()`, `.tanh()`, `.asin()`, `.acos()`, `.atan()`, `PI`/`E`, factorial closure.
-- `maxima-web/src/service.rs`: `latex()` rendering for the new nodes.
-- Unit tests in every touched module.
-
-### Acceptance Criteria
-- `cargo test --workspace` green; round-trip tests for all new variants.
-- `--no-default-features` and `--all-features` both build.
-
-**Status**: ✅ Completed — 9 new `Expr` variants, derivatives, `MathLang` round-trip, FLOP weights, CSE traversal, codegen, macros, and web LaTeX rendering all covered; `cargo test --workspace --all-features` green (94 sym-core unit tests).
-
----
-
-## Phase 16 — Maxima String Parser Parity
-
-**Goal**: Bring `parse_maxima` to feature parity with `parse_latex`, including the new nodes.
-
-### Requirements
-- Parse `%pi`, `%e`, factorial `!` (postfix, tighter than `*`), `sinh/cosh/tanh`, `asin/acos/atan`.
-- Parse Maxima calculus/matrix forms: `diff(f,x)`, `integrate(f,x)`, `sum(f,i,lo,hi)`, `matrix([a,b],[c,d])`.
-- Keep `%`-prefixed constants from being treated as variables; support `log` as `ln`.
-- Extend `tests/integration/parser_maxima.rs` golden tests; add round-trip tests (`parse → Display`).
-
-### Acceptance Criteria
-- New golden tests pass; symmetrical constructs parse in both parsers.
-
-**Status**: ✅ Completed — `%pi`/`%e`/other `%`-symbols, postfix `!` (tighter than `^`), hyperbolic/inverse-trig calls, `diff`/`integrate`/`sum`, `matrix([..],[..])`; 8 integration tests + parser unit tests pass.
-
----
-
-## Phase 17 — 1:1 Rule Expansion I: Hyperbolic, Inverse Trig, Deeper Trig
-
-**Goal**: Add provenanced rewrite rules for new functions and deepen `trigi.lisp` coverage.
-
-### Requirements
-- New `sym-core/src/rules/hyperbolic.rs` citing `sinh.lisp` (`simp-%sinh`, `simp-%cosh`, `simp-%tanh`)
-  and `trigi.lisp` (`simp-%asin`, `simp-%acos`, `simp-%atan`): zero/parity/inverse-cancellation rules.
-- Extend `rules/trigonometric.rs`: angle-sum, double-angle, `1 + tan² = sec²`.
-- Register in `rules/mod.rs`; update `tests/integration/maxima_coverage.rs` expected counts.
-- Every new rule carries a non-empty `RuleProvenance`.
-
-### Acceptance Criteria
-- `maxima_coverage` passes with the increased count; provenance invariants hold.
-
-**Status**: ✅ Completed — 27 new rules (19 hyperbolic/inverse-trig citing `sinh.lisp`, 8 deeper `trigi.lisp` identities); registry now 79 provenanced rules; `RuleConfig` gained a `hyperbolic` switch.
-
----
-
-## Phase 18 — 1:1 Rule Expansion II: Rational Normalization & Factorial
-
-**Goal**: Add `ratsimp`-style rational normalization and factorial simplification.
-
-### Requirements
-- New `sym-core/src/rules/rational.rs` citing `nrat4.lisp` (`$ratsimp`/`$nrat`):
-  common-denominator merges, `(- a)/(- b) -> a/b`, `1/(1/x) -> x`, fraction addition.
-- Factorial rules citing `sfacts.lisp` (`factcomb`): `0! -> 1`, `(n+1)! -> (n+1)*n!`, `n!/(n-1)! -> n`.
-- Register + update coverage test.
-
-### Acceptance Criteria
-- Golden simplification tests pass; coverage count updated; provenance intact.
-
-**Status**: ✅ Completed — `rules/rational.rs` (8 rules, `nrat4.lisp`) and `rules/factorial.rs` (5 rules, `sfacts.lisp`); registry now 92 provenanced rules; new `rational_factorial` golden suite.
-
----
-
-## Phase 19 — E-Graph Fidelity for Matrices
-
-**Goal**: Preserve matrix contents through saturation/extraction instead of collapsing to a sentinel.
-
-### Requirements
-- Add structured `encode_matrix_symbol`/`decode_matrix_symbol` (mirroring `tensor.rs`).
-- `lang.rs`: `to_recexpr`/`from_recexpr` use the structured encoding; remove
-  `"matrix_unsupported_in_egraph"`.
-- Add `matrix.lisp`-cited element-wise `+` / scalar `*` rules where the single-symbol
-  representation permits (documented limitations otherwise).
-- Round-trip test: `Matrix → saturate → extract` preserves shape and entries.
-
-### Acceptance Criteria
-- Matrix round-trip test passes; no sentinel string remains in `sym-core`.
-
-**Status**: ✅ Completed — new `sym-core/src/matrix.rs` lossless prefix codec; `lang.rs` round-trips matrices through the e-graph; `matrix_fidelity` integration suite (3 tests) + unit tests; element-wise `matrix.lisp` rules documented as impossible for an opaque leaf.
-
----
-
-## Phase 20 — WebUI Provenance & Maxima Coverage Surfacing
-
-**Goal**: Surface the engine's Maxima parity data in the UI and API.
-
-### Requirements
-- New `GET /api/rules` returning `{ total, by_file: [{file, count}], rules: [{name, source_file, source_fn, identity, fast_math_only}] }`.
-- Add `provenance` operation metadata to `/api/operations`.
-- Frontend: a "Maxima coverage" panel (per-file counts table + rule list), new example chips
-  for `sinh(x)`, `atan(x)`, `5!`.
-- Tests for the rules payload shape.
-
-### Acceptance Criteria
-- `cargo test -p maxima-web` green; panel renders counts; layout remains correct.
-
-**Status**: ✅ Completed — `GET /api/rules` + `RulesResponse`/`RuleEntry`/`FileRuleCount`; `provenance` compute operation (no expression required); UI coverage panel; chips for `sinh(x)`, `atan(x)`, `5!`; 7 web tests. Live check: 92 rules across 7 files.
-
----
-
-## Phase 21 — Documentation, Coverage Report & Final Verification
-
-**Goal**: Final polish and green-workspace verification.
-
-### Requirements
-- `GLOSSARY.md`: add hyperbolic/inverse-trig/factorial/rational-normalization terms.
-- `README.md`: status table → Phase 21 complete, updated rule counts/files, `/api/rules` docs.
-- `SESSION_LOG.md`: Sessions for Phases 14–21.
-- Final `cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --workspace`.
-
-### Acceptance Criteria
-- Zero clippy warnings, formatted, all tests pass, docs consistent with coverage numbers.
-
-**Status**: ✅ Completed — coverage report added (92 rules / 7 Lisp files), glossary extended with 7 parity terms, README status → Phase 21, and the final green workspace verification recorded in `SESSION_LOG.md`.
-
-### Testing Gates (Phases 14–21, Retroactive)
-> Phases 14–21 are complete; this table records the verification that was applied to each.
-
-| Phase | Gate command(s) | Result |
-|-------|-----------------|--------|
-| 14 | `cargo test -p maxima-web`; `node --check static/app.js` | ✅ 5 service tests, script valid |
-| 15 | `cargo test --workspace --all-features` | ✅ 94 sym-core unit tests |
-| 16 | `cargo test -p maxima-tests --test parser_maxima` | ✅ 8 tests |
-| 17 | `cargo test -p maxima-tests --test maxima_coverage` | ✅ ≥ 79 rules |
-| 18 | `cargo test -p maxima-tests --test rational_factorial` | ✅ 92-rule registry |
-| 19 | `cargo test -p maxima-tests --test matrix_fidelity` | ✅ 3 tests |
-| 20 | `cargo test -p maxima-web` | ✅ 7 web tests, `/api/rules` = 92/7 |
-| 21 | `cargo fmt --all -- --check` + clippy `-D warnings` + `cargo test --workspace --all-features` | ✅ green |
-
----
-
-## Phase 14–21 Deliverables Summary
-
-| Phase | Primary Files | Feature Gates |
-|-------|---------------|---------------|
-| 14 | `maxima-web/static/index.html`, `maxima-web/static/app.js`, `maxima-web/src/service.rs` | — |
-| 15 | `sym-core/src/{expr,diff,lang,cost,cse,codegen}.rs` | `core`,`diff`,`egraph`,`cse`,`codegen` |
-| 16 | `sym-core/src/parser/maxima.rs`, `tests/integration/parser_maxima.rs` | `parser` |
-| 17 | `sym-core/src/rules/{hyperbolic.rs,trigonometric.rs,mod.rs}` | `egraph` |
-| 18 | `sym-core/src/rules/{rational.rs,factorial.rs,mod.rs}` | `egraph` |
-| 19 | `sym-core/src/{matrix.rs,lang.rs}`, `sym-core/src/tensor.rs` | `core`,`egraph` |
-| 20 | `maxima-web/src/{api.rs,main.rs}`, `maxima-web/static/*` | — |
-| 21 | `README.md`, `AGENTS.md`, `GLOSSARY.md`, `SESSION_LOG.md` | — |
-
----
-
-# Roadmap — Phases 22–32: Wolfram Mathematica-Grade Comprehensive CAS Expansion
-
-> **Status legend**: ⬜ Not started · 🟨 In progress · ✅ Completed
->
-> **Mandatory Architecture Guardrails**:
-> 1. **Hybrid Architecture Invariant ([ADR-0006](docs/adr/0006-hybrid-egraph-and-procedural-cas.md))**:
->    - `sym-core/src/rules/` and `saturate.rs` remain dedicated to equivalence-preserving algebraic, trigonometric, and transcendental simplification.
->    - Procedural CAS algorithms (`expand`, `poly`, `integrate`, `limit`, `series`, `solve`) are implemented as dedicated deterministic modules in `sym-core/src/` operating on `Expr` ASTs, invoking `pipeline.rs` for local canonical simplification and `diff.rs` for differentiation.
->    - Procedural output must **never** be passed to unconstrained e-graph cost extraction (e.g. `extract.rs` with AST-size cost function) that would undo expansion or factorization.
-> 2. **Cache-Optimal Sparse Distributed Representation (SDMP)**:
->    - Packed 64-bit exponent vectors under Graded Reverse Lexicographical (`grevlex`) term order.
->    - Monagan-Pearce heap-based streaming multiplication and division running in $O(t)$ space.
-> 3. **Exact Arithmetic & Backward Compatibility**:
->    - All polynomial coefficients and constants use `sym-core/src/rational.rs` (`Rat`).
->    - Existing `sym-macros`, `maxima-rs`, and `tests/integration/` suites must remain 100% green without regressions.
-> 4. **Testing Protocol**:
->    - Run `cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --workspace` at each phase completion.
->    - Update `SESSION_LOG.md` and `README.md` status table after completing each phase.
-
----
-
-## Phase 22 — Sparse Distributed Multivariate Polynomial Engine [Feature: poly]
-
-**Goal**: Implement a high-performance Sparse Distributed Multivariate Polynomial (`Poly`) engine with 64-bit packed exponents and Monagan-Pearce heap arithmetic, enabling Mathematica-grade expression expansion without e-graph blowup.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** record `git rev-parse HEAD`; `cargo fmt --all -- --check`;
-  `cargo clippy --workspace --all-targets --all-features -- -D warnings`;
-  `cargo test --workspace --all-features` green before touching `poly/`.
-- **Gate 1 — Unit:** `cargo test -p sym-core --features poly` (monomial packing, grevlex
-  ordering, `VarContext`, Monagan-Pearce heap mul/div, `expand`).
-  Isolated build: `cargo build -p sym-core --no-default-features --features poly`.
-- **Gate 2 — Integration:** register `poly_expand` in `tests/Cargo.toml` (`[[test]]`), then
-  `cargo test -p maxima-tests --test poly_expand` — `expand((x+y)^4)`, multivariate
-  distribution, integer powers; numerical equivalence vs `eval`.
-- **Gate 3 — Completion:** `cargo fmt --all`, clippy `-D warnings`, full workspace test with
-  no regressions; update `README.md` + `SESSION_LOG.md`.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/poly/monomial.rs` | `poly` | ✅ Completed | 64-bit packed exponent vector, `grevlex` ordering, `VarContext` |
-| `sym-core/src/poly/mod.rs` | `poly` | ✅ Completed | `Poly` struct, `Term` struct, `Expr <-> Poly` bidirectional converters |
-| `sym-core/src/poly/heap.rs` | `poly` | ✅ Completed | Monagan-Pearce heap-based polynomial multiplication and pseudo-division |
-| `sym-core/src/poly/expand.rs` | `poly` | ✅ Completed | Recursive distribution of products over sums and multinomial power expansion |
-| `tests/integration/poly_expand.rs` | `poly` | ✅ Completed | Integration tests for `expand((x + y)^4)`, multivariate distribution, and power expansion |
-
-### Acceptance Criteria
-- `Poly` successfully parses from and converts to `Expr` with 100% exact rational fidelity.
-- `expand(expr)` cleanly expands products over sums and integer powers without passing through e-graph extraction.
-- `tests/integration/poly_expand.rs` passes with zero memory leaks and clean heap scaling.
-
----
-
-## Phase 23 — Exact Rational Algebra & Factorization [Feature: poly]
-
-**Goal**: Implement canonical rational simplification (`ratsimp`), multivariate polynomial GCD, Yun's square-free decomposition, Berlekamp/Cantor-Zassenhaus factorization with Hensel lifting, and partial fractions.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features poly` (subresultant PRS GCD, modular
-  F_p GCD, Yun square-free, Berlekamp/Cantor-Zassenhaus, Hensel lifting, `ratsimp`, `partfrac`).
-- **Gate 2 — Integration:** register `poly_rat` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test poly_rat` — `ratsimp((x^2-1)/(x-1)) == x+1`,
-  `partfrac(1/(x^2-1), x)`, high-degree factoring round-trips.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/poly/gcd.rs` | `poly` | ✅ Completed | Exact Euclidean univariate GCD + polynomial long division (subresultant/modular planned) |
-| `sym-core/src/poly/rat.rs` | `poly` | ✅ Completed | `ratsimp`: canonical reduction of `Expr` to coprime quotient via GCD |
-| `sym-core/src/poly/factor.rs` | `poly` | ✅ Completed | Rational-root linear factorization (Berlekamp/Hensel lifting planned) |
-| `sym-core/src/poly/partfrac.rs` | `poly` | ✅ Completed | Partial fraction decomposition over distinct linear factors |
-| `tests/integration/poly_rat.rs` | `poly` | ✅ Completed | Golden tests: `ratsimp` cancellation, `factor` round-trip, `partfrac` |
-
-### Acceptance Criteria
-- `ratsimp` reduces any rational expression to canonical irreducible coprime form.
-- `factor` accurately factors univariate and multivariate polynomials over $\mathbb{Q}[x]$.
-- `partfrac` outputs exact sum of partial fractions with linear/irreducible quadratic denominators.
-
----
-
-## Phase 24 — Symbolic Integration: Rational & Elementary [Feature: integrate]
-
-**Goal**: Implement indefinite integration (`integrate`) using Moses' SIN heuristics, Hermite reduction, and Lazard-Rioboo-Trager (LRT) to produce real-valued antiderivatives without imaginary artifacts.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features integrate` (SIN linearity / constant
-  pulling / derivative-divides, Hermite reduction, LRT real ln/atan, guarded IBP depth cap).
-- **Gate 2 — Integration:** register `integrate_elementary` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test integrate_elementary`; additionally assert the
-  anti-difference invariant `ratsimp(diff(integrate(f, x), x) - f) == 0`.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/integrate/mod.rs` | `integrate` | ✅ Completed | `integrate()` orchestrator: linearity, power rule, elementary, rational, IBP; noun fallback |
-| `sym-core/src/integrate/sin.rs` | `integrate` | ✅ Completed | Elementary (trig/exp/ln) linear-argument rules |
-| `sym-core/src/integrate/hermite.rs` | `integrate` | ✅ Completed | Rational integration via partial fractions (Hermite/LRT subset) |
-| `sym-core/src/integrate/lrt.rs` | `integrate` | ✅ Completed | Logarithmic antiderivative terms (linear-factor subset) |
-| `sym-core/src/integrate/ibp.rs` | `integrate` | ✅ Completed | Integration by parts for `x^n · exp/sin/cos` |
-| `tests/integration/integrate_elementary.rs` | `integrate` | ✅ Completed | 10 anti-difference golden tests (diff(∫f) ≈ f) |
-
-### Acceptance Criteria
-- All rational functions integrate deterministically into algebraic parts + real $\ln / \text{atan}$ terms.
-- For every elementary antiderivative $F$, differentiation $\frac{d}{dx} F$ simplifies to $f$ via `ratsimp()`.
-
----
-
-## Phase 25 — Transcendental Risch Differential Field Towers [Feature: integrate]
-
-**Goal**: Implement transcendental Risch integration (Bronstein's algorithm) over nested exponential and logarithmic field extensions, returning exact closed forms or proving non-elementary status.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features integrate` (field-tower construction,
-  `risch_de` Risch differential equation `y' + f y = g`, non-elementary detection).
-- **Gate 2 — Integration:** register `integrate_risch` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test integrate_risch` — `∫ x e^{x^2}`, `∫ ln(x)`,
-  `∫ e^x/(e^x+1)`, and `∫ e^{-x^2}` returned as `Expr::integral` noun.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/integrate/risch.rs` | `integrate` | ✅ Completed | Differential field tower $k(t_1)\dots(t_n)$ for $\exp$ and $\ln$ extensions |
-| `sym-core/src/integrate/risch_de.rs` | `integrate` | ✅ Completed | Risch differential equation solver: $y' + f y = g$ in differential fields |
-| `tests/integration/integrate_risch.rs` | `integrate` | ✅ Completed | Tests proving non-elementary integrals (e.g. $\int e^{-x^2} dx \to \text{noun}$) and solving transcendental towers |
-
-### Acceptance Criteria
-- Successfully integrates nested exp-log expressions (e.g. $\int x e^{x^2} dx$, $\int \ln(x) dx$, $\int \frac{e^x}{e^x + 1} dx$).
-- Proves non-elementary integrals and returns unevaluated `Expr::integral(f, var)` noun form.
-
----
-
-## Phase 26 — Laurent Series & Asymptotic Expansions [Feature: series]
-
-**Goal**: Implement truncated Laurent series arithmetic and generalized power series expansions supporting poles and fractional Puiseux powers.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features series` (Laurent `Series` `+ - * /`,
-  inversion, composition, `diff`, negative valuations).
-- **Gate 2 — Integration:** register `series` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test series` — Taylor/Laurent for sin/cos/exp/1/(1-x)/1/sin(x)
-  truncated to O(x^n), checked against known coefficients.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/series.rs` | `series` | ✅ Completed | `Series { center: Expr, valuation: i64, coeffs: Vec<Expr>, order: i64 }` with `+`, `-`, `*`, `/`, composition, `diff` |
-| `tests/integration/series.rs` | `series` | ✅ Completed | Taylor/Laurent expansions for $\sin(x)$, $\cos(x)$, $\exp(x)$, $\frac{1}{1-x}$, $\frac{1}{\sin(x)}$ at $x=0$ up to $O(x^n)$ |
-
-### Acceptance Criteria
-- Correct arithmetic on series with negative valuations (Laurent poles).
-- Inversion and composition of series accurate up to requested truncation order $O(x^n)$.
-
----
-
-## Phase 27 — Gruntz Limits Engine [Feature: limit]
-
-**Goal**: Implement Dominik Gruntz's MRV algorithm for computing asymptotic limits of exp-log functions, equipped with a 3-tier zero-equivalence decider.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features limit` (MRV set extraction, comparability,
-  ω→0 distortion, 3-tier zero decider: ratsimp → saturation → interval guard).
-- **Gate 2 — Integration:** register `limits` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test limits` — `lim_{x→0} sin(x)/x = 1`,
-  `lim_{x→∞} (1+1/x)^x = e`, `lim_{x→∞} (e^{x+e^{-x}} - e^x) = 1`; two-sided/one-sided/infinite.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/limit/mrv.rs` | `limit` | ✅ Completed | Most Rapidly Varying (MRV) subexpression set extraction and comparability relation |
-| `sym-core/src/limit/mod.rs` | `limit` | ✅ Completed | Gruntz algorithm orchestrator: $\omega \to 0$ distortion variable substitution and series expansion |
-| `sym-core/src/limit/zero.rs` | `limit` | ✅ Completed | 3-tier zero-equivalence decider (`ratsimp` -> e-graph saturation -> interval evaluation guard) |
-| `tests/integration/limits.rs` | `limit` | ✅ Completed | Golden tests: $\lim_{x\to 0} \frac{\sin x}{x} = 1$, $\lim_{x\to\infty} \left(1 + \frac{1}{x}\right)^x = e$, $\lim_{x\to\infty} (e^{x + e^{-x}} - e^x) = 1$ |
-
-### Acceptance Criteria
-- Solves challenging exp-log limits where naive L'Hôpital / Taylor expansions fail or loop.
-- Supports two-sided, one-sided (`plus`, `minus`), and infinite limits ($\pm\infty$).
-
----
-
-## Phase 28 — Definite Integration & Pole Scanning [Feature: integrate]
-
-**Goal**: Implement definite integration (`defint`) using the Fundamental Theorem of Calculus (FTC), guarded by real pole detection and improper limit routing.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features integrate` (Sturm root pole scanner,
-  FTC split at poles, improper-limit routing to `limit`).
-- **Gate 2 — Integration:** register `integrate_defint` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test integrate_defint` — `∫_0^1 x^2 dx = 1/3`,
-  `∫_0^∞ e^{-x} dx = 1`, and `∫_{-1}^1 1/x dx` marked divergent.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/integrate/defint.rs` | `integrate` | ✅ Completed | `defint(expr, var, a, b)` with Sturm root pole scanning and FTC evaluation |
-| `tests/integration/integrate_defint.rs` | `integrate` | ✅ Completed | Proper and improper definite integrals ($\int_0^1 x^2 dx = 1/3$, $\int_0^\infty e^{-x} dx = 1$) |
-
-### Acceptance Criteria
-- Rejects application of naive FTC across real denominator poles (e.g. $\int_{-1}^1 \frac{1}{x} dx$ marked divergent).
-- Improper integrals with infinite bounds ($\pm\infty$) evaluate cleanly via Gruntz limits.
-
----
-
-## Phase 29 — Closed-Form Algebraic Solvers [Feature: solve]
-
-**Goal**: Implement exact algebraic equation solvers for polynomial degrees $1 \le d \le 4$, factor-and-split for higher degrees, and transcendental variable isolation.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features solve` (linear/quadratic/Cardano/Ferrari,
-  factor-and-split, transcendental isolation).
-- **Gate 2 — Integration:** register `solvers_alg` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test solvers_alg` — exact roots for deg 1–4, with every root
-  back-substituted and simplified to `0`.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/solve/mod.rs` | `solve` | ✅ Completed | `solve(expr, var)` returning `AlgebraicSolutions(Vec<Expr>)` |
-| `sym-core/src/solve/alg.rs` | `solve` | ✅ Completed | Linear, quadratic, Cardano's cubic, Ferrari's quartic, and factor-and-split via Phase 23 `factor` |
-| `sym-core/src/solve/isolate.rs` | `solve` | ✅ Completed | Variable isolation for invertible elementary functions ($\exp$, $\ln$, $\sin$, $\cos$, $\tan$) |
-| `tests/integration/solvers_alg.rs` | `solve` | ✅ Completed | Algebraic equation solving and exact root verification by back-substitution |
-
-### Acceptance Criteria
-- Exact closed-form solutions for degrees 1, 2, 3, 4.
-- All returned solutions simplify to 0 when substituted into the original equation.
-
----
-
-## Phase 30 — Ordinary Differential Equation (ODE) Solvers [Feature: solve]
-
-**Goal**: Implement 1st-order standard ODE solvers (separable, linear integrating factor, Bernoulli, exact) and 2nd-order linear constant-coefficient ODE solvers.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features solve` (separable, linear integrating
-  factor, Bernoulli, exact 1st-order; 2nd-order real-distinct/repeated/complex roots).
-- **Gate 2 — Integration:** register `solvers_ode` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test solvers_ode` — `y' + y = 0`, `y'' + ω^2 y = 0`, verified by
-  substituting back with `diff` + `ratsimp` (expect `0`), yielding `_C1`/`_C2`.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/solve/ode.rs` | `solve` | ✅ Completed | `ode2(ode, y, x)` returning `OdeSolution { solution: Expr, constants: Vec<String> }` |
-| `sym-core/src/solve/ode_first.rs` | `solve` | ✅ Completed | 1st-order ODE classification: separable, linear $y' + P(x)y = Q(x)$, Bernoulli, exact |
-| `sym-core/src/solve/ode_second.rs`| `solve` | ✅ Completed | 2nd-order constant-coefficient linear ODEs: characteristic roots (real distinct, repeated, complex) |
-| `tests/integration/solvers_ode.rs` | `solve` | ✅ Completed | Solving $y' + y = 0$, $y'' + \omega^2 y = 0$, verifying ODE solutions via differentiation |
-
-### Acceptance Criteria
-- Solves classical 1st-order and 2nd-order linear ODEs producing general solutions with symbolic constants `_C1`, `_C2`.
-- Back-substitution with `diff.rs` and `ratsimp()` confirms the solution identically satisfies the ODE.
-
----
-
-## Phase 31 — Maxima Parser CAS Syntax & Facade Integration [Features: cas, parser, full]
-
-**Goal**: Extend the Maxima string parser with CAS top-level commands and expose all new procedural CAS operations across `sym-core`, `maxima-rs`, and `maxima-rs::prelude`.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --features "cas parser"` (Maxima CAS-command
-  combinators: `expand`, `factor`, `ratsimp`, `partfrac`, `limit`, `ode2`).
-- **Gate 2 — Integration:** register `parser_cas` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test parser_cas` — parse each CAS command and execute it
-  end-to-end; assert `maxima_rs::prelude::*` exposes `expand`, `ratsimp`, `factor`, `partfrac`,
-  `integrate`, `defint`, `limit`, `taylor`, `solve`, `ode2`.
-- **Gate 3 — Completion:** fmt, clippy `-D warnings`, full workspace test, no regressions; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `sym-core/src/parser/maxima.rs` | `parser` | ✅ Completed | Syntax combinators for `expand(...)`, `factor(...)`, `ratsimp(...)`, `partfrac(..., x)`, `limit(..., x, a)`, `ode2(..., y, x)` |
-| `sym-core/src/lib.rs` | `cas` | ✅ Completed | Module exports for `poly`, `integrate`, `series`, `limit`, `solve` |
-| `maxima-rs/src/lib.rs` | `cas` | ✅ Completed | Re-exports of all CAS operations and solver structures |
-| `maxima-rs/src/prelude.rs` | `cas` | ✅ Completed | Convenient prelude exports for one-line CAS usage |
-| `tests/integration/parser_cas.rs` | `parser`, `cas`| ✅ Completed | Golden tests parsing Maxima CAS commands and executing them end-to-end |
-
-### Acceptance Criteria
-- Maxima command syntax parses cleanly and executes corresponding CAS routines.
-- `maxima_rs::prelude::*` exposes `expand`, `ratsimp`, `factor`, `partfrac`, `integrate`, `defint`, `limit`, `taylor`, `solve`, `ode2`.
-
----
-
-## Phase 32 — Verification Suite, Proptest Invariants & Maxima Parity Benchmarks
-
-**Goal**: Comprehensive verification with automated proptest invariant testing, Maxima benchmark tests from `References/maxima-master/tests/`, and zero-warning linting across the workspace.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** full fmt/clippy/test baseline green (per Global Testing Gates).
-- **Gate 1 — Unit:** `cargo test -p sym-core --all-features` (all CAS modules).
-- **Gate 2 — Integration/Proptest:** register `integrate_correctness`, `solve_correctness`, and
-  `maxima_cas_parity` in `tests/Cargo.toml`, then
-  `cargo test -p maxima-tests --test integrate_correctness --test solve_correctness --test maxima_cas_parity`
-  — invariants over ≥10³ random expressions; parity against `rtest_integrate.mac`,
-  `rtest_limit.mac`, `rtest_solve.mac`.
-- **Gate 3 — Completion:** `cargo fmt --all -- --check` clean,
-  `cargo clippy --all-targets --all-features -- -D warnings` = 0,
-  `cargo test --workspace --all-features` 100% green; docs updated.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `tests/proptest/integrate_correctness.rs` | `integrate`, `poly` | ✅ Completed | Proptest: $\forall f, \text{ratsimp}\left(\frac{d}{dx}\int f dx - f\right) == 0$ + numerical equivalence check |
-| `tests/proptest/solve_correctness.rs` | `solve`, `poly` | ✅ Completed | Proptest: root back-substitution $f(\text{root}) == 0$ |
-| `tests/integration/maxima_cas_parity.rs` | `cas` | ✅ Completed | Parity benchmark suite comparing against test cases in `rtest_integrate.mac`, `rtest_limit.mac`, `rtest_solve.mac` |
-| `SESSION_LOG.md` | — | ✅ Completed | Final session log update and phase completion tracker |
-| `README.md` | — | ✅ Completed | Updated feature matrix, CAS capabilities, and usage examples |
-
-### Acceptance Criteria
-- All proptest invariants hold over $10^3$ random algebraic and trigonometric expressions.
-- `cargo fmt --all -- --check` passes cleanly.
-- `cargo clippy --all-targets --all-features -- -D warnings` exits with code 0.
-- `cargo test --workspace --all-features` passes with 100% green tests.
-
----
-
-# Final Phase — WebUI & End-to-End Verification
-
-## Phase 33 — WebUI Recursive Expression Composer & Final Integration Test Suite [Feature: maxima-web]
-
-**Goal**: Add dropdown-driven **recursive function composition** to the webUI expression
-input so a user can nest elementary functions and CAS transforms onto the current
-expression, and add a final end-to-end integration test suite covering the whole web API.
-
-### Testing Gates (Pre-Implementation)
-- **Gate 0 — Baseline:** `git status` clean; `cargo fmt --all -- --check`;
-  `cargo clippy --workspace --all-targets --all-features -- -D warnings`;
-  `cargo test --workspace --all-features`; `node --check maxima-web/static/app.js` — all green
-  before touching `maxima-web/`.
-- **Gate 1 — Unit:** `cargo test -p maxima-web` — `service::functions_catalog` (arity,
-  templates), `service::compute` (composed expressions, every operation), API model
-  (de)serialization.
-- **Gate 2 — Frontend/Integration:** `node --check maxima-web/static/app.js`; register
-  `webui_e2e` in `tests/Cargo.toml` (`[[test]]`); `cargo test -p maxima-tests --test webui_e2e`.
-- **Gate 3 — Completion:** `cargo fmt --all`; clippy `-D warnings`; `cargo test --workspace --all-features`
-  (zero regressions); live check of recursive composition; update `README.md` + `SESSION_LOG.md`.
-
-### Deliverables & Files
-
-| File | Feature Gate | Status | Purpose |
-|------|--------------|--------|---------|
-| `maxima-web/static/index.html` | `maxima-web` | ✅ Completed | "Compose / function builder" dropdown beside `#exprInput`; undo/clear controls |
-| `maxima-web/static/app.js` | `maxima-web` | ✅ Completed | Recursive `compose()`/`nest()` logic, cursor-aware insertion, input-format-aware templates (Maxima vs LaTeX), undo history |
-| `maxima-web/src/api.rs` | `maxima-web` | ✅ Completed | `FunctionCatalogEntry` + `FunctionCatalog` response models |
-| `maxima-web/src/service.rs` | `maxima-web` | ✅ Completed | `functions_catalog()` (name, arity, kind, maxima/latex templates) + unit tests |
-| `maxima-web/src/main.rs` | `maxima-web` | ✅ Completed | Register `GET /api/functions`; keep `/api/operations` authoritative |
-| `tests/integration/webui_e2e.rs` | `maxima-web` | ✅ Completed | Final integration test suite: API contract + recursive composition + CAS round-trips |
-
-### Requirements
-- **Composable catalog** (served by `GET /api/functions`):
-  - Unary functions: `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`, `asin`, `acos`, `atan`,
-    `exp`, `ln`, `sqrt`, factorial `!`.
-  - Binary/infix operators: `+`, `-`, `*`, `/`, `^`.
-  - CAS transforms (available once Phase 31 lands): `expand`, `factor`, `ratsimp`, `integrate`,
-    `limit`, `solve`, `ode2`.
-- **Recursive nesting semantics:**
-  - Selecting a unary function wraps the whole expression (or the current cursor selection):
-    `x` → `sin(x)` → `sin(cos(x))`; repeatedly applicable (true recursion).
-  - Selecting a binary operator composes two operands around the current expression.
-  - Insertion keeps the active `input_format`: `sin(x)` in Maxima mode vs `\sin{x}` in LaTeX mode.
-  - Preserve an undo/clear history; the composed text remains freely editable in the textarea
-    and is sent unchanged by **Compute**.
-- **Backward compatibility:** existing operations, example chips, coverage panel, and
-  `/api/rules` behavior are unchanged.
-
-### Acceptance Criteria
-- Any unary, binary, or CAS function picked from the dropdown nests onto the current expression
-  text recursively, in both Maxima and LaTeX input modes.
-- `GET /api/functions` returns the full composable catalog with name, arity, kind, and templates.
-- `tests/integration/webui_e2e.rs` passes: `/health`, `/operations`, `/functions`, `/rules`
-  (≥ 92 rules), and `/compute` for every operation plus recursive cases
-  (`sin(cos(x))`, `expand(factor((x+1)^2))`), matrix round-trip, and `provenance`.
-- `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
-  and `cargo test --workspace --all-features` all exit green with no regressions.
-
-**Status**: ✅ Completed — `GET /api/functions` catalog, recursive composer dropdown (wrap/undo/clear, Maxima+LaTeX aware), `webui_e2e` suite; 8 web tests + 6 e2e tests green.
-
+## 11. Review & Verification Checklist for Agents
+
+Before completing any task, filing a PR, or requesting sign-off, verify:
+- [ ] `cargo fmt --all -- --check` passes cleanly with zero formatting diffs.
+- [ ] `cargo check --workspace --all-targets` passes with 0 errors and 0 warnings.
+- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` passes with exit code 0.
+- [ ] `cargo test --workspace --all-features` passes with 100% green tests and zero regressions.
+- [ ] `cargo test -p sym-core --all-features --doc` passes all doctests.
+- [ ] **Zero unwrap policy**: No `.unwrap()`, `.expect()`, or `panic!()` in non-test paths.
+- [ ] **Zero fake verification**: Every `verified: true` flag is verified dynamically via back-substitution or numerical quadrature.
+- [ ] Mandatory Edge-Case Test Matrix adhered to for all modified modules.
+- [ ] `SESSION_LOG.md` and `README.md` updated with phase deliverables.
+- [ ] Phase Sign-Off report compiled under `docs/audits/PHASE{N}_REPORT.md`.

@@ -17,7 +17,7 @@ use winnow::prelude::*;
 type PResult<O> = ModalResult<O>;
 
 use crate::expr::Expr;
-use crate::parser::ParseError;
+use crate::parser::{ParseError, RecursionDepthGuard};
 
 /// Parse a LaTeX math string into an [`Expr`].
 pub fn parse_latex(input: &str) -> Result<Expr, ParseError> {
@@ -25,9 +25,11 @@ pub fn parse_latex(input: &str) -> Result<Expr, ParseError> {
     if trimmed.is_empty() {
         return Err(ParseError::EmptyInput);
     }
+    crate::parser::check_nesting_limit(trimmed, RecursionDepthGuard::DEFAULT_MAX_DEPTH)?;
 
+    let mut guard = RecursionDepthGuard::new();
     let mut state = trimmed;
-    match latex_expr(&mut state) {
+    match latex_expr(&mut state, &mut guard) {
         Ok(res) => {
             let rem = state.trim();
             if !rem.is_empty() {
@@ -39,6 +41,7 @@ pub fn parse_latex(input: &str) -> Result<Expr, ParseError> {
                 Ok(res)
             }
         }
+        Err(_) if guard.exceeded => Err(ParseError::RecursionLimitExceeded),
         Err(e) => Err(ParseError::Syntax {
             message: format!("{e}"),
             remaining: state.to_string(),
@@ -46,22 +49,27 @@ pub fn parse_latex(input: &str) -> Result<Expr, ParseError> {
     }
 }
 
-fn latex_expr(i: &mut &str) -> PResult<Expr> {
-    additive(i)
+fn latex_expr(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    guard
+        .enter()
+        .map_err(|_| winnow::error::ErrMode::Cut(ContextError::default()))?;
+    let res = additive(i, guard);
+    guard.leave();
+    res
 }
 
-fn additive(i: &mut &str) -> PResult<Expr> {
-    let mut left = multiplicative(i)?;
+fn additive(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let mut left = multiplicative(i, guard)?;
 
     loop {
         let _ = multispace0(i)?;
         if i.starts_with('+') {
             *i = &i[1..];
-            let right = multiplicative(i)?;
+            let right = multiplicative(i, guard)?;
             left = Expr::add(left, right);
         } else if i.starts_with('-') {
             *i = &i[1..];
-            let right = multiplicative(i)?;
+            let right = multiplicative(i, guard)?;
             left = Expr::sub(left, right);
         } else {
             break;
@@ -71,26 +79,30 @@ fn additive(i: &mut &str) -> PResult<Expr> {
     Ok(left)
 }
 
-fn multiplicative(i: &mut &str) -> PResult<Expr> {
-    let mut left = power(i)?;
+fn multiplicative(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let mut left = unary(i, guard)?;
 
     loop {
         let _ = multispace0(i)?;
         if i.starts_with(r"\cdot") {
             *i = &i[5..];
-            let right = power(i)?;
+            let right = unary(i, guard)?;
             left = Expr::mul(left, right);
         } else if i.starts_with(r"\times") {
             *i = &i[6..];
-            let right = power(i)?;
+            let right = unary(i, guard)?;
+            left = Expr::mul(left, right);
+        } else if i.starts_with(r"\,") {
+            *i = &i[2..];
+            let right = unary(i, guard)?;
             left = Expr::mul(left, right);
         } else if i.starts_with('*') {
             *i = &i[1..];
-            let right = power(i)?;
+            let right = unary(i, guard)?;
             left = Expr::mul(left, right);
         } else if i.starts_with('/') {
             *i = &i[1..];
-            let right = power(i)?;
+            let right = unary(i, guard)?;
             left = Expr::div(left, right);
         } else {
             break;
@@ -100,8 +112,32 @@ fn multiplicative(i: &mut &str) -> PResult<Expr> {
     Ok(left)
 }
 
-fn power(i: &mut &str) -> PResult<Expr> {
-    let left = unary(i)?;
+fn unary(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let _ = multispace0(i)?;
+    if i.starts_with('-') {
+        guard
+            .enter()
+            .map_err(|_| winnow::error::ErrMode::Cut(ContextError::default()))?;
+        *i = &i[1..];
+        let val = unary(i, guard);
+        guard.leave();
+        let val = val?;
+        Ok(Expr::neg(val))
+    } else if i.starts_with('+') {
+        guard
+            .enter()
+            .map_err(|_| winnow::error::ErrMode::Cut(ContextError::default()))?;
+        *i = &i[1..];
+        let val = unary(i, guard);
+        guard.leave();
+        val
+    } else {
+        power(i, guard)
+    }
+}
+
+fn power(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let left = primary(i, guard)?;
 
     let _ = multispace0(i)?;
     if i.starts_with('^') {
@@ -109,7 +145,7 @@ fn power(i: &mut &str) -> PResult<Expr> {
         let _ = multispace0(i)?;
         let exp = if i.starts_with('{') {
             *i = &i[1..];
-            let inner = latex_expr(i)?;
+            let inner = latex_expr(i, guard)?;
             let _ = multispace0(i)?;
             if i.starts_with('}') {
                 *i = &i[1..];
@@ -118,7 +154,7 @@ fn power(i: &mut &str) -> PResult<Expr> {
                 return Err(winnow::error::ErrMode::Cut(ContextError::default()));
             }
         } else {
-            unary(i)?
+            unary(i, guard)?
         };
         Ok(Expr::pow(left, exp))
     } else {
@@ -126,21 +162,46 @@ fn power(i: &mut &str) -> PResult<Expr> {
     }
 }
 
-fn unary(i: &mut &str) -> PResult<Expr> {
-    let _ = multispace0(i)?;
-    if i.starts_with('-') {
-        *i = &i[1..];
-        let val = unary(i)?;
-        Ok(Expr::neg(val))
-    } else if i.starts_with('+') {
-        *i = &i[1..];
-        unary(i)
-    } else {
-        primary(i)
+fn take_number<'a>(i: &mut &'a str) -> Option<&'a str> {
+    let bytes = i.as_bytes();
+    if bytes.is_empty() || !bytes[0].is_ascii_digit() {
+        return None;
     }
+    let mut n = 0;
+    while n < bytes.len() && bytes[n].is_ascii_digit() {
+        n += 1;
+    }
+    if n < bytes.len() && bytes[n] == b'.' && n + 1 < bytes.len() && bytes[n + 1].is_ascii_digit() {
+        n += 2;
+        while n < bytes.len() && bytes[n].is_ascii_digit() {
+            n += 1;
+        }
+    }
+    if n < bytes.len() && (bytes[n] == b'e' || bytes[n] == b'E') {
+        let mut exp_pos = n + 1;
+        if exp_pos < bytes.len() && (bytes[exp_pos] == b'+' || bytes[exp_pos] == b'-') {
+            exp_pos += 1;
+        }
+        if exp_pos < bytes.len() && bytes[exp_pos].is_ascii_digit() {
+            n = exp_pos + 1;
+            while n < bytes.len() && bytes[n].is_ascii_digit() {
+                n += 1;
+            }
+        }
+    }
+    let (head, tail) = i.split_at(n);
+    *i = tail;
+    Some(head)
 }
 
-fn primary(i: &mut &str) -> PResult<Expr> {
+fn parse_number_to_expr(s: &str) -> Option<Expr> {
+    if let Ok(num) = s.parse::<i64>() {
+        return Some(Expr::int(num));
+    }
+    crate::parser::parse_exact_rational(s).map(Expr::Const)
+}
+
+fn primary(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
     let _ = multispace0(i)?;
 
     if i.starts_with(r"\begin{pmatrix}") || i.starts_with(r"\begin{bmatrix}") {
@@ -164,7 +225,7 @@ fn primary(i: &mut &str) -> PResult<Expr> {
                 break;
             }
 
-            current_row.push(latex_expr(i)?);
+            current_row.push(latex_expr(i, guard)?);
             let _ = multispace0(i)?;
             if i.starts_with('&') {
                 *i = &i[1..];
@@ -191,9 +252,6 @@ fn primary(i: &mut &str) -> PResult<Expr> {
             let _ = multispace0(i)?;
             if i.starts_with('_') {
                 *i = &i[1..];
-                // For lower bound, we expect either `i=1` parsed as manual string or just an expression.
-                // Simple workaround: just parse_braced, if it's `i=1` it will fail because no `=` in Expr.
-                // Let's just consume the `{...}` block manually.
                 if i.starts_with('{') {
                     *i = &i[1..];
                     let mut content = String::new();
@@ -204,7 +262,6 @@ fn primary(i: &mut &str) -> PResult<Expr> {
                     if i.starts_with('}') {
                         *i = &i[1..];
                     }
-                    // very naive split for `i=1`
                     if let Some((v, val)) = content.split_once('=') {
                         var = Expr::var(v.trim());
                         lower = parse_latex(val).unwrap_or(Expr::int(0));
@@ -212,20 +269,20 @@ fn primary(i: &mut &str) -> PResult<Expr> {
                         lower = parse_latex(&content).unwrap_or(Expr::int(0));
                     }
                 } else {
-                    lower = primary(i)?;
+                    lower = primary(i, guard)?;
                 }
             } else if i.starts_with('^') {
                 *i = &i[1..];
                 upper = if i.starts_with('{') {
-                    parse_braced(i)?
+                    parse_braced(i, guard)?
                 } else {
-                    primary(i)?
+                    primary(i, guard)?
                 };
             } else {
                 break;
             }
         }
-        let body = primary(i)?;
+        let body = primary(i, guard)?;
         return Ok(Expr::sum(body, var, lower, upper));
     }
 
@@ -239,23 +296,22 @@ fn primary(i: &mut &str) -> PResult<Expr> {
             if i.starts_with('_') {
                 *i = &i[1..];
                 _lower = if i.starts_with('{') {
-                    parse_braced(i)?
+                    parse_braced(i, guard)?
                 } else {
-                    primary(i)?
+                    primary(i, guard)?
                 };
             } else if i.starts_with('^') {
                 *i = &i[1..];
                 _upper = if i.starts_with('{') {
-                    parse_braced(i)?
+                    parse_braced(i, guard)?
                 } else {
-                    primary(i)?
+                    primary(i, guard)?
                 };
             } else {
                 break;
             }
         }
-        let body = primary(i)?;
-        // assume integrating over x if not specified in a better way
+        let body = primary(i, guard)?;
         return Ok(Expr::integral(body, Expr::var("x")));
     }
 
@@ -263,33 +319,29 @@ fn primary(i: &mut &str) -> PResult<Expr> {
     if i.starts_with(r"\frac") {
         *i = &i[5..];
 
-        // Peek if it's \frac{\partial f}{\partial x} or \frac{\partial}{\partial x} f
         let temp_i = *i;
         if let Some(stripped) = temp_i.strip_prefix(r"{\partial") {
-            *i = stripped; // skip {\partial
+            *i = stripped;
             let _ = multispace0(i)?;
 
             let _f = if i.starts_with('}') {
                 *i = &i[1..];
-                // It was \frac{\partial}{\partial x} f
-                // Parse the denominator
                 let _ = multispace0(i)?;
                 if i.starts_with(r"{\partial") {
                     *i = &i[9..];
                     let _ = multispace0(i)?;
-                    let v = primary(i)?;
+                    let v = primary(i, guard)?;
                     let _ = multispace0(i)?;
                     if i.starts_with('}') {
                         *i = &i[1..];
                     }
-                    let body = primary(i)?;
+                    let body = primary(i, guard)?;
                     return Ok(Expr::derivative(body, v));
                 } else {
                     return Err(winnow::error::ErrMode::Cut(ContextError::default()));
                 }
             } else {
-                // It was \frac{\partial f}{\partial x}
-                let f_expr = primary(i)?;
+                let f_expr = primary(i, guard)?;
                 let _ = multispace0(i)?;
                 if i.starts_with('}') {
                     *i = &i[1..];
@@ -298,7 +350,7 @@ fn primary(i: &mut &str) -> PResult<Expr> {
                 if i.starts_with(r"{\partial") {
                     *i = &i[9..];
                     let _ = multispace0(i)?;
-                    let v = primary(i)?;
+                    let v = primary(i, guard)?;
                     let _ = multispace0(i)?;
                     if i.starts_with('}') {
                         *i = &i[1..];
@@ -310,43 +362,53 @@ fn primary(i: &mut &str) -> PResult<Expr> {
             };
         }
 
-        let num = parse_braced(i)?;
-        let den = parse_braced(i)?;
+        let num = parse_braced(i, guard)?;
+        let den = parse_braced(i, guard)?;
         return Ok(Expr::div(num, den));
     }
 
     // 2. \sqrt{arg}
     if i.starts_with(r"\sqrt") {
         *i = &i[5..];
-        let arg = parse_braced(i)?;
+        let arg = parse_braced(i, guard)?;
         return Ok(Expr::sqrt(arg));
     }
 
-    // 3. Trig and Transcendental functions (\sin, \cos, etc.)
-    for (cmd, constructor) in [
+    // 3. Trig and Transcendental functions (\sin, \cos, \sinh, etc.)
+    type TrigConstructor = fn(Expr) -> Expr;
+    static TRIG_FUNCS: &[(&str, TrigConstructor)] = &[
+        (r"\sinh", Expr::sinh as fn(Expr) -> Expr),
+        (r"\cosh", Expr::cosh as fn(Expr) -> Expr),
+        (r"\tanh", Expr::tanh as fn(Expr) -> Expr),
+        (r"\arcsin", Expr::asin as fn(Expr) -> Expr),
+        (r"\arccos", Expr::acos as fn(Expr) -> Expr),
+        (r"\arctan", Expr::atan as fn(Expr) -> Expr),
+        (r"\asin", Expr::asin as fn(Expr) -> Expr),
+        (r"\acos", Expr::acos as fn(Expr) -> Expr),
+        (r"\atan", Expr::atan as fn(Expr) -> Expr),
         (r"\sin", Expr::sin as fn(Expr) -> Expr),
         (r"\cos", Expr::cos as fn(Expr) -> Expr),
         (r"\tan", Expr::tan as fn(Expr) -> Expr),
         (r"\exp", Expr::exp as fn(Expr) -> Expr),
         (r"\ln", Expr::ln as fn(Expr) -> Expr),
-    ] {
+    ];
+    for &(cmd, constructor) in TRIG_FUNCS {
         if i.starts_with(cmd) {
             *i = &i[cmd.len()..];
             let _ = multispace0(i)?;
-            // Check for optional power like \sin^2(x)
             let mut power_opt = None;
             if i.starts_with('^') {
                 *i = &i[1..];
                 let _ = multispace0(i)?;
                 let exp = if i.starts_with('{') {
-                    parse_braced(i)?
+                    parse_braced(i, guard)?
                 } else {
-                    unary(i)?
+                    unary(i, guard)?
                 };
                 power_opt = Some(exp);
             }
 
-            let arg = primary(i)?;
+            let arg = primary(i, guard)?;
             let call = constructor(arg);
             return if let Some(p) = power_opt {
                 Ok(Expr::pow(call, p))
@@ -359,7 +421,7 @@ fn primary(i: &mut &str) -> PResult<Expr> {
     // 4. Parentheses (optional \left( \right))
     if i.starts_with(r"\left(") {
         *i = &i[6..];
-        let inner = latex_expr(i)?;
+        let inner = latex_expr(i, guard)?;
         let _ = multispace0(i)?;
         if i.starts_with(r"\right)") {
             *i = &i[7..];
@@ -371,7 +433,7 @@ fn primary(i: &mut &str) -> PResult<Expr> {
 
     if i.starts_with('(') {
         *i = &i[1..];
-        let inner = latex_expr(i)?;
+        let inner = latex_expr(i, guard)?;
         let _ = multispace0(i)?;
         if i.starts_with(')') {
             *i = &i[1..];
@@ -382,11 +444,11 @@ fn primary(i: &mut &str) -> PResult<Expr> {
     }
 
     if i.starts_with('{') {
-        return parse_braced(i);
+        return parse_braced(i, guard);
     }
 
     // 5. Greek letters and constants
-    for greek in [
+    static GREEK_LETTERS: &[&str] = &[
         r"\alpha",
         r"\beta",
         r"\gamma",
@@ -421,37 +483,47 @@ fn primary(i: &mut &str) -> PResult<Expr> {
         r"\Phi",
         r"\Psi",
         r"\Omega",
-    ] {
+    ];
+    for greek in GREEK_LETTERS {
         if i.starts_with(greek) {
             *i = &i[greek.len()..];
-            // Remove the backslash for the AST node name
             let name = &greek[1..];
-            return parse_tensor_indices(i, name);
+            return parse_tensor_indices(i, name, guard);
         }
     }
 
-    // 6. Variables and constants
+    // 6. Numbers (integers, decimals, scientific notation)
+    if let Some(num_str) = take_number(i) {
+        if let Some(num_expr) = parse_number_to_expr(num_str) {
+            return Ok(num_expr);
+        } else {
+            return Err(winnow::error::ErrMode::Cut(ContextError::default()));
+        }
+    }
+
+    // 7. Variables and constants
     let ident = opt(alphanumeric1).parse_next(i)?;
     if let Some(id_str) = ident {
-        if let Ok(num) = id_str.parse::<i64>() {
-            return Ok(Expr::int(num));
-        }
-        return parse_tensor_indices(i, id_str);
+        return parse_tensor_indices(i, id_str, guard);
     }
 
     Err(winnow::error::ErrMode::Backtrack(ContextError::default()))
 }
 
-fn parse_tensor_indices(i: &mut &str, base_name: &str) -> PResult<Expr> {
+fn parse_tensor_indices(
+    i: &mut &str,
+    base_name: &str,
+    guard: &mut RecursionDepthGuard,
+) -> PResult<Expr> {
     let mut indices = Vec::new();
     loop {
         let _ = multispace0(i)?;
         if i.starts_with('_') {
             *i = &i[1..];
             let idx_expr = if i.starts_with('{') {
-                parse_braced(i)?
+                parse_braced(i, guard)?
             } else {
-                primary(i)?
+                primary(i, guard)?
             };
             if let Expr::Var(n) = idx_expr {
                 indices.push(crate::tensor::Index {
@@ -459,14 +531,6 @@ fn parse_tensor_indices(i: &mut &str, base_name: &str) -> PResult<Expr> {
                     idx_type: crate::tensor::IndexType::Covariant,
                 });
             }
-        } else if i.starts_with('^') {
-            // Check if this ^ is an exponent or a contravariant index
-            // In LaTeX, it's ambiguous. But we'll try to parse it as contravariant index if it contains only letters.
-            // Actually, for simplicity, if it's attached to a variable, we parse it as an exponent at the `power()` level unless we specifically handle tensor notation.
-            // Let's just break here and let `power()` handle `^` as Exponent, UNLESS the user explicitly wants tensors.
-            // If they want tensors, they should probably use `Expr::Tensor`.
-            // Let's assume `^` is exponent for now, and we only parse `_` as covariant index.
-            break;
         } else {
             break;
         }
@@ -479,11 +543,11 @@ fn parse_tensor_indices(i: &mut &str, base_name: &str) -> PResult<Expr> {
     }
 }
 
-fn parse_braced(i: &mut &str) -> PResult<Expr> {
+fn parse_braced(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
     let _ = multispace0(i)?;
     if i.starts_with('{') {
         *i = &i[1..];
-        let inner = latex_expr(i)?;
+        let inner = latex_expr(i, guard)?;
         let _ = multispace0(i)?;
         if i.starts_with('}') {
             *i = &i[1..];
@@ -492,7 +556,7 @@ fn parse_braced(i: &mut &str) -> PResult<Expr> {
             Err(winnow::error::ErrMode::Cut(ContextError::default()))
         }
     } else {
-        primary(i)
+        primary(i, guard)
     }
 }
 
@@ -522,5 +586,27 @@ mod tests {
     fn test_parse_latex_sqrt() {
         let parsed = parse_latex(r"\sqrt{x + 1}").unwrap();
         assert_eq!(parsed, Expr::sqrt(Expr::add(Expr::var("x"), Expr::int(1))));
+    }
+
+    #[test]
+    fn test_parse_latex_precedence() {
+        let parsed = parse_latex("-x^2").unwrap();
+        assert_eq!(parsed, Expr::neg(Expr::pow(Expr::var("x"), Expr::int(2))));
+        let mut env = std::collections::HashMap::new();
+        env.insert("x".to_string(), 3.0);
+        assert_eq!(parsed.eval(&env), Some(-9.0));
+    }
+
+    #[test]
+    fn test_parse_latex_scientific() {
+        let parsed = parse_latex("1e-3").unwrap();
+        assert_eq!(parsed.eval(&Default::default()), Some(0.001));
+    }
+
+    #[test]
+    fn test_parse_latex_recursion_guard() {
+        let deep_expr = format!("{}x{}", "(".repeat(300), ")".repeat(300));
+        let res = parse_latex(&deep_expr);
+        assert_eq!(res, Err(ParseError::RecursionLimitExceeded));
     }
 }

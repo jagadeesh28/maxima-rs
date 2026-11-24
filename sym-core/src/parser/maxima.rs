@@ -12,7 +12,7 @@ use winnow::error::ContextError;
 type PResult<O> = ModalResult<O>;
 
 use crate::expr::Expr;
-use crate::parser::ParseError;
+use crate::parser::{ParseError, RecursionDepthGuard};
 
 /// Parse a Maxima expression string into an [`Expr`].
 pub fn parse_maxima(input: &str) -> Result<Expr, ParseError> {
@@ -20,9 +20,11 @@ pub fn parse_maxima(input: &str) -> Result<Expr, ParseError> {
     if trimmed.is_empty() {
         return Err(ParseError::EmptyInput);
     }
+    crate::parser::check_nesting_limit(trimmed, RecursionDepthGuard::DEFAULT_MAX_DEPTH)?;
 
+    let mut guard = RecursionDepthGuard::new();
     let mut state = trimmed;
-    match expr(&mut state) {
+    match expr(&mut state, &mut guard) {
         Ok(res) => {
             let rem = state.trim();
             if !rem.is_empty() {
@@ -34,6 +36,7 @@ pub fn parse_maxima(input: &str) -> Result<Expr, ParseError> {
                 Ok(res)
             }
         }
+        Err(_) if guard.exceeded => Err(ParseError::RecursionLimitExceeded),
         Err(e) => Err(ParseError::Syntax {
             message: format!("{e}"),
             remaining: state.to_string(),
@@ -43,22 +46,27 @@ pub fn parse_maxima(input: &str) -> Result<Expr, ParseError> {
 
 // ── Recursive Descent with Precedence Climbing ─────────────────────
 
-fn expr(i: &mut &str) -> PResult<Expr> {
-    additive(i)
+fn expr(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    guard
+        .enter()
+        .map_err(|_| winnow::error::ErrMode::Cut(ContextError::default()))?;
+    let res = additive(i, guard);
+    guard.leave();
+    res
 }
 
-fn additive(i: &mut &str) -> PResult<Expr> {
-    let mut left = multiplicative(i)?;
+fn additive(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let mut left = multiplicative(i, guard)?;
 
     loop {
         let _ = multispace0(i)?;
         if i.starts_with('+') {
             *i = &i[1..];
-            let right = multiplicative(i)?;
+            let right = multiplicative(i, guard)?;
             left = Expr::add(left, right);
         } else if i.starts_with('-') {
             *i = &i[1..];
-            let right = multiplicative(i)?;
+            let right = multiplicative(i, guard)?;
             left = Expr::sub(left, right);
         } else {
             break;
@@ -68,18 +76,18 @@ fn additive(i: &mut &str) -> PResult<Expr> {
     Ok(left)
 }
 
-fn multiplicative(i: &mut &str) -> PResult<Expr> {
-    let mut left = power(i)?;
+fn multiplicative(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let mut left = unary(i, guard)?;
 
     loop {
         let _ = multispace0(i)?;
         if i.starts_with('*') {
             *i = &i[1..];
-            let right = power(i)?;
+            let right = unary(i, guard)?;
             left = Expr::mul(left, right);
         } else if i.starts_with('/') {
             *i = &i[1..];
-            let right = power(i)?;
+            let right = unary(i, guard)?;
             left = Expr::div(left, right);
         } else {
             break;
@@ -89,36 +97,46 @@ fn multiplicative(i: &mut &str) -> PResult<Expr> {
     Ok(left)
 }
 
-fn power(i: &mut &str) -> PResult<Expr> {
-    let left = unary(i)?;
+fn unary(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let _ = multispace0(i)?;
+    if i.starts_with('-') {
+        guard
+            .enter()
+            .map_err(|_| winnow::error::ErrMode::Cut(ContextError::default()))?;
+        *i = &i[1..];
+        let val = unary(i, guard);
+        guard.leave();
+        let val = val?;
+        Ok(Expr::neg(val))
+    } else if i.starts_with('+') {
+        guard
+            .enter()
+            .map_err(|_| winnow::error::ErrMode::Cut(ContextError::default()))?;
+        *i = &i[1..];
+        let val = unary(i, guard);
+        guard.leave();
+        val
+    } else {
+        power(i, guard)
+    }
+}
+
+fn power(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let left = postfix(i, guard)?;
 
     let _ = multispace0(i)?;
     if i.starts_with('^') {
         *i = &i[1..];
-        let right = power(i)?; // right-associative
+        let right = unary(i, guard)?; // right-associative, allows 2^-1 or x^-2
         Ok(Expr::pow(left, right))
     } else {
         Ok(left)
     }
 }
 
-fn unary(i: &mut &str) -> PResult<Expr> {
-    let _ = multispace0(i)?;
-    if i.starts_with('-') {
-        *i = &i[1..];
-        let val = unary(i)?;
-        Ok(Expr::neg(val))
-    } else if i.starts_with('+') {
-        *i = &i[1..];
-        unary(i)
-    } else {
-        postfix(i)
-    }
-}
-
 /// Postfix factorial `!` — binds tighter than `*`, `/`, and `^`.
-fn postfix(i: &mut &str) -> PResult<Expr> {
-    let mut base = primary(i)?;
+fn postfix(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let mut base = primary(i, guard)?;
     loop {
         let _ = multispace0(i)?;
         if i.starts_with('!') {
@@ -131,29 +149,70 @@ fn postfix(i: &mut &str) -> PResult<Expr> {
     Ok(base)
 }
 
-/// Consume a Maxima identifier (`[A-Za-z0-9_]`).
+/// Consume a number literal: integer, decimal (`2.5`), or scientific notation (`1e-3`, `2.5e+4`).
+fn take_number<'a>(i: &mut &'a str) -> Option<&'a str> {
+    let bytes = i.as_bytes();
+    if bytes.is_empty() || !bytes[0].is_ascii_digit() {
+        return None;
+    }
+    let mut n = 0;
+    while n < bytes.len() && bytes[n].is_ascii_digit() {
+        n += 1;
+    }
+    // Check for decimal point followed by digit
+    if n < bytes.len() && bytes[n] == b'.' && n + 1 < bytes.len() && bytes[n + 1].is_ascii_digit() {
+        n += 2; // skip '.' and first digit
+        while n < bytes.len() && bytes[n].is_ascii_digit() {
+            n += 1;
+        }
+    }
+    // Check for exponent 'e' or 'E'
+    if n < bytes.len() && (bytes[n] == b'e' || bytes[n] == b'E') {
+        let mut exp_pos = n + 1;
+        if exp_pos < bytes.len() && (bytes[exp_pos] == b'+' || bytes[exp_pos] == b'-') {
+            exp_pos += 1;
+        }
+        if exp_pos < bytes.len() && bytes[exp_pos].is_ascii_digit() {
+            n = exp_pos + 1;
+            while n < bytes.len() && bytes[n].is_ascii_digit() {
+                n += 1;
+            }
+        }
+    }
+    let (head, tail) = i.split_at(n);
+    *i = tail;
+    Some(head)
+}
+
+fn parse_number_to_expr(s: &str) -> Option<Expr> {
+    if let Ok(num) = s.parse::<i64>() {
+        return Some(Expr::int(num));
+    }
+    crate::parser::parse_exact_rational(s).map(Expr::Const)
+}
+
+/// Consume a Maxima identifier (`[A-Za-z_][A-Za-z0-9_]*`).
 fn take_ident<'a>(i: &mut &'a str) -> Option<&'a str> {
     let bytes = i.as_bytes();
-    let mut n = 0;
+    if bytes.is_empty() || (!bytes[0].is_ascii_alphabetic() && bytes[0] != b'_') {
+        return None;
+    }
+    let mut n = 1;
     while n < bytes.len() && (bytes[n].is_ascii_alphanumeric() || bytes[n] == b'_') {
         n += 1;
     }
-    if n == 0 {
-        None
-    } else {
-        let (head, tail) = i.split_at(n);
-        *i = tail;
-        Some(head)
-    }
+    let (head, tail) = i.split_at(n);
+    *i = tail;
+    Some(head)
 }
 
-fn primary(i: &mut &str) -> PResult<Expr> {
+fn primary(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
     let _ = multispace0(i)?;
 
     // 1. Parenthesized expression
     if i.starts_with('(') {
         *i = &i[1..];
-        let inner = expr(i)?;
+        let inner = expr(i, guard)?;
         let _ = multispace0(i)?;
         if i.starts_with(')') {
             *i = &i[1..];
@@ -171,27 +230,33 @@ fn primary(i: &mut &str) -> PResult<Expr> {
         return match name {
             "pi" => Ok(Expr::pi()),
             "e" => Ok(Expr::e()),
+            #[cfg(feature = "complex")]
+            "i" => Ok(Expr::i()),
             other => Ok(Expr::var(&format!("%{other}"))),
         };
     }
 
-    // 3. Builtin function calls, matrix literals, or identifiers
+    // 3. Numbers: integers, decimals, scientific notation
+    if let Some(num_str) = take_number(i) {
+        if let Some(num_expr) = parse_number_to_expr(num_str) {
+            return Ok(num_expr);
+        } else {
+            return cut();
+        }
+    }
+
+    // 4. Builtin function calls, matrix literals, or identifiers
     if let Some(id_str) = take_ident(i) {
         let name = id_str.to_string();
         let _ = multispace0(i)?;
         if i.starts_with('(') {
             *i = &i[1..];
             if name == "matrix" {
-                return Ok(Expr::matrix(matrix_rows(i)?));
+                return Ok(Expr::matrix(matrix_rows(i, guard)?));
             }
-            let args = call_args(i)?;
+            let args = call_args(i, guard)?;
             return build_call(&name, args);
         }
-        // Check if it's an integer number
-        if let Ok(num) = name.parse::<i64>() {
-            return Ok(Expr::int(num));
-        }
-        // Otherwise it's a variable
         return Ok(Expr::var(&name));
     }
 
@@ -203,7 +268,7 @@ fn cut<T>() -> PResult<T> {
 }
 
 /// Parse a comma-separated function argument list; the opening `(` is already consumed.
-fn call_args(i: &mut &str) -> PResult<Vec<Expr>> {
+fn call_args(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Vec<Expr>> {
     let mut args = Vec::new();
     let _ = multispace0(i)?;
     if i.starts_with(')') {
@@ -211,7 +276,7 @@ fn call_args(i: &mut &str) -> PResult<Vec<Expr>> {
         return Ok(args);
     }
     loop {
-        args.push(expr(i)?);
+        args.push(expr(i, guard)?);
         let _ = multispace0(i)?;
         if i.starts_with(',') {
             *i = &i[1..];
@@ -226,7 +291,7 @@ fn call_args(i: &mut &str) -> PResult<Vec<Expr>> {
 }
 
 /// Parse `matrix([a,b],[c,d])` rows; the opening `(` is already consumed.
-fn matrix_rows(i: &mut &str) -> PResult<Vec<Vec<Expr>>> {
+fn matrix_rows(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Vec<Vec<Expr>>> {
     let mut rows = Vec::new();
     loop {
         let _ = multispace0(i)?;
@@ -244,7 +309,7 @@ fn matrix_rows(i: &mut &str) -> PResult<Vec<Vec<Expr>>> {
             *i = &i[1..];
         } else {
             loop {
-                row.push(expr(i)?);
+                row.push(expr(i, guard)?);
                 let _ = multispace0(i)?;
                 if i.starts_with(',') {
                     *i = &i[1..];
@@ -314,6 +379,138 @@ fn build_call(name: &str, args: Vec<Expr>) -> PResult<Expr> {
             let upper = args.remove(0);
             Ok(Expr::sum(body, var, lower, upper))
         }
+        #[cfg(feature = "specfn")]
+        "gamma" => {
+            if args.len() != 1 {
+                return cut();
+            }
+            Ok(Expr::gamma(args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "beta" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::beta(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "psi" => {
+            if args.is_empty() || args.len() > 2 {
+                return cut();
+            }
+            Ok(Expr::special_fn(crate::specfn::SpecialFnKind::Psi, args))
+        }
+        #[cfg(feature = "specfn")]
+        "erf" => {
+            if args.len() != 1 {
+                return cut();
+            }
+            Ok(Expr::erf(args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "erfc" => {
+            if args.len() != 1 {
+                return cut();
+            }
+            Ok(Expr::erfc(args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "bessel_j" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::bessel_j(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "bessel_y" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::bessel_y(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "bessel_i" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::bessel_i(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "bessel_k" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::bessel_k(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "airy_ai" => {
+            if args.len() != 1 {
+                return cut();
+            }
+            Ok(Expr::airy_ai(args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "airy_dai" => {
+            if args.len() != 1 {
+                return cut();
+            }
+            Ok(Expr::special_fn(
+                crate::specfn::SpecialFnKind::AiryAiPrime,
+                args,
+            ))
+        }
+        #[cfg(feature = "specfn")]
+        "airy_bi" => {
+            if args.len() != 1 {
+                return cut();
+            }
+            Ok(Expr::airy_bi(args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "airy_dbi" => {
+            if args.len() != 1 {
+                return cut();
+            }
+            Ok(Expr::special_fn(
+                crate::specfn::SpecialFnKind::AiryBiPrime,
+                args,
+            ))
+        }
+        #[cfg(feature = "specfn")]
+        "legendre_p" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::legendre_p(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "chebyshev_t" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::chebyshev_t(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "chebyshev_u" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::chebyshev_u(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "hermite" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::hermite_h(args.remove(0), args.remove(0)))
+        }
+        #[cfg(feature = "specfn")]
+        "laguerre" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::laguerre_l(args.remove(0), args.remove(0)))
+        }
         _ => cut(),
     }
 }
@@ -366,7 +563,10 @@ mod tests {
             parse_maxima("2 * %pi").unwrap(),
             Expr::mul(Expr::int(2), Expr::pi())
         );
-        // Other %-symbols stay symbolic variables.
+        // %i evaluates to Expr::i() when complex feature enabled, otherwise symbolic variable.
+        #[cfg(feature = "complex")]
+        assert_eq!(parse_maxima("%i").unwrap(), Expr::i());
+        #[cfg(not(feature = "complex"))]
         assert_eq!(parse_maxima("%i").unwrap(), Expr::var("%i"));
     }
 
@@ -439,6 +639,63 @@ mod tests {
                 "display output for {s} was not parseable: {parsed}"
             );
         }
+    }
+
+    #[test]
+    fn test_operator_precedence_negative_power() {
+        // -x^2 must parse as -(x^2)
+        let parsed = parse_maxima("-x^2").unwrap();
+        assert_eq!(parsed, Expr::neg(Expr::pow(Expr::var("x"), Expr::int(2))));
+        let mut env = std::collections::HashMap::new();
+        env.insert("x".to_string(), 3.0);
+        assert_eq!(parsed.eval(&env), Some(-9.0));
+
+        // -2^2 == -4
+        let p2 = parse_maxima("-2^2").unwrap();
+        assert_eq!(p2, Expr::neg(Expr::pow(Expr::int(2), Expr::int(2))));
+        assert_eq!(p2.eval(&Default::default()), Some(-4.0));
+
+        // 2^-1 == 0.5
+        let p3 = parse_maxima("2^-1").unwrap();
+        assert_eq!(p3, Expr::pow(Expr::int(2), Expr::neg(Expr::int(1))));
+        assert_eq!(p3.eval(&Default::default()), Some(0.5));
+
+        // -x! == -(x!)
+        let p4 = parse_maxima("-x!").unwrap();
+        assert_eq!(p4, Expr::neg(Expr::factorial(Expr::var("x"))));
+
+        // (-x)^2 == (-x)^2
+        let p5 = parse_maxima("(-x)^2").unwrap();
+        assert_eq!(p5, Expr::pow(Expr::neg(Expr::var("x")), Expr::int(2)));
+        assert_eq!(p5.eval(&env), Some(9.0));
+
+        // exp(-x^2) == Exp(Neg(Pow(x, 2)))
+        let p6 = parse_maxima("exp(-x^2)").unwrap();
+        assert_eq!(
+            p6,
+            Expr::exp(Expr::neg(Expr::pow(Expr::var("x"), Expr::int(2))))
+        );
+    }
+
+    #[test]
+    fn test_scientific_notation() {
+        let e1 = parse_maxima("1e-3").unwrap();
+        assert_eq!(e1.eval(&Default::default()), Some(0.001));
+
+        let e2 = parse_maxima("2.5e+4").unwrap();
+        assert_eq!(e2.eval(&Default::default()), Some(25000.0));
+
+        let e3 = parse_maxima("x + 1e-3").unwrap();
+        let mut env = std::collections::HashMap::new();
+        env.insert("x".to_string(), 1.0);
+        assert!((e3.eval(&env).unwrap() - 1.001).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_recursion_limit_guard() {
+        let deep_expr = format!("{}x{}", "(".repeat(300), ")".repeat(300));
+        let res = parse_maxima(&deep_expr);
+        assert_eq!(res, Err(ParseError::RecursionLimitExceeded));
     }
 }
 #[cfg(feature = "cas")]

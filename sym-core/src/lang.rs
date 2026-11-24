@@ -48,6 +48,12 @@ define_language! {
 
         // Matrix (Serialized as a flat symbol for now)
         Matrix(Symbol),
+
+        // Bfloat arbitrary precision float
+        Bfloat(Symbol),
+
+        // Special functions (gamma, erf, bessel, airy, orthopoly)
+        SpecialFn(Symbol),
     }
 }
 
@@ -69,7 +75,11 @@ impl Analysis<MathLang> for MathAnalysis {
 
         match enode {
             MathLang::Const(c) => Some(c.clone()),
-            MathLang::Var(_) | MathLang::Tensor(_) | MathLang::NamedConst(_) => None,
+            MathLang::Var(_)
+            | MathLang::Tensor(_)
+            | MathLang::NamedConst(_)
+            | MathLang::Bfloat(_)
+            | MathLang::SpecialFn(_) => None,
             MathLang::Factorial([a]) => {
                 let ca = get_const(a)?;
                 Rat::factorial(&ca)
@@ -222,6 +232,8 @@ impl Expr {
             }
             Expr::Pi => recexpr.add(MathLang::NamedConst(Symbol::from("pi"))),
             Expr::E => recexpr.add(MathLang::NamedConst(Symbol::from("e"))),
+            #[cfg(feature = "complex")]
+            Expr::I => recexpr.add(MathLang::NamedConst(Symbol::from("i"))),
             Expr::Factorial(a) => {
                 let id_a = a.build_recexpr(recexpr);
                 recexpr.add(MathLang::Factorial([id_a]))
@@ -250,6 +262,23 @@ impl Expr {
             Expr::Matrix(mat) => {
                 let encoded = crate::matrix::encode_matrix_symbol(mat);
                 recexpr.add(MathLang::Matrix(Symbol::from(encoded.as_str())))
+            }
+            #[cfg(feature = "bfloat")]
+            Expr::Bfloat(b) => {
+                let encoded = format!("{}:{}", b.prec, b.to_maxima_string());
+                recexpr.add(MathLang::Bfloat(Symbol::from(encoded.as_str())))
+            }
+            #[cfg(feature = "specfn")]
+            Expr::SpecialFn(kind, args) => {
+                let encoded = format!(
+                    "{}:{}",
+                    kind.as_str(),
+                    args.iter()
+                        .map(|a| format!("{a}"))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
+                recexpr.add(MathLang::SpecialFn(Symbol::from(encoded.as_str())))
             }
         }
     }
@@ -305,6 +334,8 @@ impl Expr {
             MathLang::NamedConst(s) => match s.as_str() {
                 "pi" => Expr::Pi,
                 "e" => Expr::E,
+                #[cfg(feature = "complex")]
+                "i" => Expr::I,
                 other => Expr::var(other),
             },
             MathLang::Tensor(s) => {
@@ -335,6 +366,28 @@ impl Expr {
                     Some(rows) => Expr::Matrix(rows),
                     None => Expr::Matrix(vec![]),
                 }
+            }
+            MathLang::Bfloat(s) => {
+                #[cfg(feature = "bfloat")]
+                {
+                    let s_str = s.as_str();
+                    if let Some((prec_str, val_str)) = s_str.split_once(':')
+                        && let Ok(prec) = prec_str.parse::<usize>()
+                        && let Ok(bw) = crate::bfloat::BfloatWrapper::parse(val_str, prec)
+                    {
+                        return Expr::Bfloat(bw);
+                    }
+                }
+                Expr::var(s.as_str())
+            }
+            MathLang::SpecialFn(s) => {
+                #[cfg(feature = "specfn")]
+                {
+                    if let Some(e) = crate::specfn::decode_special_fn(s.as_str()) {
+                        return e;
+                    }
+                }
+                Expr::var(s.as_str())
             }
         }
     }

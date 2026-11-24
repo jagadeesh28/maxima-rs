@@ -374,9 +374,10 @@ impl Series {
     }
 }
 
-/// Expand `expr` as a truncated Laurent/Taylor series about `center`, order `order`.
+/// Expand `expr` as a truncated Laurent/Taylor series about `center`, retaining powers
+/// up to and including degree `order` (truncation cutoff `order + 1`).
 pub fn series_expand(expr: &Expr, var: &str, center: &Expr, order: i64) -> Option<Series> {
-    expand(expr, var, center, order)
+    expand(expr, var, center, order + 1)
 }
 
 /// Convenience wrapper: expand a series and convert it back into an [`Expr`].
@@ -587,6 +588,9 @@ fn ln_series(g: Series) -> Option<Series> {
 }
 
 fn expand(expr: &Expr, var: &str, center: &Expr, order: i64) -> Option<Series> {
+    if !expr.variables().contains(&var.to_string()) {
+        return Some(Series::constant(expr.clone(), var, center, order));
+    }
     match expr {
         Expr::Const(r) => Some(Series::constant(
             Expr::constant(r.clone()),

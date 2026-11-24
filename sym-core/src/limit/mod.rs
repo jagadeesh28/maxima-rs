@@ -31,6 +31,10 @@ fn subst_var(e: &Expr, name: &str, r: &Expr) -> Expr {
     }
     match e {
         Expr::Var(_) | Expr::Const(_) | Expr::Pi | Expr::E => e.clone(),
+        #[cfg(feature = "bfloat")]
+        Expr::Bfloat(_) => e.clone(),
+        #[cfg(feature = "complex")]
+        Expr::I => e.clone(),
         Expr::Add(a, b) => Expr::add(subst_var(a, name, r), subst_var(b, name, r)),
         Expr::Sub(a, b) => Expr::sub(subst_var(a, name, r), subst_var(b, name, r)),
         Expr::Mul(a, b) => Expr::mul(subst_var(a, name, r), subst_var(b, name, r)),
@@ -64,8 +68,15 @@ fn subst_var(e: &Expr, name: &str, r: &Expr) -> Expr {
                 .map(|row| row.iter().map(|x| subst_var(x, name, r)).collect())
                 .collect(),
         ),
+        #[cfg(feature = "specfn")]
+        Expr::SpecialFn(kind, args) => {
+            Expr::SpecialFn(*kind, args.iter().map(|x| subst_var(x, name, r)).collect())
+        }
     }
 }
+
+#[cfg(feature = "assume")]
+use crate::assume::{Assumptions, Sign};
 
 /// Compute the two-sided limit of `expr` as `var` approaches `point`.
 ///
@@ -73,6 +84,45 @@ fn subst_var(e: &Expr, name: &str, r: &Expr) -> Expr {
 /// `Expr::var("minf")` for infinite limits. Returns `None` when the limit cannot
 /// be determined.
 pub fn limit(expr: &Expr, var: &str, point: &Expr) -> Option<Expr> {
+    #[cfg(feature = "assume")]
+    {
+        limit_with_assumptions(expr, var, point, None)
+    }
+    #[cfg(not(feature = "assume"))]
+    {
+        limit_core(expr, var, point)
+    }
+}
+
+/// Compute limit with optional [`Assumptions`] context.
+#[cfg(feature = "assume")]
+pub fn limit_with_assumptions(
+    expr: &Expr,
+    var: &str,
+    point: &Expr,
+    assumptions: Option<&Assumptions>,
+) -> Option<Expr> {
+    if !expr.variables().iter().any(|v| v == var) {
+        return Some(expr.clone());
+    }
+    // Check monomial power with assumptions as point -> inf
+    if let Expr::Pow(base, exp) = expr
+        && matches!(base.as_ref(), Expr::Var(v) if v == var)
+        && is_pos_inf(point)
+        && !exp.variables().contains(&var.to_string())
+        && let Some(ctx) = assumptions
+    {
+        match ctx.csign(exp) {
+            Sign::Pos => return Some(Expr::var("inf")),
+            Sign::Neg => return Some(Expr::int(0)),
+            Sign::Zero => return Some(Expr::int(1)),
+            _ => {}
+        }
+    }
+    limit_core(expr, var, point)
+}
+
+fn limit_core(expr: &Expr, var: &str, point: &Expr) -> Option<Expr> {
     if !expr.variables().iter().any(|v| v == var) {
         return Some(expr.clone());
     }

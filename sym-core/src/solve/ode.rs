@@ -110,15 +110,20 @@ pub fn ode2(ode: &Expr, y: &str, x: &str) -> Option<OdeSolution> {
     } else {
         return None;
     };
-    let a = coeffs[order].clone()?;
-    if a.is_zero() {
-        return None;
-    }
-    let b = coeffs[1].clone().unwrap_or_else(|| Expr::int(0));
-    let c = coeffs[0].clone().unwrap_or_else(|| Expr::int(0));
     if order == 1 {
+        let a = coeffs[1].clone()?;
+        if a.is_zero() {
+            return None;
+        }
+        let b = coeffs[0].clone().unwrap_or_else(|| Expr::int(0));
         ode_first::solve_first(&a, &b, x)
     } else {
+        let a = coeffs[2].clone()?;
+        if a.is_zero() {
+            return None;
+        }
+        let b = coeffs[1].clone().unwrap_or_else(|| Expr::int(0));
+        let c = coeffs[0].clone().unwrap_or_else(|| Expr::int(0));
         ode_second::solve_second(&a, &b, &c, x)
     }
 }

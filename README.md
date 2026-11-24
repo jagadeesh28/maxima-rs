@@ -6,7 +6,7 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 
 ---
 
-## Current Status: Phase 21 Complete ✅ (v0.2.0)
+## Current Status: Phase 45 Complete ✅ (v0.5.0)
 
 | Phase | Feature | Status | Summary |
 |-------|---------|--------|---------|
@@ -68,6 +68,22 @@ Expanding maxima-rs into a high-performance Computer Algebra System rivaling Wol
 | 31 | Maxima CAS Syntax & Prelude | `cas`/`parser` | ✅ Completed | `parse_maxima_cas`/`execute_cas` for expand/factor/ratsimp/partfrac/limit/integrate/defint/taylor/solve/ode2; prelude re-exports CAS ops |
 | 32 | Verification & Maxima Benchmarks | all | ✅ Completed | Proptest integration/solve invariants (≥10³ cases) + Maxima-style parity cases (`rtest_integrate/limit/solve`) + clean fmt/clippy |
 | 33 | WebUI Recursive Composer & E2E | `maxima-web` | ✅ Completed | Dropdown function composer (recursive wrap, undo, format-aware), `GET /api/functions`, `webui_e2e` suite |
+| 34 | CAS Web API Wiring & Typed Dispatch | `maxima-web` | ✅ Completed | Declarative `OpSpec` catalog, typed parameter validation (400), uniform status model, verification checks, `POST /api/parse` |
+| 35 | Precedence-Aware LaTeX Formatter | `core` | ✅ Completed | Core `to_latex(&Expr)` with operator precedence (1..5), Greek macros, subscript constants, matrices, no redundant parens |
+| 36 | Offline-First WebUI Notebook & Rebuild | `maxima-web` | ✅ Completed | Vendored KaTeX + WOFF2 fonts, standalone CSS, vanilla ES modules, `In[n]`/`Out[n]` notebook, tabbed outputs |
+| 37 | Service Isolation & Asset Embedding | `maxima-web` | ✅ Completed | `spawn_blocking`, timeouts, semaphore concurrency, CLI config (`clap`), static asset embedding (`rust-embed`) |
+| 38 | Standalone & Lambda Packaging | `maxima-web` | ✅ Completed | Thin LTO release profile, Dockerfile with Lambda Web Adapter, SAM template |
+| 38A | P0 Safety, Correctness & Hardening | all | ✅ Completed | Precedence `-x^2 == -9`, recursion limit 256, scientific notation (`1e-3`), owned semaphore in worker thread, roundtrip proptests |
+| 38B | WebUI Wiring & Styling Restoration | `maxima-web` | ✅ Completed | Palette catalog parsing, TDZ elimination, embedded CAS argument extraction, CSE let-bindings visualization, 0 undefined CSS classes |
+| 38C | Engine Honesty & Defect Remediation | all | ✅ Completed | 1st-order linear ODE coefficient fix, Liouville non-elementary detection, definite integral negative branch cuts, composite Simpson & ODE residual dynamic verification |
+| 39 | Arbitrary-Precision Float (`bfloat`) | `bfloat` | ✅ Completed | Pure-Rust `dashu-float` arbitrary-precision decimal floating point with Maxima `$fpprec` precision control, `b`/`B` exponent indicator, exact arithmetic & transcendentals |
+| 40 | Symbolic Linear Algebra & Bareiss Algorithm | `matrix` | ✅ Completed | Fraction-free Bareiss $O(n^3)$ determinant algorithm, classical adjoint inverse, characteristic polynomial (`charpoly`), trace, and eigenvalues |
+| 41 | Complex Analysis, Rectangular Form & Residues | `complex` | ✅ Completed | Zero-allocation `Expr::I` atom, canonical `rectform` (`rpart.lisp`), polar form, `cabs`, `carg`, `conjugate`, Euler's formula, and Laurent series residue calculus |
+| 42 | Special Functions & Table Dispatch | `specfn` | ✅ Completed | Non-elementary special functions ($\Gamma, \beta, \text{erf}, \text{erfc}$, Bessel $J, Y, I, K$, Airy $\text{Ai}, \text{Bi}$, orthogonal polynomials $P_n, T_n, U_n, H_n, L_n$) with table-driven differentiation |
+| 43 | Operational Laplace Transforms & ODE Initial Values | `transform` | ✅ Completed | Operational forward Laplace (`laplace`), inverse Laplace (`ilt`), frequency shift, multiplier, derivative rules, and IVP/BVP solvers (`ic1`, `ic2`, `bc2`, `ic1_ode`, `ic2_ode`, `bc2_ode`) |
+| 44 | Scoped Deductive Inference & Assumptions Context | `assume` | ✅ Completed | Thread-safe `Assumptions` context, inequality DAG inference, interval bound propagation, sign deduction (`csign`, `asksign`), predicate evaluation (`is`), domain properties (`PropertyKind`), and reversibility (`forget`) |
+| 45 | Maxima 5.50 Parity Test Suite & Golden Verification | `tests` | ✅ Completed | Full upstream golden test suite ported from Maxima 5.50 (`rtest_integrate`, `rtest_limit`, `rtest_taylor`, `rtest_solve`, `rtest_laplace`, `rtest_bessel`), 100% test pass rate across workspace |
+
 
 ---
 
@@ -236,34 +252,55 @@ assert_eq!(grad[1].eval(&env), Some(0.0));
 
 ---
 
-## Interactive Local Web Server (`maxima-web`)
+## Offline-First WebUI & CAS Service (`maxima-web`)
 
-`maxima-rs` includes an interactive local web server providing a browser-based UI and a JSON REST API for real-time symbolic optimization:
+`maxima-web` provides a standalone, offline-first browser interface and JSON CAS API backed by the `maxima-rs` symbolic engine.
 
-### Running the Web Server
+All static assets (KaTeX 0.16.11, 20 WOFF2 math fonts, responsive CSS, and vanilla ES modules) are embedded directly into the release binary via `rust-embed`. The executable runs from any folder or air-gapped system with **zero runtime CDN or external network requests**.
 
-Run the `maxima-web` crate from within its folder or with `--bin maxima-web`:
+### Running the Standalone Web Service
 
-```powershell
-# From the repository root:
-cargo run -p maxima-web
+Run directly with explicit CLI arguments:
 
-# Or from inside the maxima-web directory:
-cd maxima-web
-cargo run
+```bash
+# Run standalone server on default port 3000
+cargo run --release -p maxima-web
+
+# Or specify custom port, bind address, and compute timeout via CLI flags:
+cargo run --release -p maxima-web -- --bind 0.0.0.0 --port 8080 --timeout-ms 5000 --concurrency 8
+
+# Print all CLI configuration options:
+cargo run -p maxima-web -- --help
 ```
 
 Then open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
-### Capabilities in the Web UI:
-- **Real-time Simplify & Optimize**: Equality saturation using 1:1 Maxima rules.
-- **Analytical Derivatives**: Compute partial derivatives, gradients, Jacobians, and Hessians.
-- **CSE Breakdown**: View common subexpressions extracted as ordered intermediate let-bindings.
-- **Zero-Overhead Rust Codegen**: Inspect and copy compilable Rust function bodies.
-- **Math Formats**: Interactive rendering with KaTeX supporting Maxima syntax and LaTeX inputs.
-- **REST API Endpoints**:
-  - `POST /api/compute`: Accepts `{ "expression": "...", "input_format": "maxima"|"latex", "operation": "simplify" (alias "optimize") | "differentiate" | "gradient" | "jacobian" | "hessian" | "cse" | "rust_code" | "evaluate", "variables": [...], "env": { "x": "1" } }`
-  - `GET /api/operations`: Lists all supported operations and metadata.
-  - `GET /api/rules`: Returns the 1:1 Maxima rule catalog `{ total, by_file: [{ file, count }], rules: [{ name, source_file, source_fn, identity, fast_math_only }] }`.
-  - `GET /api/health`: Health status and engine version.
+### WebUI & API Capabilities
+- **Interactive Notebook Model**: `In[n]` / `Out[n]` stream with "Use as input", status chips (`ok`, `unevaluated`, `divergent`, `no_solution`, `error`), and automated `verified` checkmarks.
+- **Tabbed Math Outputs**: Typeset math rendered via local KaTeX, raw Maxima syntax, clean precedence-aware LaTeX source, and compilable Rust code.
+- **Recursive Function Composer**: Wrap, nest, undo, and clear elementary functions and CAS transforms.
+- **Procedural CAS API**: Full coverage for `expand`, `factor`, `ratsimp`, `partfrac`, `integrate`, `defint`, `limit`, `taylor`, `solve`, and `ode2`.
+- **Compute Isolation & Concurrency**: Computations run in `spawn_blocking` + `catch_unwind` with strict timeouts (`408`) and semaphore concurrency throttling (`503`).
+- **REST Endpoints**:
+  - `POST /api/compute`: Typed execution of CAS and optimization operations.
+  - `POST /api/parse`: Live typeset LaTeX preview and variable detection.
+  - `GET /api/operations`: Authoritative declarative catalog of all operations and parameter schemas.
+  - `GET /api/functions`: Catalog of composable unary, binary, and CAS functions.
+  - `GET /api/rules`: 1:1 Maxima LISP rewrite rules and citations.
+  - `GET /api/health`: Health status.
+
+### Container & AWS Lambda Deployment
+
+#### Docker Standalone Container
+```bash
+docker build -t maxima-web .
+docker run -p 3000:3000 maxima-web --bind 0.0.0.0 --port 3000
+```
+
+#### AWS Lambda (Serverless Application Model)
+The provided `template.yaml` packages the container using AWS Lambda Web Adapter with explicit CLI arguments:
+```bash
+sam build
+sam deploy --guided
+```
 

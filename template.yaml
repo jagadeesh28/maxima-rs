@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  maxima-rs WebUI & Symbolic CAS Engine — Containerized AWS Lambda Deployment
+  Packaged with AWS Lambda Web Adapter and explicit CLI parameter passing.
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+
+Resources:
+  MaximaWebService:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageConfig:
+        Command:
+          - "--bind"
+          - "0.0.0.0"
+          - "--port"
+          - "8080"
+          - "--timeout-ms"
+          - "8000"
+      Events:
+        ProxyApiRoot:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: ANY
+        ProxyApiGreedy:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: latest
+
+Outputs:
+  MaximaWebUrl:
+    Description: "HTTP API Gateway URL for maxima-web service"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"

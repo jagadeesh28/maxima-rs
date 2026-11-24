@@ -23,7 +23,7 @@ impl CostFunction<MathLang> for FlopCost {
         C: FnMut(Id) -> Self::Cost,
     {
         let op_cost = match enode {
-            MathLang::Var(_) | MathLang::Const(_) => 0,
+            MathLang::Var(_) | MathLang::Const(_) | MathLang::Bfloat(_) => 0,
             MathLang::Add(_) | MathLang::Sub(_) | MathLang::Neg(_) => 1,
             MathLang::Mul(_) => 2,
             MathLang::Div(_) => 8,
@@ -46,6 +46,7 @@ impl CostFunction<MathLang> for FlopCost {
             | MathLang::Integral(_)
             | MathLang::Sum(_)
             | MathLang::Matrix(_) => 0,
+            MathLang::SpecialFn(_) => 50,
         };
 
         enode.fold(op_cost, |sum, id| sum.saturating_add(costs(id)))

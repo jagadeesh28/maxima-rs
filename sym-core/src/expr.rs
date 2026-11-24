@@ -113,6 +113,10 @@ pub enum Expr {
     /// e — Euler's number (irrational, kept symbolic until evaluation)
     E,
 
+    /// Imaginary unit: `i = \sqrt{-1}`
+    #[cfg(feature = "complex")]
+    I,
+
     /// Factorial: `n!`
     Factorial(Box<Expr>),
 
@@ -130,6 +134,14 @@ pub enum Expr {
 
     /// Matrix or Vector literal
     Matrix(Vec<Vec<Expr>>),
+
+    /// Arbitrary-precision floating-point constant (`bfloat`).
+    #[cfg(feature = "bfloat")]
+    Bfloat(crate::bfloat::BfloatWrapper),
+
+    /// Non-elementary special function: $\Gamma, \beta, \text{erf}$, Bessel, Airy, orthogonal polynomials.
+    #[cfg(feature = "specfn")]
+    SpecialFn(crate::specfn::SpecialFnKind, Vec<Expr>),
 }
 
 // ── Ergonomic Constructors ─────────────────────────────────────────
@@ -191,6 +203,19 @@ impl Expr {
     /// ```
     pub fn from_f64(v: f64) -> Self {
         Expr::Const(Rat::from_f64(v))
+    }
+
+    /// Create an arbitrary-precision floating-point constant (`bfloat`).
+    #[cfg(feature = "bfloat")]
+    pub fn bfloat(bw: crate::bfloat::BfloatWrapper) -> Self {
+        Expr::Bfloat(bw)
+    }
+
+    /// Create a bfloat from string with default precision.
+    #[cfg(feature = "bfloat")]
+    pub fn bfloat_str(s: &str) -> Result<Self, String> {
+        let bw = crate::bfloat::BfloatWrapper::parse(s, crate::bfloat::DEFAULT_FPPREC)?;
+        Ok(Expr::Bfloat(bw))
     }
 
     // ── Binary operator constructors ───────────────────────────────
@@ -302,6 +327,12 @@ impl Expr {
         Expr::E
     }
 
+    /// Imaginary unit `i`
+    #[cfg(feature = "complex")]
+    pub fn i() -> Self {
+        Expr::I
+    }
+
     /// Factorial `a!`
     pub fn factorial(a: Expr) -> Self {
         Expr::Factorial(Box::new(a))
@@ -332,21 +363,134 @@ impl Expr {
         Expr::Matrix(mat)
     }
 
+    /// Non-elementary special function constructor.
+    #[cfg(feature = "specfn")]
+    pub fn special_fn(kind: crate::specfn::SpecialFnKind, args: Vec<Expr>) -> Self {
+        Expr::SpecialFn(kind, args)
+    }
+
+    /// `gamma(z)` — Euler Gamma function
+    #[cfg(feature = "specfn")]
+    pub fn gamma(z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::Gamma, vec![z])
+    }
+
+    /// `beta(a, b)` — Euler Beta function
+    #[cfg(feature = "specfn")]
+    pub fn beta(a: Expr, b: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::Beta, vec![a, b])
+    }
+
+    /// `erf(z)` — Gauss Error function
+    #[cfg(feature = "specfn")]
+    pub fn erf(z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::Erf, vec![z])
+    }
+
+    /// `erfc(z)` — Complementary Error function
+    #[cfg(feature = "specfn")]
+    pub fn erfc(z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::Erfc, vec![z])
+    }
+
+    /// `bessel_j(n, z)` — Bessel function of the first kind
+    #[cfg(feature = "specfn")]
+    pub fn bessel_j(n: Expr, z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::BesselJ, vec![n, z])
+    }
+
+    /// `bessel_y(n, z)` — Bessel function of the second kind
+    #[cfg(feature = "specfn")]
+    pub fn bessel_y(n: Expr, z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::BesselY, vec![n, z])
+    }
+
+    /// `bessel_i(n, z)` — Modified Bessel function of the first kind
+    #[cfg(feature = "specfn")]
+    pub fn bessel_i(n: Expr, z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::BesselI, vec![n, z])
+    }
+
+    /// `bessel_k(n, z)` — Modified Bessel function of the second kind
+    #[cfg(feature = "specfn")]
+    pub fn bessel_k(n: Expr, z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::BesselK, vec![n, z])
+    }
+
+    /// `airy_ai(z)` — Airy function of the first kind
+    #[cfg(feature = "specfn")]
+    pub fn airy_ai(z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::AiryAi, vec![z])
+    }
+
+    /// `airy_bi(z)` — Airy function of the second kind
+    #[cfg(feature = "specfn")]
+    pub fn airy_bi(z: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::AiryBi, vec![z])
+    }
+
+    /// `legendre_p(n, x)` — Legendre polynomial
+    #[cfg(feature = "specfn")]
+    pub fn legendre_p(n: Expr, x: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::LegendreP, vec![n, x])
+    }
+
+    /// `chebyshev_t(n, x)` — Chebyshev polynomial of the first kind
+    #[cfg(feature = "specfn")]
+    pub fn chebyshev_t(n: Expr, x: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::ChebyshevT, vec![n, x])
+    }
+
+    /// `chebyshev_u(n, x)` — Chebyshev polynomial of the second kind
+    #[cfg(feature = "specfn")]
+    pub fn chebyshev_u(n: Expr, x: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::ChebyshevU, vec![n, x])
+    }
+
+    /// `hermite_h(n, x)` — Hermite polynomial
+    #[cfg(feature = "specfn")]
+    pub fn hermite_h(n: Expr, x: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::HermiteH, vec![n, x])
+    }
+
+    /// `laguerre_l(n, x)` — Laguerre polynomial
+    #[cfg(feature = "specfn")]
+    pub fn laguerre_l(n: Expr, x: Expr) -> Self {
+        Expr::SpecialFn(crate::specfn::SpecialFnKind::LaguerreL, vec![n, x])
+    }
+
     // ── Introspection ──────────────────────────────────────────────
 
     /// Returns `true` if this expression is the constant zero.
     pub fn is_zero(&self) -> bool {
-        matches!(self, Expr::Const(r) if r.is_zero())
+        match self {
+            Expr::Const(r) => r.is_zero(),
+            #[cfg(feature = "bfloat")]
+            Expr::Bfloat(b) => b.is_zero(),
+            _ => false,
+        }
     }
 
     /// Returns `true` if this expression is the constant one.
     pub fn is_one(&self) -> bool {
-        matches!(self, Expr::Const(r) if r.is_one())
+        match self {
+            Expr::Const(r) => r.is_one(),
+            #[cfg(feature = "bfloat")]
+            Expr::Bfloat(b) => b.is_one(),
+            _ => false,
+        }
     }
 
     /// Returns `true` if this expression is a constant (any value).
     pub fn is_const(&self) -> bool {
-        matches!(self, Expr::Const(_))
+        match self {
+            Expr::Const(_) => true,
+            #[cfg(feature = "bfloat")]
+            Expr::Bfloat(_) => true,
+            #[cfg(feature = "complex")]
+            Expr::I => true,
+            _ => false,
+        }
     }
 
     /// Returns `true` if this expression is a variable.
@@ -375,6 +519,8 @@ impl Expr {
                 vars.insert(name.clone());
             }
             Expr::Const(_) => {}
+            #[cfg(feature = "bfloat")]
+            Expr::Bfloat(_) => {}
             Expr::Add(a, b)
             | Expr::Sub(a, b)
             | Expr::Mul(a, b)
@@ -400,6 +546,8 @@ impl Expr {
                 a.collect_vars(vars);
             }
             Expr::Pi | Expr::E => {}
+            #[cfg(feature = "complex")]
+            Expr::I => {}
             Expr::Tensor(name, _indices) => {
                 vars.insert(name.clone());
             }
@@ -418,6 +566,12 @@ impl Expr {
                     for elem in row {
                         elem.collect_vars(vars);
                     }
+                }
+            }
+            #[cfg(feature = "specfn")]
+            Expr::SpecialFn(_, args) => {
+                for arg in args {
+                    arg.collect_vars(vars);
                 }
             }
         }
@@ -440,6 +594,8 @@ impl Expr {
         match self {
             Expr::Var(name) => env.get(name).copied(),
             Expr::Const(r) => Some(Rat::to_f64(r)),
+            #[cfg(feature = "bfloat")]
+            Expr::Bfloat(b) => Some(b.to_f64()),
             Expr::Add(a, b) => Some(a.eval(env)? + b.eval(env)?),
             Expr::Sub(a, b) => Some(a.eval(env)? - b.eval(env)?),
             Expr::Mul(a, b) => Some(a.eval(env)? * b.eval(env)?),
@@ -473,6 +629,8 @@ impl Expr {
             Expr::Atan(a) => Some(a.eval(env)?.atan()),
             Expr::Pi => Some(std::f64::consts::PI),
             Expr::E => Some(std::f64::consts::E),
+            #[cfg(feature = "complex")]
+            Expr::I => None,
             Expr::Factorial(a) => {
                 let v = a.eval(env)?;
                 if v < 0.0 || v.fract() != 0.0 || v > 170.0 {
@@ -497,6 +655,14 @@ impl Expr {
                 // Symbolic operators and matrices cannot be evaluated directly
                 None
             }
+            #[cfg(feature = "specfn")]
+            Expr::SpecialFn(kind, args) => {
+                if let Some(exact) = kind.eval_exact(args) {
+                    exact.eval(env)
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -506,6 +672,8 @@ impl Expr {
     pub fn node_count(&self) -> usize {
         match self {
             Expr::Var(_) | Expr::Const(_) => 1,
+            #[cfg(feature = "bfloat")]
+            Expr::Bfloat(_) => 1,
             Expr::Add(a, b)
             | Expr::Sub(a, b)
             | Expr::Mul(a, b)
@@ -526,6 +694,8 @@ impl Expr {
             | Expr::Atan(a)
             | Expr::Factorial(a) => 1 + a.node_count(),
             Expr::Pi | Expr::E => 1,
+            #[cfg(feature = "complex")]
+            Expr::I => 1,
             Expr::Tensor(_, _) => 1,
             Expr::Derivative(a, b) | Expr::Integral(a, b) => 1 + a.node_count() + b.node_count(),
             Expr::Sum(a, b, c, d) => {
@@ -538,6 +708,8 @@ impl Expr {
                     .map(|e| e.node_count())
                     .sum::<usize>()
             }
+            #[cfg(feature = "specfn")]
+            Expr::SpecialFn(_, args) => 1 + args.iter().map(|a| a.node_count()).sum::<usize>(),
         }
     }
 }
@@ -548,6 +720,8 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expr::Var(name) => write!(f, "{name}"),
+            #[cfg(feature = "bfloat")]
+            Expr::Bfloat(b) => write!(f, "{b}"),
             Expr::Const(r) => {
                 if r.denom() == &BigInt::from(1) {
                     // Integer constant: display without denominator
@@ -581,6 +755,8 @@ impl fmt::Display for Expr {
             Expr::Atan(a) => write!(f, "atan({a})"),
             Expr::Pi => write!(f, "%pi"),
             Expr::E => write!(f, "%e"),
+            #[cfg(feature = "complex")]
+            Expr::I => write!(f, "%i"),
             Expr::Factorial(a) => write!(f, "({a})!"),
             Expr::Tensor(name, indices) => {
                 write!(f, "{}", name)?;
@@ -610,6 +786,17 @@ impl fmt::Display for Expr {
                     }
                 }
                 write!(f, "]")
+            }
+            #[cfg(feature = "specfn")]
+            Expr::SpecialFn(kind, args) => {
+                write!(f, "{}(", kind.as_str())?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{arg}")?;
+                }
+                write!(f, ")")
             }
         }
     }

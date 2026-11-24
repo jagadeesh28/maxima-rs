@@ -1,0 +1,17 @@
+# Git & IDE metadata
+.git/
+.gitignore
+.agents/
+.gemini/
+.vscode/
+
+# Build artifacts & targets
+target/
+target-dir/
+Cargo.lock
+
+# Documentation & large reference archives
+docs/
+References/
+*.log
+*.tmp
