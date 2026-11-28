@@ -1,4 +1,4 @@
-//! Proptest invariant: every returned root satisfies the equation (Phase 32).
+//! Proptest invariant: every returned root satisfies the equation and root-count is complete (Phase 32 / 53).
 
 use maxima_rs::prelude::*;
 use proptest::prelude::*;
@@ -13,9 +13,24 @@ fn quadratic(r1: i64, r2: i64) -> Expr {
     )
 }
 
-fn root_valid(e: &Expr, r: &Expr) -> bool {
+fn cubic(r1: i64, r2: i64, r3: i64) -> Expr {
+    let x = Expr::var("x");
+    Expr::mul(
+        Expr::mul(
+            Expr::sub(x.clone(), Expr::int(r1)),
+            Expr::sub(x.clone(), Expr::int(r2)),
+        ),
+        Expr::sub(x, Expr::int(r3)),
+    )
+}
+
+fn eval_root(r: &Expr) -> Option<f64> {
     let empty: HashMap<String, f64> = HashMap::new();
-    let Some(rv) = r.eval(&empty) else {
+    r.eval(&empty)
+}
+
+fn root_valid(e: &Expr, r: &Expr) -> bool {
+    let Some(rv) = eval_root(r) else {
         return false;
     };
     let mut env = HashMap::new();
@@ -24,31 +39,46 @@ fn root_valid(e: &Expr, r: &Expr) -> bool {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(256))]
+    #![proptest_config(ProptestConfig::with_cases(500))]
+
     #[test]
-    fn prop_quadratic_roots_back_substitute(r1 in -6i64..=6, r2 in -6i64..=6) {
+    fn prop_quadratic_roots_complete_and_valid(r1 in -12i64..=12, r2 in -12i64..=12) {
         let e = quadratic(r1, r2);
         let sols = solve(&e, "x");
-        prop_assert!(!sols.is_empty());
+        if r1 == r2 {
+            prop_assert!(!sols.is_empty());
+        } else {
+            prop_assert_eq!(sols.0.len(), 2, "expected 2 distinct roots for ({}, {}), got {:?}", r1, r2, sols.0);
+        }
+        let vals: Vec<f64> = sols.0.iter().filter_map(eval_root).collect();
+        prop_assert_eq!(vals.len(), sols.0.len(), "non-numeric root in {:?}", sols.0);
+        prop_assert!(vals.iter().any(|&v| (v - r1 as f64).abs() < 1e-6), "missing root {r1} in {vals:?}");
+        prop_assert!(vals.iter().any(|&v| (v - r2 as f64).abs() < 1e-6), "missing root {r2} in {vals:?}");
         for r in &sols.0 {
             prop_assert!(root_valid(&e, r));
         }
     }
-}
 
-#[test]
-fn deterministic_1000_quadratics() {
-    let mut checked = 0;
-    for r1 in -16..=16 {
-        for r2 in -16..=16 {
-            let e = quadratic(r1, r2);
-            let sols = solve(&e, "x");
-            assert!(!sols.is_empty(), "no roots for ({r1}, {r2})");
-            for r in &sols.0 {
-                assert!(root_valid(&e, r), "invalid root for ({r1}, {r2})");
-            }
-            checked += 1;
+    #[test]
+    fn prop_cubic_distinct_roots_complete(
+        r1 in -6i64..=6,
+        r2 in -6i64..=6,
+        r3 in -6i64..=6
+    ) {
+        prop_assume!(r1 != r2 && r2 != r3 && r1 != r3);
+        let e = cubic(r1, r2, r3);
+        let sols = solve(&e, "x");
+        prop_assert_eq!(
+            sols.0.len(),
+            3,
+            "expected 3 roots for ({}, {}, {}), got {:?}",
+            r1,
+            r2,
+            r3,
+            sols.0
+        );
+        for r in &sols.0 {
+            prop_assert!(root_valid(&e, r));
         }
     }
-    assert!(checked >= 1000, "expected >= 1000 cases, got {checked}");
 }

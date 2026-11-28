@@ -4,6 +4,7 @@ use super::ode::OdeSolution;
 use crate::expr::Expr;
 #[cfg(feature = "integrate")]
 use crate::integrate::{contains_integral, integrate};
+#[cfg(feature = "integrate")]
 use crate::poly::rat::ratsimp;
 
 /// Solve `a(x)·y' + b(x)·y = q(x)` for `y(x)`.

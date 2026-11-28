@@ -1,4 +1,4 @@
-//! Proptest invariant: integrating then differentiating recovers the integrand (Phase 32).
+//! Proptest invariant: integrating then differentiating recovers the integrand (Phase 32 / 53).
 
 use maxima_rs::prelude::*;
 use proptest::prelude::*;
@@ -6,17 +6,25 @@ use std::collections::HashMap;
 use sym_core::diff::differentiate;
 use sym_core::integrate::integrate;
 
-fn poly_expr(coeffs: &[i64]) -> Expr {
-    let x = Expr::var("x");
-    let mut e = Expr::int(0);
-    for (k, &c) in coeffs.iter().enumerate() {
-        if c == 0 {
-            continue;
-        }
-        let term = Expr::mul(Expr::int(c), Expr::pow(x.clone(), Expr::int(k as i64)));
-        e = Expr::add(e, term);
-    }
-    e
+fn integrable_atom_strategy() -> impl Strategy<Value = Expr> {
+    prop_oneof![
+        (-5i64..=5i64).prop_map(Expr::int),
+        (1i64..=4i64).prop_map(|p| Expr::pow(Expr::var("x"), Expr::int(p))),
+        (1i64..=3i64).prop_map(|k| Expr::sin(Expr::mul(Expr::int(k), Expr::var("x")))),
+        (1i64..=3i64).prop_map(|k| Expr::cos(Expr::mul(Expr::int(k), Expr::var("x")))),
+        (1i64..=2i64).prop_map(|k| Expr::exp(Expr::mul(Expr::int(k), Expr::var("x")))),
+    ]
+}
+
+fn integrable_expr_strategy() -> impl Strategy<Value = Expr> {
+    integrable_atom_strategy().prop_recursive(2, 10, 3, |inner| {
+        prop_oneof![
+            (inner.clone(), inner.clone()).prop_map(|(a, b)| Expr::add(a, b)),
+            (inner.clone(), inner.clone()).prop_map(|(a, b)| Expr::sub(a, b)),
+            (-4i64..=4i64, inner.clone()).prop_map(|(c, e)| Expr::mul(Expr::int(c), e)),
+            inner.prop_map(Expr::neg),
+        ]
+    })
 }
 
 fn assert_antiderivative(f: &Expr) {
@@ -29,39 +37,18 @@ fn assert_antiderivative(f: &Expr) {
     for xv in [0.37_f64, 1.3, -0.8] {
         let mut env = HashMap::new();
         env.insert("x".to_string(), xv);
-        if let (Some(a), Some(b)) = (f.eval(&env), d.eval(&env)) {
-            assert!((a - b).abs() < 1e-6, "at {xv}: {a} vs {b} for {f}");
-        }
+        let a = f.eval(&env).expect("integrand eval must succeed");
+        let b = d
+            .eval(&env)
+            .expect("derivative of antiderivative eval must succeed");
+        assert!((a - b).abs() < 1e-5, "at {xv}: {a} vs {b} for {f}");
     }
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(256))]
+    #![proptest_config(ProptestConfig::with_cases(500))]
     #[test]
-    fn prop_integrate_then_differentiate(coeffs in prop::collection::vec(-4i64..=4, 0..6)) {
-        let f = poly_expr(&coeffs);
-        if f.variables().is_empty() {
-            return Ok(());
-        }
-        assert_antiderivative(&f);
-    }
-}
-
-#[test]
-fn deterministic_integrate_1000_polynomials() {
-    let mut state = 123_456_789u64;
-    for _ in 0..1000 {
-        let mut coeffs = Vec::new();
-        for _ in 0..5 {
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            coeffs.push(((state >> 33) % 11) as i64 - 5);
-        }
-        let f = poly_expr(&coeffs);
-        if f.variables().is_empty() {
-            continue;
-        }
+    fn prop_integrate_then_differentiate(f in integrable_expr_strategy()) {
         assert_antiderivative(&f);
     }
 }

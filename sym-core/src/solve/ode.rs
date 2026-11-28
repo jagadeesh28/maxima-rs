@@ -201,7 +201,13 @@ fn solve_second_nonhomogeneous(
     let dy2 = differentiate(&y2, x);
     let w = Expr::sub(Expr::mul(y1.clone(), dy2), Expr::mul(y2.clone(), dy1));
     #[cfg(feature = "egraph")]
-    let w_simp = crate::pipeline::optimize(&w, &crate::saturate::SaturationConfig::default());
+    let w_simp = {
+        let (eg, r) = crate::saturate::saturate(
+            std::slice::from_ref(&w),
+            &crate::saturate::SaturationConfig::default(),
+        );
+        crate::extract::extract_single(&eg, r[0])
+    };
     #[cfg(not(feature = "egraph"))]
     let w_simp = ratsimp(&w).unwrap_or(w);
     if w_simp.is_zero() {

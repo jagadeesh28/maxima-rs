@@ -273,7 +273,10 @@ fn integrate_core(expr: &Expr, var: &str, assumptions: Option<&Assumptions>) -> 
 }
 
 #[cfg(not(feature = "assume"))]
-fn integrate_core(expr: &Expr, var: &str, _assumptions: Option<()>) -> Expr {
+fn integrate_core(expr: &Expr, var: &str, assumptions: Option<()>) -> Expr {
+    if crate::cancel::is_cancelled() {
+        return noun(expr, var);
+    }
     if is_constant_wrt(expr, var) {
         return Expr::mul(expr.clone(), Expr::var(var));
     }

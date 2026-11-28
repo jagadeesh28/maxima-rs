@@ -15,10 +15,10 @@ saturation engine that generates zero-overhead optimized Rust code via procedura
 
 | File | Purpose |
 |------|---------|
-| [`agents.md`](file:///e:/Rust/Max/agents.md) | Full phased implementation plan (Phases 1–21) |
-| [`GLOSSARY.md`](file:///e:/Rust/Max/GLOSSARY.md) | Canonical domain vocabulary (20 terms) |
-| [`docs/adr/`](file:///e:/Rust/Max/docs/adr) | 5 Architecture Decision Records (ADR-0003 superseded by ADR-0005) |
-| [`References/maxima-master.zip`](file:///e:/Rust/Max/References/maxima-master.zip) | Maxima Common Lisp reference source |
+| [`AGENTS.md`](AGENTS.md) | Full phased implementation plan (Phases 1–21) |
+| [`GLOSSARY.md`](GLOSSARY.md) | Canonical domain vocabulary (20 terms) |
+| [`docs/adr/`](docs/adr) | 5 Architecture Decision Records (ADR-0003 superseded by ADR-0005) |
+| [`References/maxima-master.zip`](References/maxima-master.zip) | Maxima Common Lisp reference source |
 
 ---
 
@@ -50,11 +50,11 @@ saturation engine that generates zero-overhead optimized Rust code via procedura
 | 26 | Citation format | Structured `RuleProvenance` metadata + rustdoc comments | R2 |
 | 27 | `optimize()` API shape | Both free functions (`optimize`, `optimize_gradient`) AND fluent `Pipeline` builder | R3 |
 | 28 | Parser library | `winnow = "0.7"` for high performance and clean parser combinator errors | R3 |
-| 29 | Phase plan | Clean renumber to 12-phase roadmap in `agents.md` | R3 |
+| 29 | Phase plan | Clean renumber to 12-phase roadmap in `AGENTS.md` | R3 |
 
 ### ADRs Updated
-- Added [`docs/adr/0005-systematic-maxima-rule-coverage.md`](file:///e:/Rust/Max/docs/adr/0005-systematic-maxima-rule-coverage.md)
-- Marked [`docs/adr/0003-hand-curated-rewrite-rules.md`](file:///e:/Rust/Max/docs/adr/0003-hand-curated-rewrite-rules.md) as superseded
+- Added [`docs/adr/0005-systematic-maxima-rule-coverage.md`](docs/adr/0005-systematic-maxima-rule-coverage.md)
+- Marked [`docs/adr/0003-hand-curated-rewrite-rules.md`](docs/adr/0003-hand-curated-rewrite-rules.md) as superseded
 
 ---
 
@@ -62,7 +62,7 @@ saturation engine that generates zero-overhead optimized Rust code via procedura
 
 When starting a new session, instruct the AI:
 
-> Read `SESSION_LOG.md` and `agents.md` from `e:\Rust\Max\` to restore context.
+> Read `SESSION_LOG.md` and `AGENTS.md` from `e:\Rust\Max\` to restore context.
 > Continue from the current phase marker below.
 
 ### Cargo Feature Groupings
@@ -147,8 +147,8 @@ When starting a new session, instruct the AI:
 
 ### Session Rules & Protocol
 
-1. **README Rule**: Actively update [`README.md`](file:///e:/Rust/Max/README.md) after completing each phase (updating the Current Status table and relevant examples).
-2. **Session Log Rule**: Update [`SESSION_LOG.md`](file:///e:/Rust/Max/SESSION_LOG.md) phase tracker and notes at each milestone.
+1. **README Rule**: Actively update [`README.md`](README.md) after completing each phase (updating the Current Status table and relevant examples).
+2. **Session Log Rule**: Update [`SESSION_LOG.md`](SESSION_LOG.md) phase tracker and notes at each milestone.
 3. **Clippy & Formatting Rule**: Run `cargo clippy --all-targets --all-features -- -D warnings` and `cargo fmt` before completing any phase.
 
 
@@ -161,27 +161,27 @@ When starting a new session, instruct the AI:
 
 ### Summary of Deliverables Built
 1. **Phase 3 (E-Graph & 1:1 Maxima Rules)**:
-   - Defined [`egg::Language`](file:///e:/Rust/Max/sym-core/src/lang.rs) (`MathLang`) and constant analysis (`MathAnalysis`).
-   - Implemented [`RuleProvenance`](file:///e:/Rust/Max/sym-core/src/provenance.rs) registry and structured metadata citing Maxima Common LISP files (`simp.lisp`, `trigi.lisp`, `combin.lisp`, `logarc.lisp`).
-   - Implemented 52 rewrite rules across [`rules/arithmetic.rs`](file:///e:/Rust/Max/sym-core/src/rules/arithmetic.rs), [`rules/trigonometric.rs`](file:///e:/Rust/Max/sym-core/src/rules/trigonometric.rs), [`rules/exponential.rs`](file:///e:/Rust/Max/sym-core/src/rules/exponential.rs), and [`rules/logarithmic.rs`](file:///e:/Rust/Max/sym-core/src/rules/logarithmic.rs).
+   - Defined [`egg::Language`](sym-core/src/lang.rs) (`MathLang`) and constant analysis (`MathAnalysis`).
+   - Implemented [`RuleProvenance`](sym-core/src/provenance.rs) registry and structured metadata citing Maxima Common LISP files (`simp.lisp`, `trigi.lisp`, `combin.lisp`, `logarc.lisp`).
+   - Implemented 52 rewrite rules across [`rules/arithmetic.rs`](sym-core/src/rules/arithmetic.rs), [`rules/trigonometric.rs`](sym-core/src/rules/trigonometric.rs), [`rules/exponential.rs`](sym-core/src/rules/exponential.rs), and [`rules/logarithmic.rs`](sym-core/src/rules/logarithmic.rs).
 2. **Phase 4 (Cost, Saturation, Extraction)**:
-   - Implemented [`FlopCost`](file:///e:/Rust/Max/sym-core/src/cost.rs) weighting constants and operations to extract minimal-computation expressions.
-   - Configured [`saturate`](file:///e:/Rust/Max/sym-core/src/saturate.rs) and [`extract`](file:///e:/Rust/Max/sym-core/src/extract.rs) with multi-root support.
+   - Implemented [`FlopCost`](sym-core/src/cost.rs) weighting constants and operations to extract minimal-computation expressions.
+   - Configured [`saturate`](sym-core/src/saturate.rs) and [`extract`](sym-core/src/extract.rs) with multi-root support.
 3. **Phase 5 (CSE Post-Pass)**:
-   - Implemented DAG-based subterm identification and topological let-binding generation in [`sym-core/src/cse.rs`](file:///e:/Rust/Max/sym-core/src/cse.rs).
+   - Implemented DAG-based subterm identification and topological let-binding generation in [`sym-core/src/cse.rs`](sym-core/src/cse.rs).
 4. **Phase 6 (Codegen)**:
-   - Implemented TokenStream code generator in [`sym-core/src/codegen.rs`](file:///e:/Rust/Max/sym-core/src/codegen.rs) emitting flat `let` bindings for `f32` and `f64`.
+   - Implemented TokenStream code generator in [`sym-core/src/codegen.rs`](sym-core/src/codegen.rs) emitting flat `let` bindings for `f32` and `f64`.
 5. **Phase 7 (Multi-Format Parsers)**:
-   - Implemented `winnow = "0.7"` parsers for Maxima strings ([`parser/maxima.rs`](file:///e:/Rust/Max/sym-core/src/parser/maxima.rs)) and LaTeX scalar math formulas ([`parser/latex.rs`](file:///e:/Rust/Max/sym-core/src/parser/latex.rs)).
+   - Implemented `winnow = "0.7"` parsers for Maxima strings ([`parser/maxima.rs`](sym-core/src/parser/maxima.rs)) and LaTeX scalar math formulas ([`parser/latex.rs`](sym-core/src/parser/latex.rs)).
 6. **Phase 8 (High-Level API & Pipeline Builder)**:
-   - Implemented free functions `optimize()` / `optimize_gradient()` and fluent builder `Pipeline` in [`sym-core/src/pipeline.rs`](file:///e:/Rust/Max/sym-core/src/pipeline.rs).
+   - Implemented free functions `optimize()` / `optimize_gradient()` and fluent builder `Pipeline` in [`sym-core/src/pipeline.rs`](sym-core/src/pipeline.rs).
 7. **Phase 9 (Proc-Macro Crate `sym-macros`)**:
-   - Implemented `sym_fn!` and `sym_eval!` in [`sym-macros`](file:///e:/Rust/Max/sym-macros/src/lib.rs) with span-preserving error diagnostics and attributes parsing (`fast_math`, `node_limit`, `time_limit_ms`).
+   - Implemented `sym_fn!` and `sym_eval!` in [`sym-macros`](sym-macros/src/lib.rs) with span-preserving error diagnostics and attributes parsing (`fast_math`, `node_limit`, `time_limit_ms`).
 8. **Phase 10 (Facade Crate `maxima-rs` & Prelude)**:
-   - Re-exported all feature-gated functionality and exposed [`prelude`](file:///e:/Rust/Max/maxima-rs/src/prelude.rs).
+   - Re-exported all feature-gated functionality and exposed [`prelude`](maxima-rs/src/prelude.rs).
 9. **Phase 11 (Testing Infrastructure & Coverage)**:
-   - Created test suite package [`maxima-tests`](file:///e:/Rust/Max/tests/Cargo.toml) with 9 integration suites and 2 proptest suites.
-   - Implemented automated 1:1 Maxima citation verification in [`tests/integration/maxima_coverage.rs`](file:///e:/Rust/Max/tests/integration/maxima_coverage.rs).
+   - Created test suite package [`maxima-tests`](tests/Cargo.toml) with 9 integration suites and 2 proptest suites.
+   - Implemented automated 1:1 Maxima citation verification in [`tests/integration/maxima_coverage.rs`](tests/integration/maxima_coverage.rs).
 10. **Phase 12 (Polish & Verification)**:
     - Workspace clean build, all tests passed, 0 clippy warnings (`-D warnings`), code formatted with `cargo fmt`.
 
@@ -194,7 +194,7 @@ When starting a new session, instruct the AI:
 
 ### Deliverables Built
 - Added `tensor` feature to `sym-core`.
-- Defined `Index` and `IndexType` (Covariant/Contravariant) in [`sym-core/src/tensor.rs`](file:///e:/Rust/Max/sym-core/src/tensor.rs).
+- Defined `Index` and `IndexType` (Covariant/Contravariant) in [`sym-core/src/tensor.rs`](sym-core/src/tensor.rs).
 - Added `Tensor(String, Vec<Index>)` variant to the `Expr` AST.
 - Implemented serialization of `Tensor` into `egg::Symbol` string format (`"T|<name>,C|<idx>,U|<idx>"`) for e-graph compatibility.
 - Integrated `Tensor` across all passes: `MathLang` representation, cost evaluation, CSE counting, differentiation (0-tensor stub), and token emission (`T_cov_idx`).
@@ -226,7 +226,7 @@ When starting a new session, instruct the AI:
 **Scope**: Restore the `maxima-web` UI and deepen 1:1 Maxima LISP rule/AST/parser parity.
 
 ### Plan (committed first)
-- Added `Roadmap — Phases 14–21` to `agents.md` and a matching roadmap table to `README.md`.
+- Added `Roadmap — Phases 14–21` to `AGENTS.md` and a matching roadmap table to `README.md`.
 - Commit: `docs(plan): add Phases 14-21 roadmap for WebUI restoration and Maxima parity`.
 
 ### Phase 14 — WebUI Correctness ✅
@@ -319,7 +319,7 @@ When starting a new session, instruct the AI:
   Phases 14–21 roadmap all ✅.
 - `GLOSSARY.md`: added Hyperbolic Function Node, Inverse Trigonometric Node, Factorial
   Simplification, Rational Normalization, Named Constant, Matrix Symbol Encoding, Rule Coverage API.
-- `agents.md`: Phase 21 marked complete.
+- `AGENTS.md`: Phase 21 marked complete.
 - Final verification (2026-11-22):
   - `cargo fmt --all` — clean.
   - `cargo clippy --workspace --all-targets --all-features -- -D warnings` — clean.
@@ -367,7 +367,7 @@ When starting a new session, instruct the AI:
 ### Artifacts Created & Updated
 - **ADR Created**: [`docs/adr/0006-hybrid-egraph-and-procedural-cas.md`](docs/adr/0006-hybrid-egraph-and-procedural-cas.md) — Accepted.
 - **GLOSSARY Extended**: Added 6 canonical CAS terms (*Sparse Distributed Multivariate Polynomial*, *Procedural CAS Algorithm*, *Ratsimp*, *Hermite Reduction*, *Rothstein-Trager / LRT*, *Gruntz Limit Algorithm*).
-- **Plan Committed**: Added detailed Phase 22–32 specifications to [`agents.md`](agents.md).
+- **Plan Committed**: Added detailed Phase 22–32 specifications to [`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -772,8 +772,8 @@ When starting a new session, instruct the AI:
 - **ADR-0010**: Added first-class zero-allocation `Expr::I` atom in `Expr` AST enum ($I^2 \leftrightarrow -1$), canonical complex decompositions (`rectform`, `polarform`, `residue`), and selected the **Bareiss fraction-free LU algorithm** (`newdet.lisp`) for symbolic matrix determinants, adjoint inverses, and characteristic polynomials.
 - **ADR-0011**: Added consolidated `Expr::SpecialFn(SpecialFnKind, Vec<Expr>)` enum variant for non-elementary special functions ($\Gamma, \beta, \text{erf}$, Bessel, Airy, orthogonal polynomials) with table-driven differentiation/limits. Structured operational Laplace transforms (`laplace`, `ilt`) with `partfrac` pole decomposition, and implemented a thread-safe, immutable, scoped `Assumptions` context (inequality DAG) for `assume`, `forget`, `is`, `asksign`, `csign`.
 **Documentation & Plans Updated**:
-- [`GLOSSARY.md`](file:///e:/Rust/Max/GLOSSARY.md): Added `Core Mathematical Parity`, `Bfloat (Arbitrary-Precision Float)`, `Bareiss Algorithm`, `Complex Rectangular Form (rectform)`, `Imaginary Unit Atom (Expr::I)`, `Special Function Node (Expr::SpecialFn)`, `Operational Laplace Transform`, and `Scoped Assumptions Context`.
-- [`agents.md`](file:///e:/Rust/Max/agents.md): Extended Cargo Feature Architecture and file tree; added detailed phase specifications for **Phases 39 through 45** with strict testing gates (Gates 0–3) and 1:1 Maxima LISP citations.
+- [`GLOSSARY.md`](GLOSSARY.md): Added `Core Mathematical Parity`, `Bfloat (Arbitrary-Precision Float)`, `Bareiss Algorithm`, `Complex Rectangular Form (rectform)`, `Imaginary Unit Atom (Expr::I)`, `Special Function Node (Expr::SpecialFn)`, `Operational Laplace Transform`, and `Scoped Assumptions Context`.
+- [`AGENTS.md`](AGENTS.md): Extended Cargo Feature Architecture and file tree; added detailed phase specifications for **Phases 39 through 45** with strict testing gates (Gates 0–3) and 1:1 Maxima LISP citations.
 
 ---
 
@@ -1247,6 +1247,29 @@ When starting a new session, instruct the AI:
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
 - `cargo test --workspace --all-features` (exit 0)
 - `docs/audits/PHASE52_REPORT.md` compiled.
+
+---
+
+## Session 53 — Automated Maxima 5.50 `.mac` Golden Harness, Fuzzing & Release Readiness (Phase 53)
+
+**Date**: 2026-11-28  
+**Scope**: Completed Phase 53 across `tests/integration/{golden_parity,web_hardening}.rs`, `tests/proptest/*.rs`, `sym-core/src/integrate/mod.rs`, `docs/audits/{PARITY_SCOREBOARD,PHASE53_REPORT}.md`, `README.md`, and `SESSION_LOG.md`.
+
+### Deliverables Built
+1. **Upstream `.mac` Golden Harness (`tests/integration/golden_parity.rs`)**: Executed 927 test pairs across 10 Maxima 5.50 `.mac` suites (`rtest1`, `rtest_trig`, `rtest_integrate`, `rtest_limit`, `rtest_taylor`, `rtest_carg`, `rtest_sign`, `rtest_laplace`, `rtestode`, `rtest_algsys`), generating `docs/audits/PARITY_SCOREBOARD.md`.
+2. **Recursive AST Proptest Fuzzing (`tests/proptest/*.rs`)**: Upgraded all 5 proptest suites to 500-case recursive AST strategies with quadratic/cubic root-count completeness assertions.
+3. **JSON Contracts & 19-Feature Isolation (`tests/integration/web_hardening.rs`, `sym-core/src/integrate/mod.rs`)**: Added `test_phase53_json_schema_contracts` and fixed `integrate_core` `#[cfg(not(feature = "assume"))]` isolation.
+4. **Documentation & ADR-0012 Sync (`README.md`, `SESSION_LOG.md`)**: Synced `v0.2.0`, updated status table through Phase 53, and eliminated all `file:///` links and stale `agents.md` references.
+
+### Passing Gate Verification
+- `cargo fmt --all -- --check` (exit 0)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo test --workspace --all-features` (exit 0)
+- `cargo test -p sym-core --all-features --doc` (exit 0: 17 passed)
+- 19-feature isolation matrix on `sym-core` (exit 0)
+- `E:\Anaconda\python.exe scripts/verify_css_classes.py` (exit 0)
+- `node --check maxima-web/static/js/*.js` (exit 0)
+- `docs/audits/PHASE53_REPORT.md` compiled.
 
 
 

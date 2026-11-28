@@ -6,7 +6,7 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 
 ---
 
-## Current Status: Phase 45 Complete ✅ (v0.5.0)
+## Current Status: Phase 53 Complete ✅ (v0.2.0)
 
 | Phase | Feature | Status | Summary |
 |-------|---------|--------|---------|
@@ -37,7 +37,7 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 ### Roadmap: Phases 14–21 (planned)
 
 The next workstream restores the WebUI and deepens **1:1 parity with Maxima LISP sources**.
-The detailed requirements live in [`agents.md`](file:///e:/Rust/Max/agents.md).
+The detailed requirements live in [`AGENTS.md`](AGENTS.md).
 
 | Phase | Workstream | Status | Summary |
 |-------|-----------|--------|---------|
@@ -82,7 +82,15 @@ Expanding maxima-rs into a high-performance Computer Algebra System rivaling Wol
 | 42 | Special Functions & Table Dispatch | `specfn` | ✅ Completed | Non-elementary special functions ($\Gamma, \beta, \text{erf}, \text{erfc}$, Bessel $J, Y, I, K$, Airy $\text{Ai}, \text{Bi}$, orthogonal polynomials $P_n, T_n, U_n, H_n, L_n$) with table-driven differentiation |
 | 43 | Operational Laplace Transforms & ODE Initial Values | `transform` | ✅ Completed | Operational forward Laplace (`laplace`), inverse Laplace (`ilt`), frequency shift, multiplier, derivative rules, and IVP/BVP solvers (`ic1`, `ic2`, `bc2`, `ic1_ode`, `ic2_ode`, `bc2_ode`) |
 | 44 | Scoped Deductive Inference & Assumptions Context | `assume` | ✅ Completed | Thread-safe `Assumptions` context, inequality DAG inference, interval bound propagation, sign deduction (`csign`, `asksign`), predicate evaluation (`is`), domain properties (`PropertyKind`), and reversibility (`forget`) |
-| 45 | Maxima 5.50 Parity Test Suite & Golden Verification | `tests` | ✅ Completed | Full upstream golden test suite ported from Maxima 5.50 (`rtest_integrate`, `rtest_limit`, `rtest_taylor`, `rtest_solve`, `rtest_laplace`, `rtest_bessel`), 100% test pass rate across workspace |
+| 45 | Maxima 5.50 Parity Test Suite & Golden Verification | `tests` | ✅ Completed | Upstream golden test suite ported from Maxima 5.50 (`rtest_integrate`, `rtest_limit`, `rtest_taylor`, `rtest_solve`, `rtest_laplace`, `rtest_bessel`) |
+| 46 | Security, Build/CI Integrity & WebUI Contract Hotfixes | `maxima-web`/`ci`/`cargo` | ✅ Completed | DOM XSS elimination, CSP/nosniff/DENY headers, `/api/parse` isolation, TOML/CLI precedence, `fast_math`/`float_type`/bounds, `[workspace.dependencies]`, `tensor` feature |
+| 47 | E-Graph Soundness, Core Numbers, Parsers, Codegen & Macros | `sym-core`/`sym-macros` | ✅ Completed | `egg::Condition` singularity guards & Maxima `SimpFlags`, `Rat`/`bfloat`/`Expr` hardening, UTF-8/depth/precedence parsers, `cse`/`codegen`/`sym-macros` fixes |
+| 48 | Assumptions, Complex Analysis & Multivariate Poly/Rat Parity | `assume`/`complex`/`poly` | ✅ Completed | Normalized inequality DAG + `csign`, `Abs`/`Atan2` 4-quadrant `carg`/`cabs`, multivariate `poly_gcd`, Cantor-Zassenhaus/Hensel `factor`, `partfrac`, kernel `ratsimp` |
+| 49 | Calculus Engine Overhaul (`diff`, `series`, `limit`, `integrate`, `defint`) | `diff`/`series`/`limit`/`integrate` | ✅ Completed | `diff(u!,x)` + FTC, exact Laurent truncation, Gruntz MRV + L'Hôpital, Hermite + LRT + Risch + `defint` pole checks |
+| 50 | Solvers, Linear Algebra, SpecFn, Transforms & Web Wiring | `solve`/`matrix`/`specfn`/`transform` | ✅ Completed | Complex/parametric/ODE solvers, multivariate Bareiss + $O(n^3)$ adjoint, `laplace`/`ilt` nouns, `orthopoly <= 100`, full WebUI dispatch |
+| 51 | Newbie-First UI/UX, Stateless `session_context` & A11y | `maxima-web` | ✅ Completed | Client-carried `SessionContext` (`%`, `%oN`, `a: expr`, `assume`/`forget`/`kill(all)`), 12-card onboarding, LaTeX auto-detect, `error_span` + Fix-It, WCAG AA & ARIA |
+| 52 | Maxima 5.50 Language Parity & Cooperative Cancellation | `sym-core`/`maxima-web` | ✅ Completed | `CancelToken` + 8 MB worker stacks, `**`/`=`/`[...]`/noun `'`, `trigexpand`/`trigreduce`/`trigsimp`/`radcan`/`demoivre`/`exponentialize`/`subst`/`float`/`divide`/`num`/`denom`/`sum`/`product`, directional `limit` |
+| 53 | Upstream `.mac` Golden Harness, AST Fuzzing & Release | `tests`/`docs` | ✅ Completed | 927-case `.mac` golden harness (`docs/audits/PARITY_SCOREBOARD.md`), recursive AST proptests (500 cases), JSON schema contracts, ADR-0012 doc sync |
 
 
 ---
@@ -186,14 +194,14 @@ Current registry: **92 rules across 7 Maxima LISP files** (also exposed live via
 
 ## Workspace Structure
 
-- [`sym-core`](file:///e:/Rust/Max/sym-core/) — Core engine: expression AST, rational constants, differentiation, e-graph rules, cost function, CSE, codegen.
-- [`sym-macros`](file:///e:/Rust/Max/sym-macros/) — Procedural macro implementation (`sym_fn!`, `sym_eval!`).
-- [`maxima-rs`](file:///e:/Rust/Max/maxima-rs/) — Public facade crate re-exporting the engine and macros.
-- [`maxima-web`](file:///e:/Rust/Max/maxima-web/) — Interactive browser WebUI & JSON compute API (built with Axum).
-- [`docs/adr/`](file:///e:/Rust/Max/docs/adr/) — Architectural Decision Records.
-- [`GLOSSARY.md`](file:///e:/Rust/Max/GLOSSARY.md) — Canonical domain vocabulary.
-- [`agents.md`](file:///e:/Rust/Max/agents.md) — Phased implementation plan.
-- [`SESSION_LOG.md`](file:///e:/Rust/Max/SESSION_LOG.md) — Cross-session context log.
+- [`sym-core`](sym-core/) — Core engine: expression AST, rational constants, differentiation, e-graph rules, cost function, CSE, codegen.
+- [`sym-macros`](sym-macros/) — Procedural macro implementation (`sym_fn!`, `sym_eval!`).
+- [`maxima-rs`](maxima-rs/) — Public facade crate re-exporting the engine and macros.
+- [`maxima-web`](maxima-web/) — Interactive browser WebUI & JSON compute API (built with Axum).
+- [`docs/adr/`](docs/adr/) — Architectural Decision Records.
+- [`GLOSSARY.md`](GLOSSARY.md) — Canonical domain vocabulary.
+- [`AGENTS.md`](AGENTS.md) — Phased implementation plan & operating manual.
+- [`SESSION_LOG.md`](SESSION_LOG.md) — Cross-session context log.
 
 ---
 

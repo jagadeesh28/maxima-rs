@@ -54,10 +54,12 @@ proptest! {
         env.insert("y".to_string(), 2.0);
         env.insert("z".to_string(), 0.5);
 
-        if let (Some(v1), Some(v2)) = (orig.eval(&env), parsed.eval(&env))
+        if let Some(v1) = orig.eval(&env)
             && v1.is_finite()
-            && v2.is_finite()
         {
+            let v2 = parsed
+                .eval(&env)
+                .expect("parsed Maxima expression must evaluate when original evaluates");
             prop_assert!(
                 (v1 - v2).abs() < 1e-6,
                 "Numerical divergence: orig={}, parsed={}, text={}",

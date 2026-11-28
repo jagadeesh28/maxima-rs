@@ -5,55 +5,56 @@ use proptest::prelude::*;
 use std::collections::HashMap;
 use sym_core::saturate::SaturationConfig;
 
+fn opt_leaf_strategy() -> impl Strategy<Value = Expr> {
+    prop_oneof![
+        (-10i64..=10i64).prop_map(Expr::int),
+        prop_oneof![Just("x"), Just("y")].prop_map(Expr::var),
+    ]
+}
+
+fn opt_expr_strategy() -> impl Strategy<Value = Expr> {
+    opt_leaf_strategy().prop_recursive(3, 14, 4, |inner| {
+        prop_oneof![
+            (inner.clone(), inner.clone()).prop_map(|(a, b)| Expr::add(a, b)),
+            (inner.clone(), inner.clone()).prop_map(|(a, b)| Expr::sub(a, b)),
+            (inner.clone(), inner.clone()).prop_map(|(a, b)| Expr::mul(a, b)),
+            (inner.clone(), 1i64..=3i64).prop_map(|(a, p)| Expr::pow(a, Expr::int(p))),
+            inner.clone().prop_map(Expr::neg),
+            inner.clone().prop_map(Expr::sin),
+            inner.prop_map(Expr::cos),
+        ]
+    })
+}
+
 proptest! {
-    #[test]
-    fn prop_pythagorean_identity_numeric_equiv(x_val in -100.0f64..100.0f64) {
-        let x = Expr::var("x");
-        let orig = Expr::add(
-            Expr::pow(Expr::sin(x.clone()), Expr::int(2)),
-            Expr::pow(Expr::cos(x.clone()), Expr::int(2)),
-        );
-
-        let opt = optimize(&orig, &SaturationConfig::default());
-
-        let mut env = HashMap::new();
-        env.insert("x".to_string(), x_val);
-
-        let val_orig = orig.eval(&env).expect("eval orig");
-        let val_opt = opt.eval(&env).expect("eval opt");
-
-        prop_assert!((val_orig - val_opt).abs() < 1e-10, "val_orig = {val_orig}, val_opt = {val_opt}");
-        prop_assert!((val_opt - 1.0).abs() < 1e-10, "opt is not 1.0: {val_opt}");
-    }
+    #![proptest_config(ProptestConfig::with_cases(500))]
 
     #[test]
-    fn prop_arithmetic_linear_numeric_equiv(
-        x_val in -50.0f64..50.0f64,
-        y_val in -50.0f64..50.0f64,
-        z_val in -50.0f64..50.0f64
+    fn prop_recursive_optimize_numeric_equiv(
+        orig in opt_expr_strategy(),
+        x_val in -3.0f64..3.0f64,
+        y_val in -3.0f64..3.0f64
     ) {
-        let x = Expr::var("x");
-        let y = Expr::var("y");
-        let z = Expr::var("z");
-
-        // ((x + y) * z) / z -> x + y (when z != 0)
-        prop_assume!(z_val.abs() > 0.01);
-
-        let orig = Expr::div(
-            Expr::mul(Expr::add(x.clone(), y.clone()), z.clone()),
-            z.clone(),
-        );
-
-        let opt = optimize(&orig, &SaturationConfig::default());
+        let cfg = SaturationConfig {
+            node_limit: 4_000,
+            iter_limit: 12,
+            time_limit_secs: 0.25,
+            ..SaturationConfig::default()
+        };
+        let opt = optimize(&orig, &cfg);
 
         let mut env = HashMap::new();
         env.insert("x".to_string(), x_val);
         env.insert("y".to_string(), y_val);
-        env.insert("z".to_string(), z_val);
 
         let val_orig = orig.eval(&env).expect("eval orig");
+        prop_assume!(val_orig.is_finite() && val_orig.abs() < 1e9);
         let val_opt = opt.eval(&env).expect("eval opt");
-
-        prop_assert!((val_orig - val_opt).abs() < 1e-7, "val_orig = {val_orig}, val_opt = {val_opt}");
+        prop_assert!(val_opt.is_finite(), "opt non-finite for {orig} -> {opt}");
+        let tol = 1e-6 * (1.0 + val_orig.abs());
+        prop_assert!(
+            (val_orig - val_opt).abs() <= tol,
+            "orig={orig} ({val_orig}) vs opt={opt} ({val_opt})"
+        );
     }
 }

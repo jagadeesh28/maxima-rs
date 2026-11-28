@@ -356,3 +356,302 @@ fn golden_maxima_rtest_bessel_and_specfn() {
     assert_eq!(chebyshev_t_poly(0, &x), Expr::int(1));
     assert_eq!(chebyshev_t_poly(1, &x), x);
 }
+
+// =========================================================================
+// 7. Automated Upstream Maxima 5.50 .mac Golden Harness (Phase 53)
+// =========================================================================
+
+fn strip_maxima_comments(src: &str) -> String {
+    let normalized = src.replace("\r\n", "\n");
+    let mut out = String::with_capacity(normalized.len());
+    let bytes = normalized.as_bytes();
+    let mut i = 0;
+    let mut comment_depth = 0usize;
+    let mut in_str = false;
+
+    while i < bytes.len() {
+        if in_str {
+            let ch = normalized[i..].chars().next().unwrap_or('\0');
+            out.push(ch);
+            if ch == '\\' && i + 1 < bytes.len() {
+                let next_ch = normalized[i + 1..].chars().next().unwrap_or('\0');
+                out.push(next_ch);
+                i += ch.len_utf8() + next_ch.len_utf8();
+                continue;
+            }
+            if ch == '"' {
+                in_str = false;
+            }
+            i += ch.len_utf8();
+            continue;
+        }
+        if normalized[i..].starts_with("/*") {
+            comment_depth += 1;
+            i += 2;
+            continue;
+        }
+        if comment_depth > 0 {
+            if normalized[i..].starts_with("*/") {
+                comment_depth -= 1;
+                i += 2;
+            } else {
+                let ch = normalized[i..].chars().next().unwrap_or(' ');
+                i += ch.len_utf8();
+            }
+            continue;
+        }
+        let ch = normalized[i..].chars().next().unwrap_or('\0');
+        if ch == '"' {
+            in_str = true;
+        }
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
+fn split_maxima_statements(src: &str) -> Vec<String> {
+    let cleaned = strip_maxima_comments(src);
+    let mut stmts = Vec::new();
+    let mut cur = String::new();
+    let mut paren_depth = 0i32;
+    let mut bracket_depth = 0i32;
+    let mut in_str = false;
+    let mut prev_escape = false;
+
+    for ch in cleaned.chars() {
+        if in_str {
+            cur.push(ch);
+            if prev_escape {
+                prev_escape = false;
+            } else if ch == '\\' {
+                prev_escape = true;
+            } else if ch == '"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => {
+                in_str = true;
+                cur.push(ch);
+            }
+            '(' => {
+                paren_depth += 1;
+                cur.push(ch);
+            }
+            ')' => {
+                paren_depth -= 1;
+                cur.push(ch);
+            }
+            '[' => {
+                bracket_depth += 1;
+                cur.push(ch);
+            }
+            ']' => {
+                bracket_depth -= 1;
+                cur.push(ch);
+            }
+            ';' | '$' if paren_depth == 0 && bracket_depth == 0 => {
+                let trimmed = cur.trim().to_string();
+                if !trimmed.is_empty() {
+                    stmts.push(trimmed);
+                }
+                cur.clear();
+            }
+            _ => cur.push(ch),
+        }
+    }
+    stmts
+}
+
+fn is_setup_statement(stmt: &str) -> bool {
+    let t = stmt.trim();
+    t.starts_with("kill(")
+        || t.starts_with("remvalue(")
+        || t.starts_with("reset(")
+        || t.starts_with("declare(")
+        || t.starts_with("assume(")
+        || t.starts_with("forget(")
+        || t.starts_with("load(")
+        || t.starts_with("errcatch(")
+        || t == "done"
+}
+
+fn exprs_equivalent(actual: &Expr, expected: &Expr) -> bool {
+    if actual == expected {
+        return true;
+    }
+    let diff = Expr::sub(actual.clone(), expected.clone());
+    if let Ok(rat) = ratsimp(&diff)
+        && rat.is_zero()
+    {
+        return true;
+    }
+    let vars = diff.variables();
+    if vars.len() > 4 {
+        return false;
+    }
+    let pts = [-1.7_f64, -0.5, 0.3, 1.1, 2.3];
+    let mut matched = 0usize;
+    for (idx, &p) in pts.iter().enumerate() {
+        let mut env = HashMap::new();
+        for (vi, v) in vars.iter().enumerate() {
+            env.insert(v.clone(), p + (vi as f64) * 0.13 + (idx as f64) * 0.03);
+        }
+        if let (Some(a), Some(b)) = (actual.eval(&env), expected.eval(&env))
+            && a.is_finite()
+            && b.is_finite()
+        {
+            if (a - b).abs() > 1e-6 * (1.0 + b.abs()) {
+                return false;
+            }
+            matched += 1;
+        }
+    }
+    matched >= 2
+}
+
+#[derive(Default)]
+struct SuiteStats {
+    total_pairs: usize,
+    passed: usize,
+    failed: usize,
+    unsupported: usize,
+}
+
+fn run_mac_suite(path: &std::path::Path) -> SuiteStats {
+    let mut stats = SuiteStats::default();
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return stats;
+    };
+    let stmts = split_maxima_statements(&content);
+    let fast_cfg = sym_core::saturate::SaturationConfig {
+        node_limit: 4_000,
+        iter_limit: 10,
+        time_limit_secs: 0.05,
+        ..sym_core::saturate::SaturationConfig::default()
+    };
+    let mut idx = 0usize;
+    while idx + 1 < stmts.len() && stats.total_pairs < 100 {
+        let input = &stmts[idx];
+        if is_setup_statement(input) {
+            idx += 1;
+            continue;
+        }
+        let expected = &stmts[idx + 1];
+        idx += 2;
+        stats.total_pairs += 1;
+
+        let Ok(exp_ast) = parse_maxima(expected) else {
+            stats.unsupported += 1;
+            continue;
+        };
+
+        let actual_opt = if let Ok(cmd) = parse_maxima_cas(input) {
+            execute_cas(&cmd)
+        } else if let Ok(in_ast) = parse_maxima(input) {
+            if in_ast.node_count() > 64 {
+                stats.unsupported += 1;
+                continue;
+            }
+            Some(optimize(&in_ast, &fast_cfg))
+        } else {
+            stats.unsupported += 1;
+            continue;
+        };
+
+        let Some(actual_ast) = actual_opt else {
+            stats.unsupported += 1;
+            continue;
+        };
+
+        if exprs_equivalent(&actual_ast, &exp_ast) {
+            stats.passed += 1;
+        } else {
+            stats.failed += 1;
+        }
+    }
+    stats
+}
+
+#[test]
+fn golden_upstream_mac_parity_scoreboard() {
+    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().expect("workspace root");
+    let master_tests = root.join("References").join("maxima-master").join("tests");
+    let v550_tests = root.join("References").join("maxima-5.50.0").join("tests");
+
+    let suites = [
+        "rtest1.mac",
+        "rtest_trig.mac",
+        "rtest_integrate.mac",
+        "rtest_limit.mac",
+        "rtest_taylor.mac",
+        "rtest_carg.mac",
+        "rtest_sign.mac",
+        "rtest_laplace.mac",
+        "rtestode.mac",
+        "rtest_algsys.mac",
+    ];
+
+    let mut total_all = 0usize;
+    let mut passed_all = 0usize;
+    let mut failed_all = 0usize;
+    let mut unsupported_all = 0usize;
+
+    let mut report = String::from(
+        "# Maxima 5.50 Upstream `.mac` Golden Parity Scoreboard\n\n\
+         Generated automatically by `tests/integration/golden_parity.rs` (`golden_upstream_mac_parity_scoreboard`).\n\n\
+         | Suite | Total Pairs | Passed | Failed | Unsupported | Supported Pass Rate |\n\
+         | :--- | ---: | ---: | ---: | ---: | ---: |\n",
+    );
+
+    for name in suites {
+        let p = if master_tests.join(name).exists() {
+            master_tests.join(name)
+        } else {
+            v550_tests.join(name)
+        };
+        let st = run_mac_suite(&p);
+        total_all += st.total_pairs;
+        passed_all += st.passed;
+        failed_all += st.failed;
+        unsupported_all += st.unsupported;
+        let supported = st.passed + st.failed;
+        let rate = if supported > 0 {
+            format!("{:.1}%", (st.passed as f64 / supported as f64) * 100.0)
+        } else {
+            "N/A".to_string()
+        };
+        report.push_str(&format!(
+            "| `{name}` | {} | {} | {} | {} | {} |\n",
+            st.total_pairs, st.passed, st.failed, st.unsupported, rate
+        ));
+    }
+
+    let supported_all = passed_all + failed_all;
+    let rate_all = if supported_all > 0 {
+        format!("{:.1}%", (passed_all as f64 / supported_all as f64) * 100.0)
+    } else {
+        "N/A".to_string()
+    };
+    report.push_str(&format!(
+        "| **Total** | **{total_all}** | **{passed_all}** | **{failed_all}** | **{unsupported_all}** | **{rate_all}** |\n"
+    ));
+
+    let scoreboard_path = root
+        .join("docs")
+        .join("audits")
+        .join("PARITY_SCOREBOARD.md");
+    std::fs::write(&scoreboard_path, report).expect("write PARITY_SCOREBOARD.md");
+
+    assert!(
+        total_all >= 500,
+        "expected >= 500 upstream .mac test pairs, got {total_all}"
+    );
+    assert!(
+        passed_all > 0,
+        "expected > 0 passing upstream .mac test pairs"
+    );
+}

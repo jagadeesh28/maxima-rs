@@ -798,3 +798,155 @@ async fn test_phase52_adversarial_inputs_never_panic_or_oom() {
         .unwrap();
     assert_eq!(res_ortho.status(), StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn test_phase53_json_schema_contracts() {
+    let app = build_app(test_state());
+
+    // 1. GET /api/health
+    let r_health = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r_health.status(), StatusCode::OK);
+    let h: serde_json::Value =
+        serde_json::from_slice(&r_health.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(h["status"], "ok");
+    assert!(h["crate_name"].is_string());
+
+    // 2. GET /api/operations
+    let r_ops = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/operations")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r_ops.status(), StatusCode::OK);
+    let ops: Vec<serde_json::Value> =
+        serde_json::from_slice(&r_ops.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert!(!ops.is_empty());
+    for op in &ops {
+        assert!(op["id"].is_string());
+        assert!(op["name"].is_string());
+        assert!(op["category"].is_string());
+        assert!(op["description"].is_string());
+        assert!(op["needs_variables"].is_boolean());
+        assert!(op["needs_env"].is_boolean());
+        assert!(op["params"].is_array());
+    }
+
+    // 3. GET /api/rules
+    let r_rules = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/rules")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r_rules.status(), StatusCode::OK);
+    let rules: serde_json::Value =
+        serde_json::from_slice(&r_rules.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert!(rules["total"].as_u64().unwrap_or(0) >= 92);
+    assert!(rules["by_file"].is_array());
+    assert!(rules["rules"].is_array());
+
+    // 4. GET /api/functions
+    let r_fns = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/functions")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r_fns.status(), StatusCode::OK);
+    let fns: serde_json::Value =
+        serde_json::from_slice(&r_fns.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert!(fns["functions"].is_array());
+
+    // 5. POST /api/parse
+    let r_parse = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/parse")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "expression": "sin(x)", "input_format": "maxima" })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r_parse.status(), StatusCode::OK);
+    let parse_json: serde_json::Value =
+        serde_json::from_slice(&r_parse.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(parse_json["ok"], true);
+    assert!(parse_json["latex"].is_string());
+    assert!(parse_json["variables"].is_array());
+
+    // 6. POST /api/compute (200 OK)
+    let r_comp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/compute")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "expression": "x^2 - 1", "operation": "factor" })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r_comp.status(), StatusCode::OK);
+    let comp_json: serde_json::Value =
+        serde_json::from_slice(&r_comp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(comp_json["success"], true);
+    assert_eq!(comp_json["status"], "ok");
+    assert!(comp_json["result"].is_string());
+    assert!(comp_json["result_latex"].is_string());
+    assert!(comp_json["outputs"].is_array());
+    assert!(comp_json["elapsed_ms"].is_u64());
+
+    // 7. POST /api/compute (400 Bad Request contract)
+    let r_err = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/compute")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "expression": "2**", "operation": "simplify" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r_err.status(), StatusCode::BAD_REQUEST);
+    let err_json: serde_json::Value =
+        serde_json::from_slice(&r_err.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(err_json["status"], "bad_request");
+    assert!(err_json["error"].is_string());
+    assert!(err_json["error_span"]["start"].is_u64());
+    assert!(err_json["error_span"]["end"].is_u64());
+}
