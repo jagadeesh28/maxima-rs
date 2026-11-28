@@ -6,6 +6,7 @@ pub mod ode;
 pub mod ode_first;
 pub mod ode_second;
 
+pub use alg::{SolveStatus, linsolve};
 pub use ode::{OdeSolution, ode2};
 
 use crate::expr::Expr;
@@ -51,4 +52,15 @@ pub fn solve(expr: &Expr, var: &str) -> AlgebraicSolutions {
         return AlgebraicSolutions::new(vec![root], true);
     }
     AlgebraicSolutions::new(Vec::new(), false)
+}
+
+/// Solve `expr = 0` for `var` and return both roots and [`SolveStatus`].
+pub fn solve_classified(expr: &Expr, var: &str) -> (Vec<Expr>, SolveStatus) {
+    if let Some((roots, status)) = alg::solve_polynomial_classified(expr, var) {
+        return (roots, status);
+    }
+    if let Some(root) = isolate::isolate(expr, var) {
+        return (vec![root], SolveStatus::Finite);
+    }
+    (Vec::new(), SolveStatus::Partial)
 }

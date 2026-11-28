@@ -8,4 +8,4 @@ pub mod bvp;
 pub mod laplace;
 
 pub use bvp::{bc2, bc2_ode, ic1, ic1_ode, ic2, ic2_ode};
-pub use laplace::{ilt, laplace};
+pub use laplace::{TransformError, ilt, laplace, try_ilt, try_laplace};

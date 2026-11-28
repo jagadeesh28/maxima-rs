@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use num_bigint::BigInt;
 use num_rational::BigRational;
+use num_traits::Zero;
 
 use crate::expr::Expr;
 use crate::tensor::{Index, IndexType};
@@ -166,6 +167,9 @@ fn decode_expr(toks: &[&str], pos: &mut usize) -> Option<Expr> {
             let (num, den) = raw.split_once('/')?;
             let num = BigInt::from_str(num).ok()?;
             let den = BigInt::from_str(den).ok()?;
+            if den.is_zero() {
+                return None;
+            }
             Expr::constant(BigRational::new(num, den))
         }
         "+" => Expr::add(decode_expr(toks, pos)?, decode_expr(toks, pos)?),

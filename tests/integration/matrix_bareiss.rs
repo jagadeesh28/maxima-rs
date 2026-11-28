@@ -310,3 +310,37 @@ fn test_matrix_web_service_dispatch() {
     assert!(resp_tr.success);
     assert_eq!(resp_tr.result, "5");
 }
+
+#[test]
+fn test_phase50_multivar_3x3_bareiss_complex_eigenvalues_and_decode_guard() {
+    use sym_core::matrix::decode_matrix_symbol;
+
+    let x = Expr::var("x");
+    let y = Expr::var("y");
+    let m3 = Matrix::new(vec![
+        vec![x.clone(), y.clone(), Expr::int(0)],
+        vec![Expr::int(1), x.clone(), y.clone()],
+        vec![Expr::int(0), Expr::int(1), x.clone()],
+    ])
+    .unwrap();
+    let det = determinant(&m3).unwrap();
+    let adj = adjoint(&m3).unwrap();
+    let prod = m3.mul(&adj).unwrap();
+    // (M * adj(M))[0][0] == det(M)
+    let mut env = std::collections::HashMap::new();
+    env.insert("x".to_string(), 2.5);
+    env.insert("y".to_string(), -1.5);
+    assert!((prod[(0, 0)].eval(&env).unwrap() - det.eval(&env).unwrap()).abs() < 1e-9);
+
+    // Complex eigenvalues of 90-deg rotation [[0, -1], [1, 0]]: ±%i
+    let rot = Matrix::new(vec![
+        vec![Expr::int(0), Expr::int(-1)],
+        vec![Expr::int(1), Expr::int(0)],
+    ])
+    .unwrap();
+    let evs = eigenvalues(&rot).unwrap();
+    assert_eq!(evs.len(), 2);
+
+    // den == 0 guard in decode_matrix_symbol
+    assert!(decode_matrix_symbol("MX 1 1 C 1/0").is_none());
+}

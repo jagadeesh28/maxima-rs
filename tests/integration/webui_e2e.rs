@@ -262,3 +262,59 @@ fn compute_parse_endpoint() {
     assert!(parse_resp.variables.contains(&"y".to_string()));
     assert!(parse_resp.latex.is_some());
 }
+
+#[test]
+fn compute_phase50_new_operations_and_cas_dispatch() {
+    // 1. Direct operations: laplace, ilt, adjoint, transpose, bfloat, orthopoly, assume, is, csign
+    let lap = compute(&req_with_params(
+        "sin(2*t)",
+        "laplace",
+        &[("t", "t".into()), ("s", "s".into())],
+    ));
+    assert!(lap.success, "laplace failed: {:?}", lap.error);
+
+    let inv_lap = compute(&req_with_params(
+        "1 / (s - 3)",
+        "ilt",
+        &[("s", "s".into()), ("t", "t".into())],
+    ));
+    assert!(inv_lap.success, "ilt failed: {:?}", inv_lap.error);
+
+    let adj = compute(&req("matrix([1, 2], [3, 4])", "adjoint", &[]));
+    assert!(adj.success);
+    assert_eq!(adj.result, "[[4, (-2)], [(-3), 1]]");
+
+    let tr = compute(&req("matrix([1, 2], [3, 4])", "transpose", &[]));
+    assert!(tr.success);
+    assert_eq!(tr.result, "[[1, 3], [2, 4]]");
+
+    let bf = compute(&req_with_params("%pi", "bfloat", &[("fpprec", 20.into())]));
+    assert!(bf.success);
+
+    let op = compute(&req_with_params(
+        "x",
+        "orthopoly",
+        &[("kind", "legendre_p".into()), ("degree", 2.into())],
+    ));
+    assert!(op.success);
+
+    let asm = compute(&req("x > 0", "assume", &[]));
+    assert!(asm.success);
+
+    let pred = compute(&req("5 > 2", "is", &[]));
+    assert!(pred.success);
+    assert_eq!(pred.result, "true");
+
+    let cs = compute(&req("exp(%i*%pi)", "csign", &[]));
+    assert!(cs.success);
+    assert_eq!(cs.result, "neg");
+
+    // 2. Auto-dispatch from Maxima command strings
+    let cmd_lap = compute(&req("laplace(cos(3*t), t, s)", "simplify", &[]));
+    assert!(cmd_lap.success);
+    assert_eq!(cmd_lap.operation, "laplace");
+
+    let cmd_adj = compute(&req("adjoint(matrix([1, 2], [3, 4]))", "simplify", &[]));
+    assert!(cmd_adj.success);
+    assert_eq!(cmd_adj.operation, "adjoint");
+}

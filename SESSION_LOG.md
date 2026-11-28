@@ -1188,6 +1188,26 @@ When starting a new session, instruct the AI:
 - `cargo test --workspace --all-features` (exit 0: 159 `sym-core` unit + all integration/proptest/doctests)
 - `docs/audits/PHASE49_REPORT.md` compiled.
 
+---
+
+## Session 50 — Solvers, Linear Algebra, Special Functions, Transforms & Web Service Wiring (Phase 50)
+
+**Date**: 2026-11-28  
+**Scope**: Completed Phase 50 overhaul across `sym-core/src/solve/*`, `sym-core/src/matrix/*`, `sym-core/src/specfn/orthopoly.rs`, `sym-core/src/transform/*`, `sym-core/src/assume/mod.rs`, `sym-core/src/parser/maxima.rs`, `maxima-web/src/service.rs`, and `tests/integration/{solvers_ode,solvers_alg,matrix_bareiss,transform_laplace,webui_e2e}.rs`.
+
+### Deliverables Built
+1. **Algebraic & ODE Solvers (`sym-core/src/solve/*`)**: Fixed `ode_second.rs` (`expand(disc)`, `c == 0`, leading sign, symbolic `Assumptions`), `isolate.rs` (`a - var = 0`, circular `rhs` rejection), `alg.rs` (complex roots, parametric equations, `SolveStatus`, Cardano, biquadratic, `linsolve`), and `ode_first.rs`/`ode.rs` (integrating factor, separable, exact, non-homogeneous 2nd-order).
+2. **Linear Algebra (`sym-core/src/matrix/*`)**: Added kernel-mapped `Poly` Bareiss determinant, $O(n^3)$ Bareiss-Jordan `adjoint`, enhanced `is_expr_zero`, and guarded `den == 0` in `decode_expr`.
+3. **Special Functions & Transforms (`sym-core/src/{specfn,transform}/*`)**: Added `TransformError` + `try_laplace`/`try_ilt` (eliminating bogus `1/s`/`1/(s^2+1)`/`f/s` fallbacks), fixed `ilt_rational` (`s`-leak, `BigInt` factorial, `A*s + B`, `partfrac`), simplified `bvp.rs` determinants, and capped `orthopoly` degree at `<= 100`.
+4. **Web Service & CAS Dispatch (`maxima-web/src/service.rs`, `parser/maxima.rs`)**: Exposed `laplace`, `ilt`, `ic1`, `ic2`, `bc2`, `bfloat`, `assume`, `is`, `csign`, `adjoint`, `transpose`, and `orthopoly` in `OPERATIONS`, `run_operation`, and `CasCommand` auto-dispatch, and repaired `verify_integral`, `verify_defint`, and `verify_ode`.
+
+### Passing Gate Verification
+- `cargo fmt --all -- --check` (exit 0)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo test -p maxima-tests --test solvers_ode --test solvers_alg --test matrix_bareiss --test transform_laplace --test specfn --test webui_e2e` (exit 0: 5, 7, 11, 9, 9, 19 passed)
+- `cargo test --workspace --all-features` (exit 0: 159 `sym-core` unit + 28 `maxima-web` unit + all integration/proptest/doctests)
+- `docs/audits/PHASE50_REPORT.md` compiled.
+
 
 
 

@@ -6,8 +6,17 @@
 
 use crate::diff::differentiate;
 use crate::expr::Expr;
+use crate::poly::{expand, ratsimp};
 use crate::solve::ode::OdeSolution;
 use crate::transform::laplace::subst;
+
+fn simplify_bvp_expr(e: &Expr) -> Expr {
+    ratsimp(e).unwrap_or_else(|_| expand(e))
+}
+
+fn is_bvp_zero(e: &Expr) -> bool {
+    e.is_zero() || simplify_bvp_expr(e).is_zero()
+}
 
 /// Solve 1st-order Initial Value Problem (IVP):
 ///
@@ -23,15 +32,15 @@ pub fn ic1(sol: &Expr, x_var: &str, c_var: &str, x0: &Expr, y0: &Expr) -> Result
     let a_plus_b = subst(&y_at_x0, c_var, &Expr::int(1));
     let a = Expr::sub(a_plus_b, b.clone());
 
-    if a.is_zero() {
+    if is_bvp_zero(&a) {
         return Err("Constant of integration does not affect initial value".to_string());
     }
 
     // a*C + b = y0 => C = (y0 - b) / a
-    let c_val = Expr::div(Expr::sub(y0.clone(), b), a);
+    let c_val = simplify_bvp_expr(&Expr::div(Expr::sub(y0.clone(), b), a));
 
     // Substitute C back into the general solution
-    Ok(subst(sol, c_var, &c_val))
+    Ok(simplify_bvp_expr(&subst(sol, c_var, &c_val)))
 }
 
 /// Solve 1st-order IVP directly from an [`OdeSolution`].
@@ -103,11 +112,11 @@ pub fn ic2(
     let a22 = Expr::sub(dy_c2_1, b2.clone());
 
     // Solve 2x2 system via Cramer's rule:
-    let det = Expr::sub(
+    let det = simplify_bvp_expr(&Expr::sub(
         Expr::mul(a11.clone(), a22.clone()),
         Expr::mul(a12.clone(), a21.clone()),
-    );
-    if det.is_zero() {
+    ));
+    if is_bvp_zero(&det) {
         return Err("Singular determinant in initial value system".to_string());
     }
 
@@ -117,11 +126,11 @@ pub fn ic2(
     let c1_num = Expr::sub(Expr::mul(rhs1.clone(), a22), Expr::mul(rhs2.clone(), a12));
     let c2_num = Expr::sub(Expr::mul(a11, rhs2), Expr::mul(a21, rhs1));
 
-    let c1_val = Expr::div(c1_num, det.clone());
-    let c2_val = Expr::div(c2_num, det);
+    let c1_val = simplify_bvp_expr(&Expr::div(c1_num, det.clone()));
+    let c2_val = simplify_bvp_expr(&Expr::div(c2_num, det));
 
     let sol_c1 = subst(sol, c1_var, &c1_val);
-    Ok(subst(&sol_c1, c2_var, &c2_val))
+    Ok(simplify_bvp_expr(&subst(&sol_c1, c2_var, &c2_val)))
 }
 
 /// Solve 2nd-order IVP directly from an [`OdeSolution`].
@@ -202,11 +211,11 @@ pub fn bc2(
     let a21 = Expr::sub(y1_c1_1, b2.clone());
     let a22 = Expr::sub(y1_c2_1, b2.clone());
 
-    let det = Expr::sub(
+    let det = simplify_bvp_expr(&Expr::sub(
         Expr::mul(a11.clone(), a22.clone()),
         Expr::mul(a12.clone(), a21.clone()),
-    );
-    if det.is_zero() {
+    ));
+    if is_bvp_zero(&det) {
         return Err("Singular determinant in boundary value system".to_string());
     }
 
@@ -216,11 +225,11 @@ pub fn bc2(
     let c1_num = Expr::sub(Expr::mul(rhs1.clone(), a22), Expr::mul(rhs2.clone(), a12));
     let c2_num = Expr::sub(Expr::mul(a11, rhs2), Expr::mul(a21, rhs1));
 
-    let c1_val = Expr::div(c1_num, det.clone());
-    let c2_val = Expr::div(c2_num, det);
+    let c1_val = simplify_bvp_expr(&Expr::div(c1_num, det.clone()));
+    let c2_val = simplify_bvp_expr(&Expr::div(c2_num, det));
 
     let sol_c1 = subst(sol, c1_var, &c1_val);
-    Ok(subst(&sol_c1, c2_var, &c2_val))
+    Ok(simplify_bvp_expr(&subst(&sol_c1, c2_var, &c2_val)))
 }
 
 /// Solve 2nd-order BVP directly from an [`OdeSolution`].

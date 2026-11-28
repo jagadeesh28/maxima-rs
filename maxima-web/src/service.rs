@@ -159,6 +159,171 @@ static PARAM_RESIDUE: &[ParamSpec] = &[
 
 static PARAM_EMPTY: &[ParamSpec] = &[];
 
+static PARAM_LAPLACE: &[ParamSpec] = &[
+    ParamSpec {
+        name: "t",
+        param_type: "variable",
+        required: false,
+        default: Some("t"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "s",
+        param_type: "variable",
+        required: false,
+        default: Some("s"),
+        accepts: None,
+    },
+];
+
+static PARAM_ILT: &[ParamSpec] = &[
+    ParamSpec {
+        name: "s",
+        param_type: "variable",
+        required: false,
+        default: Some("s"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "t",
+        param_type: "variable",
+        required: false,
+        default: Some("t"),
+        accepts: None,
+    },
+];
+
+static PARAM_IC1: &[ParamSpec] = &[
+    ParamSpec {
+        name: "variable",
+        param_type: "variable",
+        required: false,
+        default: Some("x"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "x0",
+        param_type: "point",
+        required: false,
+        default: Some("0"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "y0",
+        param_type: "point",
+        required: false,
+        default: Some("1"),
+        accepts: None,
+    },
+];
+
+static PARAM_IC2: &[ParamSpec] = &[
+    ParamSpec {
+        name: "variable",
+        param_type: "variable",
+        required: false,
+        default: Some("x"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "x0",
+        param_type: "point",
+        required: false,
+        default: Some("0"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "y0",
+        param_type: "point",
+        required: false,
+        default: Some("1"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "dy0",
+        param_type: "point",
+        required: false,
+        default: Some("0"),
+        accepts: None,
+    },
+];
+
+static PARAM_BC2: &[ParamSpec] = &[
+    ParamSpec {
+        name: "variable",
+        param_type: "variable",
+        required: false,
+        default: Some("x"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "x0",
+        param_type: "point",
+        required: false,
+        default: Some("0"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "y0",
+        param_type: "point",
+        required: false,
+        default: Some("0"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "x1",
+        param_type: "point",
+        required: false,
+        default: Some("1"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "y1",
+        param_type: "point",
+        required: false,
+        default: Some("1"),
+        accepts: None,
+    },
+];
+
+static PARAM_BFLOAT: &[ParamSpec] = &[ParamSpec {
+    name: "fpprec",
+    param_type: "int",
+    required: false,
+    default: Some("32"),
+    accepts: None,
+}];
+
+static PARAM_ORTHOPOLY: &[ParamSpec] = &[
+    ParamSpec {
+        name: "kind",
+        param_type: "enum",
+        required: false,
+        default: Some("legendre_p"),
+        accepts: Some(&[
+            "legendre_p",
+            "chebyshev_t",
+            "chebyshev_u",
+            "hermite_h",
+            "laguerre_l",
+        ]),
+    },
+    ParamSpec {
+        name: "degree",
+        param_type: "int",
+        required: false,
+        default: Some("3"),
+        accepts: None,
+    },
+    ParamSpec {
+        name: "variable",
+        param_type: "variable",
+        required: false,
+        default: Some("x"),
+        accepts: None,
+    },
+];
+
 /// Declarative, authoritative specification of all available operations.
 pub static OPERATIONS: &[Operation] = &[
     // ── Algebra ──────────────────────────────────────────────────────────
@@ -314,6 +479,116 @@ pub static OPERATIONS: &[Operation] = &[
         name: "Eigenvalues",
         category: "matrix",
         description: "Exact eigenvalues from characteristic polynomial roots",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "adjoint",
+        name: "Adjoint Matrix",
+        category: "matrix",
+        description: "Classical adjugate matrix via Bareiss-Jordan elimination",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "transpose",
+        name: "Transpose Matrix",
+        category: "matrix",
+        description: "Matrix transpose A^T",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    // ── Transforms & IVP/BVP ─────────────────────────────────────────────
+    Operation {
+        id: "laplace",
+        name: "Laplace Transform",
+        category: "transform",
+        description: "Forward Laplace transform L{f(t)}(s)",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_LAPLACE,
+    },
+    Operation {
+        id: "ilt",
+        name: "Inverse Laplace Transform",
+        category: "transform",
+        description: "Inverse Laplace transform L^-1{F(s)}(t)",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_ILT,
+    },
+    Operation {
+        id: "ic1",
+        name: "1st-Order IVP (ic1)",
+        category: "transform",
+        description: "Solve 1st-order initial value problem y(x0) = y0",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_IC1,
+    },
+    Operation {
+        id: "ic2",
+        name: "2nd-Order IVP (ic2)",
+        category: "transform",
+        description: "Solve 2nd-order initial value problem y(x0) = y0, y'(x0) = dy0",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_IC2,
+    },
+    Operation {
+        id: "bc2",
+        name: "2nd-Order BVP (bc2)",
+        category: "transform",
+        description: "Solve 2nd-order boundary value problem y(x0) = y0, y(x1) = y1",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_BC2,
+    },
+    // ── Assumptions & Precision ──────────────────────────────────────────
+    Operation {
+        id: "bfloat",
+        name: "Arbitrary-Precision Float",
+        category: "calculus",
+        description: "Evaluate expression to fpprec decimal digits",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_BFLOAT,
+    },
+    Operation {
+        id: "orthopoly",
+        name: "Orthogonal Polynomial",
+        category: "algebra",
+        description: "Generate Legendre, Chebyshev, Hermite, or Laguerre polynomial",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_ORTHOPOLY,
+    },
+    Operation {
+        id: "assume",
+        name: "Assume Relation",
+        category: "assume",
+        description: "Validate and record an inequality relation (e.g. x > 0)",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "is",
+        name: "Evaluate Predicate (is)",
+        category: "assume",
+        description: "Decide inequality relation (true / false / unknown)",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "csign",
+        name: "Complex/Real Sign (csign)",
+        category: "assume",
+        description: "Deduce sign (pos, neg, zero, nonneg, nonpos, complex, unknown)",
         needs_variables: false,
         needs_env: false,
         params: PARAM_EMPTY,
@@ -563,19 +838,13 @@ fn run_operation(
         None
     };
     let op_name = if req.operation == "simplify" || req.operation.is_empty() {
-        if let Some(ref cmd) = cas_cmd {
-            match cmd {
-                maxima_rs::parser::maxima::CasCommand::Defint(..) => "defint",
-                maxima_rs::parser::maxima::CasCommand::Integrate(..) => "integrate",
-                maxima_rs::parser::maxima::CasCommand::Taylor(..) => "taylor",
-                maxima_rs::parser::maxima::CasCommand::Limit(..) => "limit",
-                maxima_rs::parser::maxima::CasCommand::Solve(..) => "solve",
-                maxima_rs::parser::maxima::CasCommand::Ode2(..) => "ode2",
-                maxima_rs::parser::maxima::CasCommand::Partfrac(..) => "partfrac",
-                maxima_rs::parser::maxima::CasCommand::Expand(..) => "expand",
-                maxima_rs::parser::maxima::CasCommand::Factor(..) => "factor",
-                maxima_rs::parser::maxima::CasCommand::Ratsimp(..) => "ratsimp",
-            }
+        let trimmed = req.expression.trim();
+        if trimmed.starts_with("assume(") {
+            "assume"
+        } else if trimmed.starts_with("is(") {
+            "is"
+        } else if let Some(ref cmd) = cas_cmd {
+            cmd.operation_id()
         } else {
             req.operation.as_str()
         }
@@ -1520,6 +1789,289 @@ fn run_operation(
             )];
             resp.status = Status::Ok;
         }
+        "adjoint" => {
+            let mat = Matrix::from_expr(&expr).map_err(|e| (format!("{e}"), None))?;
+            let adj = adjoint(&mat).map_err(|e| (format!("{e}"), None))?;
+            let res_expr = adj.to_expr();
+            let res_str = format_matrix_string(&adj.data);
+            let res_latex = latex(&res_expr);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new("adjoint", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "transpose" => {
+            let mat = Matrix::from_expr(&expr).map_err(|e| (format!("{e}"), None))?;
+            let tr = mat.transpose();
+            let res_expr = tr.to_expr();
+            let res_str = format_matrix_string(&tr.data);
+            let res_latex = latex(&res_expr);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new("transpose", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "laplace" => {
+            let (t_var, s_var) =
+                if let Some(maxima_rs::parser::maxima::CasCommand::Laplace(_, ref t, ref s)) =
+                    cas_cmd
+                {
+                    (t.clone(), s.clone())
+                } else {
+                    let t = param_var(req, "t", &[]).unwrap_or_else(|_| "t".to_string());
+                    let s = param_var(req, "s", &[]).unwrap_or_else(|_| "s".to_string());
+                    (t, s)
+                };
+            let res = maxima_rs::transform::try_laplace(&expr, &t_var, &s_var)
+                .map_err(|e| (format!("{e}"), None))?;
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new("laplace", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "ilt" => {
+            let (s_var, t_var) = if let Some(maxima_rs::parser::maxima::CasCommand::Ilt(
+                _,
+                ref s,
+                ref t,
+            )) = cas_cmd
+            {
+                (s.clone(), t.clone())
+            } else {
+                let s = param_var(req, "s", &[]).unwrap_or_else(|_| "s".to_string());
+                let t = param_var(req, "t", &[]).unwrap_or_else(|_| "t".to_string());
+                (s, t)
+            };
+            let res = maxima_rs::transform::try_ilt(&expr, &s_var, &t_var)
+                .map_err(|e| (format!("{e}"), None))?;
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new("ilt", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "ic1" => {
+            let (x_var, x0, y0) =
+                if let Some(maxima_rs::parser::maxima::CasCommand::Ic1(_, ref x, ref x0, ref y0)) =
+                    cas_cmd
+                {
+                    (x.clone(), x0.clone(), y0.clone())
+                } else {
+                    let x = param_var(req, "variable", &[]).unwrap_or_else(|_| "x".to_string());
+                    let x0 = param_point(req, "x0", Some("0")).map_err(|e| (e, None))?;
+                    let y0 = param_point(req, "y0", Some("1")).map_err(|e| (e, None))?;
+                    (x, x0, y0)
+                };
+            let res =
+                maxima_rs::transform::ic1(&expr, &x_var, "_C1", &x0, &y0).map_err(|e| (e, None))?;
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new("ic1", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "ic2" => {
+            let (x_var, x0, y0, dy0) = if let Some(maxima_rs::parser::maxima::CasCommand::Ic2(
+                _,
+                ref x,
+                ref x0,
+                ref y0,
+                ref dy0,
+            )) = cas_cmd
+            {
+                (x.clone(), x0.clone(), y0.clone(), dy0.clone())
+            } else {
+                let x = param_var(req, "variable", &[]).unwrap_or_else(|_| "x".to_string());
+                let x0 = param_point(req, "x0", Some("0")).map_err(|e| (e, None))?;
+                let y0 = param_point(req, "y0", Some("1")).map_err(|e| (e, None))?;
+                let dy0 = param_point(req, "dy0", Some("0")).map_err(|e| (e, None))?;
+                (x, x0, y0, dy0)
+            };
+            let res = maxima_rs::transform::ic2(&expr, &x_var, "_C1", "_C2", &x0, &y0, &dy0)
+                .map_err(|e| (e, None))?;
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new("ic2", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "bc2" => {
+            let (x_var, x0, y0, x1, y1) = if let Some(maxima_rs::parser::maxima::CasCommand::Bc2(
+                _,
+                ref x,
+                ref x0,
+                ref y0,
+                ref x1,
+                ref y1,
+            )) = cas_cmd
+            {
+                (x.clone(), x0.clone(), y0.clone(), x1.clone(), y1.clone())
+            } else {
+                let x = param_var(req, "variable", &[]).unwrap_or_else(|_| "x".to_string());
+                let x0 = param_point(req, "x0", Some("0")).map_err(|e| (e, None))?;
+                let y0 = param_point(req, "y0", Some("0")).map_err(|e| (e, None))?;
+                let x1 = param_point(req, "x1", Some("1")).map_err(|e| (e, None))?;
+                let y1 = param_point(req, "y1", Some("1")).map_err(|e| (e, None))?;
+                (x, x0, y0, x1, y1)
+            };
+            let res =
+                maxima_rs::transform::bc2(&expr, &x_var, "_C1", "_C2", (&x0, &y0), (&x1, &y1))
+                    .map_err(|e| (e, None))?;
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new("bc2", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "bfloat" => {
+            let prec = if let Some(maxima_rs::parser::maxima::CasCommand::Bfloat(_, p)) = cas_cmd {
+                p
+            } else {
+                req.params
+                    .get("fpprec")
+                    .and_then(|v| {
+                        v.as_u64()
+                            .map(|n| n as usize)
+                            .or_else(|| v.as_str().and_then(|s| s.trim().parse::<usize>().ok()))
+                    })
+                    .unwrap_or(32)
+            };
+            let res_expr = maxima_rs::bfloat::bfloat(&expr, Some(prec.clamp(1, 200)));
+            let res_str = res_expr.to_string();
+            let res_latex = latex(&res_expr);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new("bfloat", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "orthopoly" => {
+            let (kind, deg, arg) = if let Some(maxima_rs::parser::maxima::CasCommand::Orthopoly(
+                ref k,
+                d,
+                ref x_expr,
+            )) = cas_cmd
+            {
+                (k.clone(), d, x_expr.clone())
+            } else {
+                let k = req
+                    .params
+                    .get("kind")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("legendre_p")
+                    .to_string();
+                let d = req
+                    .params
+                    .get("degree")
+                    .and_then(|v| {
+                        v.as_u64()
+                            .map(|n| n as usize)
+                            .or_else(|| v.as_str().and_then(|s| s.trim().parse::<usize>().ok()))
+                    })
+                    .unwrap_or(3);
+                (k, d, expr.clone())
+            };
+            if deg > 100 {
+                return Err((format!("orthopoly degree {deg} exceeds maximum 100"), None));
+            }
+            let res = match kind.as_str() {
+                "legendre_p" => maxima_rs::specfn::orthopoly::legendre_p_poly(deg, &arg),
+                "chebyshev_t" => maxima_rs::specfn::orthopoly::chebyshev_t_poly(deg, &arg),
+                "chebyshev_u" => maxima_rs::specfn::orthopoly::chebyshev_u_poly(deg, &arg),
+                "hermite_h" => maxima_rs::specfn::orthopoly::hermite_h_poly(deg, &arg),
+                "laguerre_l" => maxima_rs::specfn::orthopoly::laguerre_l_poly(deg, &arg),
+                other => return Err((format!("unknown orthopoly kind: {other}"), None)),
+            };
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new(format!("{kind}({deg})"), res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "assume" => {
+            let raw = req.expression.trim();
+            let inner = raw
+                .strip_prefix("assume(")
+                .and_then(|s| s.strip_suffix(')'))
+                .unwrap_or(raw);
+            let (lhs, cmp, rhs) = parse_relation(inner).map_err(|e| (e, None))?;
+            let ctx = Assumptions::new()
+                .assume_rel(lhs.clone(), cmp, rhs.clone())
+                .map_err(|e| (e.to_string(), None))?;
+            let sign = format!("{:?}", ctx.csign(&lhs)).to_lowercase();
+            let res_str = format!("[{lhs} {cmp:?} {rhs}] (csign({lhs}) = {sign})");
+            resp.result = res_str.clone();
+            resp.result_latex = format!(r"\text{{{res_str}}}");
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.outputs = vec![Output::new(
+                "assume",
+                res_str.clone(),
+                resp.result_latex.clone(),
+            )];
+            resp.status = Status::Ok;
+        }
+        "is" => {
+            let raw = req.expression.trim();
+            let inner = raw
+                .strip_prefix("is(")
+                .and_then(|s| s.strip_suffix(')'))
+                .unwrap_or(raw);
+            let (lhs, cmp, rhs) = parse_relation(inner).map_err(|e| (e, None))?;
+            let pred = Assumptions::new().is(&lhs, cmp, &rhs);
+            let res_str = match pred {
+                PredicateResult::True => "true",
+                PredicateResult::False => "false",
+                PredicateResult::Unknown => "unknown",
+            }
+            .to_string();
+            resp.result = res_str.clone();
+            resp.result_latex = format!(r"\text{{{res_str}}}");
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.outputs = vec![Output::new("is", res_str, resp.result_latex.clone())];
+            resp.status = Status::Ok;
+        }
+        "csign" => {
+            let sign = Assumptions::new().csign(&expr);
+            let res_str = format!("{sign:?}").to_lowercase();
+            resp.result = res_str.clone();
+            resp.result_latex = format!(r"\text{{{res_str}}}");
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.outputs = vec![Output::new("csign", res_str, resp.result_latex.clone())];
+            resp.status = Status::Ok;
+        }
         other => return Err((format!("unknown operation: {other}"), None)),
     }
 
@@ -1677,6 +2229,19 @@ pub fn parse(req: &ParseRequest) -> ParseResponse {
                             error_span: None,
                         };
                     }
+                    other => {
+                        let op = other.operation_id();
+                        let e = other.primary_expr();
+                        let latex_str = format!("\\text{{{op}}}\\left({}\\right)", latex(e));
+                        return ParseResponse {
+                            ok: true,
+                            latex: Some(latex_str),
+                            maxima: Some(req.expression.clone()),
+                            variables: e.variables(),
+                            error: None,
+                            error_span: None,
+                        };
+                    }
                 }
             } else {
                 parse_maxima(&req.expression)
@@ -1767,7 +2332,35 @@ fn extract_error_span(err: &ParseError, input: &str) -> ErrorSpan {
     }
 }
 
+fn parse_relation(s: &str) -> Result<(Expr, maxima_rs::assume::Comparison, Expr), String> {
+    use maxima_rs::assume::Comparison;
+    for (op, cmp) in [
+        (">=", Comparison::GreaterThanOrEqual),
+        ("<=", Comparison::LessThanOrEqual),
+        ("!=", Comparison::NotEqual),
+        ("/=", Comparison::NotEqual),
+        (">", Comparison::GreaterThan),
+        ("<", Comparison::LessThan),
+        ("=", Comparison::Equal),
+    ] {
+        if let Some((lhs_s, rhs_s)) = s.split_once(op) {
+            let lhs = parse_maxima(lhs_s.trim()).map_err(|e| format!("bad LHS: {e}"))?;
+            let rhs = parse_maxima(rhs_s.trim()).map_err(|e| format!("bad RHS: {e}"))?;
+            return Ok((lhs, cmp, rhs));
+        }
+    }
+    Err(format!("expected relation (<, <=, >, >=, =, !=) in '{s}'"))
+}
+
 fn parse_input(req: &ComputeRequest) -> Result<Expr, (String, Option<ErrorSpan>)> {
+    let trimmed = req.expression.trim();
+    if req.operation == "assume"
+        || req.operation == "is"
+        || trimmed.starts_with("assume(")
+        || trimmed.starts_with("is(")
+    {
+        return Ok(Expr::int(0));
+    }
     match req.input_format.as_str() {
         "latex" => parse_latex(&req.expression).map_err(|e| {
             let span = extract_error_span(&e, &req.expression);
@@ -1775,18 +2368,7 @@ fn parse_input(req: &ComputeRequest) -> Result<Expr, (String, Option<ErrorSpan>)
         }),
         _ => {
             if let Ok(cmd) = maxima_rs::parser::maxima::parse_maxima_cas(&req.expression) {
-                match cmd {
-                    maxima_rs::parser::maxima::CasCommand::Defint(e, _, _, _) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Integrate(e, _) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Taylor(e, _, _, _) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Solve(e, _) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Partfrac(e, _) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Limit(e, _, _) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Expand(e) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Factor(e) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Ratsimp(e) => Ok(e),
-                    maxima_rs::parser::maxima::CasCommand::Ode2(e, _, _) => Ok(e),
-                }
+                Ok(cmd.primary_expr().clone())
             } else {
                 parse_maxima(&req.expression).map_err(|e| {
                     let span = extract_error_span(&e, &req.expression);
@@ -2173,11 +2755,14 @@ fn emit_rust_fn(expr: &Expr, vars: &[&str], fn_name: &str, float_type: FloatType
 
 fn verify_integral(integrand: &Expr, antideriv: &Expr, var: &str) -> bool {
     let deriv = differentiate(antideriv, var);
-    let test_points = [0.25, 0.5, 0.75, 1.25];
+    let test_points = [-1.25, -0.5, 0.25, 0.5, 0.75, 1.25];
     let mut tested = 0;
     for &pt in &test_points {
         let mut env = HashMap::new();
         env.insert(var.to_string(), pt);
+        for v in integrand.variables().into_iter().chain(deriv.variables()) {
+            env.entry(v).or_insert(1.3);
+        }
         if let (Some(v1), Some(v2)) = (integrand.eval(&env), deriv.eval(&env))
             && v1.is_finite()
             && v2.is_finite()
@@ -2305,6 +2890,36 @@ fn improper_quad_inf(integrand: &Expr, var: &str, a: f64) -> Option<f64> {
     Some(sum)
 }
 
+fn is_neg_inf(e: &Expr) -> bool {
+    match e {
+        Expr::Var(s) => s == "minf",
+        Expr::Neg(inner) => is_pos_inf(inner),
+        _ => false,
+    }
+}
+
+fn improper_quad_minf(integrand: &Expr, var: &str, b: f64) -> Option<f64> {
+    let n = 200;
+    let t_min = 0.0005;
+    let t_max = 0.9995;
+    let dt = (t_max - t_min) / (n as f64);
+    let mut sum = 0.0;
+    let mut env = HashMap::new();
+    for i in 0..n {
+        let t = t_min + (i as f64 + 0.5) * dt;
+        let one_minus_t = 1.0 - t;
+        let x = b - t / one_minus_t;
+        let dx_dt = 1.0 / (one_minus_t * one_minus_t);
+        env.insert(var.to_string(), x);
+        let fx = integrand.eval(&env)?;
+        if !fx.is_finite() {
+            return None;
+        }
+        sum += fx * dx_dt * dt;
+    }
+    Some(sum)
+}
+
 fn verify_defint(integrand: &Expr, result: &Expr, var: &str, a: &Expr, b: &Expr) -> bool {
     if let (Some(a_num), Some(b_num)) = (eval_bound(a), eval_bound(b)) {
         if (b_num - a_num).abs() < 1e-12
@@ -2330,6 +2945,14 @@ fn verify_defint(integrand: &Expr, result: &Expr, var: &str, a: &Expr, b: &Expr)
     } else if is_pos_inf(b)
         && let Some(a_num) = eval_bound(a)
         && let Some(num_int) = improper_quad_inf(integrand, var, a_num)
+        && let Some(res_num) = eval_bound(result)
+    {
+        let diff = (num_int - res_num).abs();
+        let scale = 1.0 + res_num.abs();
+        return diff / scale < 2e-2;
+    } else if is_neg_inf(a)
+        && let Some(b_num) = eval_bound(b)
+        && let Some(num_int) = improper_quad_minf(integrand, var, b_num)
         && let Some(res_num) = eval_bound(result)
     {
         let diff = (num_int - res_num).abs();
@@ -2385,6 +3008,16 @@ fn substitute_ode(e: &Expr, y: &Expr, yp: &Expr, ypp: &Expr, dep: &str, indep: &
             substitute_ode(b, y, yp, ypp, dep, indep),
         ),
         Expr::Neg(a) => Expr::neg(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Sin(a) => Expr::sin(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Cos(a) => Expr::cos(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Tan(a) => Expr::tan(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Exp(a) => Expr::exp(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Ln(a) => Expr::ln(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Sqrt(a) => Expr::sqrt(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Sinh(a) => Expr::sinh(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Cosh(a) => Expr::cosh(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Tanh(a) => Expr::tanh(substitute_ode(a, y, yp, ypp, dep, indep)),
+        Expr::Abs(a) => Expr::abs(substitute_ode(a, y, yp, ypp, dep, indep)),
         other => other.clone(),
     }
 }
@@ -2763,7 +3396,7 @@ mod tests {
 
     #[test]
     fn test_solve_no_solution() {
-        let mut req = request("x^2 + 1", "solve");
+        let mut req = request("1", "solve");
         req.variable = "x".into();
         let resp = compute(&req);
         assert!(resp.success);
@@ -2821,8 +3454,8 @@ mod tests {
 
     #[test]
     fn test_solve_partial_status() {
-        // x * (x^2 + 1) = x^3 + x has root x = 0, leaving irreducible x^2 + 1
-        let mut req = request("x^3 + x", "solve");
+        // x * (x^5 + x + 1) = x^6 + x^2 + x has root x = 0, leaving unsolvable quintic x^5 + x + 1
+        let mut req = request("x^6 + x^2 + x", "solve");
         req.variable = "x".into();
         let resp = compute(&req);
         assert!(resp.success, "error: {:?}", resp.error);

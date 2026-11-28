@@ -272,7 +272,57 @@ impl fmt::Display for Matrix {
     }
 }
 
-// ── Simplification Helper ───────────────────────────────────────────
+// ── Simplification & Kernel Mapping Helpers ────────────────────────
+
+fn map_kernels(e: &Expr, kernels: &mut Vec<Expr>) -> Expr {
+    match e {
+        Expr::Add(a, b) => Expr::add(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Sub(a, b) => Expr::sub(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Mul(a, b) => Expr::mul(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Div(a, b) => Expr::div(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Neg(a) => Expr::neg(map_kernels(a, kernels)),
+        Expr::Pow(b, exp) => {
+            if let Expr::Const(r) = exp.as_ref()
+                && crate::rational::Rat::is_integer(r)
+                && *r >= num_rational::BigRational::from_integer(0.into())
+            {
+                return Expr::pow(map_kernels(b, kernels), (**exp).clone());
+            }
+            kernel_var(e, kernels)
+        }
+        Expr::Var(_) | Expr::Const(_) => e.clone(),
+        _ => kernel_var(e, kernels),
+    }
+}
+
+fn kernel_var(e: &Expr, kernels: &mut Vec<Expr>) -> Expr {
+    if let Some(idx) = kernels.iter().position(|k| k == e) {
+        return Expr::var(&format!("__mk_{idx}"));
+    }
+    let idx = kernels.len();
+    kernels.push(e.clone());
+    Expr::var(&format!("__mk_{idx}"))
+}
+
+fn unmap_kernels(e: &Expr, kernels: &[Expr]) -> Expr {
+    match e {
+        Expr::Var(n) if n.starts_with("__mk_") => {
+            if let Ok(idx) = n["__mk_".len()..].parse::<usize>()
+                && let Some(orig) = kernels.get(idx)
+            {
+                return orig.clone();
+            }
+            e.clone()
+        }
+        Expr::Add(a, b) => Expr::add(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Sub(a, b) => Expr::sub(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Mul(a, b) => Expr::mul(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Div(a, b) => Expr::div(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Pow(a, b) => Expr::pow(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Neg(a) => Expr::neg(unmap_kernels(a, kernels)),
+        _ => e.clone(),
+    }
+}
 
 fn is_expr_zero(e: &Expr) -> bool {
     if e.is_zero() {
@@ -282,8 +332,17 @@ fn is_expr_zero(e: &Expr) -> bool {
     if exp.is_zero() {
         return true;
     }
-    if let Ok(sim) = crate::poly::ratsimp(e) {
-        return sim.is_zero();
+    if let Ok(sim) = crate::poly::ratsimp(e)
+        && sim.is_zero()
+    {
+        return true;
+    }
+    let mut kernels = Vec::new();
+    let mapped = map_kernels(e, &mut kernels);
+    if let Ok(p) = crate::poly::Poly::from_expr(&mapped)
+        && p.is_zero()
+    {
+        return true;
     }
     false
 }
@@ -306,6 +365,90 @@ fn simplify_div(num: &Expr, den: &Expr) -> Expr {
     } else {
         crate::poly::expand(&div_expr)
     }
+}
+
+/// Try converting all matrix entries into `Poly` over a shared `VarContext` (with kernel mapping).
+fn matrix_to_polys(
+    m: &Matrix,
+) -> Option<(
+    Vec<Vec<crate::poly::Poly>>,
+    crate::poly::VarContext,
+    Vec<Expr>,
+)> {
+    use crate::poly::{Poly, VarContext};
+    let mut kernels = Vec::new();
+    let mut mapped_rows = Vec::with_capacity(m.rows);
+    let mut all_vars = Vec::new();
+    for row in &m.data {
+        let mut mr = Vec::with_capacity(m.cols);
+        for cell in row {
+            let me = map_kernels(cell, &mut kernels);
+            for v in me.variables() {
+                if !all_vars.contains(&v) {
+                    all_vars.push(v);
+                }
+            }
+            mr.push(me);
+        }
+        mapped_rows.push(mr);
+    }
+    all_vars.sort();
+    let mut ctx = VarContext::new();
+    for v in &all_vars {
+        ctx.add(v);
+    }
+    let mut poly_rows = Vec::with_capacity(m.rows);
+    for mr in &mapped_rows {
+        let mut pr = Vec::with_capacity(m.cols);
+        for cell in mr {
+            pr.push(Poly::from_expr_with_ctx(cell, &ctx).ok()?);
+        }
+        poly_rows.push(pr);
+    }
+    Some((poly_rows, ctx, kernels))
+}
+
+fn bareiss_poly_det(
+    mut a: Vec<Vec<crate::poly::Poly>>,
+    ctx: &crate::poly::VarContext,
+    kernels: &[Expr],
+) -> Option<Expr> {
+    use crate::poly::Poly;
+    use crate::poly::gcd::poly_div_exact;
+    use num_rational::BigRational;
+    use num_traits::One;
+
+    let n = a.len();
+    let mut prev_pivot = Poly::constant(BigRational::one(), ctx.clone());
+    let mut sign = 1i32;
+
+    for k in 0..n - 1 {
+        if a[k][k].is_zero() {
+            let swap_row = (k + 1..n).find(|&p| !a[p][k].is_zero());
+            match swap_row {
+                Some(p) => {
+                    a.swap(k, p);
+                    sign = -sign;
+                }
+                None => return Some(Expr::int(0)),
+            }
+        }
+        let p_kk = a[k][k].clone();
+        for i in (k + 1)..n {
+            let p_ik = a[i][k].clone();
+            for j in (k + 1)..n {
+                let num = p_kk.mul(&a[i][j]).sub(&p_ik.mul(&a[k][j]));
+                a[i][j] = poly_div_exact(&num, &prev_pivot)?;
+            }
+        }
+        prev_pivot = p_kk;
+    }
+    let det_poly = if sign == 1 {
+        a[n - 1][n - 1].clone()
+    } else {
+        a[n - 1][n - 1].neg()
+    };
+    Some(unmap_kernels(&det_poly.to_expr(), kernels))
 }
 
 // ── Bareiss Algorithm ───────────────────────────────────────────────
@@ -334,12 +477,17 @@ pub fn determinant(m: &Matrix) -> Result<Expr, MatrixError> {
         return Ok(crate::poly::expand(&Expr::sub(p1, p2)));
     }
 
+    if let Some((polys, ctx, kernels)) = matrix_to_polys(m)
+        && let Some(det) = bareiss_poly_det(polys, &ctx, &kernels)
+    {
+        return Ok(det);
+    }
+
     let mut a = m.data.clone();
     let mut prev_pivot = Expr::int(1);
     let mut sign = 1i32;
 
     for k in 0..n - 1 {
-        // Pivot selection: check if a[k][k] is zero
         if is_expr_zero(&a[k][k]) {
             let mut swap_row = None;
             for (p, row) in a.iter().enumerate().skip(k + 1) {
@@ -416,7 +564,8 @@ pub fn charpoly(m: &Matrix, var: &str) -> Result<Expr, MatrixError> {
     determinant(&char_mat)
 }
 
-/// Compute the classical adjoint (adjugate) matrix: $\text{adj}(M)_{i,j} = (-1)^{i+j} \det(M_{\setminus j, \setminus i})$.
+/// Compute the classical adjoint (adjugate) matrix using $O(n^3)$ Bareiss-Jordan
+/// fraction-free elimination for non-singular matrices, falling back to cofactors if singular.
 pub fn adjoint(m: &Matrix) -> Result<Matrix, MatrixError> {
     if !m.is_square() {
         return Err(MatrixError::NonSquare {
@@ -430,6 +579,12 @@ pub fn adjoint(m: &Matrix) -> Result<Matrix, MatrixError> {
     }
     if n == 1 {
         return Matrix::new(vec![vec![Expr::int(1)]]);
+    }
+
+    if let Some((polys, ctx, kernels)) = matrix_to_polys(m)
+        && let Some(adj) = bareiss_jordan_adjoint_poly(polys, &ctx, &kernels)
+    {
+        return Matrix::new(adj);
     }
 
     let mut adj_data = vec![vec![Expr::int(0); n]; n];
@@ -447,6 +602,62 @@ pub fn adjoint(m: &Matrix) -> Result<Matrix, MatrixError> {
         }
     }
     Matrix::new(adj_data)
+}
+
+fn bareiss_jordan_adjoint_poly(
+    mut a: Vec<Vec<crate::poly::Poly>>,
+    ctx: &crate::poly::VarContext,
+    kernels: &[Expr],
+) -> Option<Vec<Vec<Expr>>> {
+    use crate::poly::Poly;
+    use crate::poly::gcd::poly_div_exact;
+    use num_rational::BigRational;
+    use num_traits::One;
+
+    let n = a.len();
+    let one = Poly::constant(BigRational::one(), ctx.clone());
+    let zero = Poly::zero(ctx.clone());
+    let mut rhs = vec![vec![zero; n]; n];
+    for (i, row) in rhs.iter_mut().enumerate() {
+        row[i] = one.clone();
+    }
+    let mut prev_pivot = one;
+    let mut sign = 1i32;
+
+    for k in 0..n {
+        if a[k][k].is_zero() {
+            let p = (k + 1..n).find(|&r| !a[r][k].is_zero())?;
+            a.swap(k, p);
+            rhs.swap(k, p);
+            sign = -sign;
+        }
+        let p_kk = a[k][k].clone();
+        for i in 0..n {
+            if i == k {
+                continue;
+            }
+            let p_ik = a[i][k].clone();
+            for j in (k + 1)..n {
+                let num = p_kk.mul(&a[i][j]).sub(&p_ik.mul(&a[k][j]));
+                a[i][j] = poly_div_exact(&num, &prev_pivot)?;
+            }
+            for j in 0..n {
+                let num = p_kk.mul(&rhs[i][j]).sub(&p_ik.mul(&rhs[k][j]));
+                rhs[i][j] = poly_div_exact(&num, &prev_pivot)?;
+            }
+            a[i][k] = Poly::zero(ctx.clone());
+        }
+        prev_pivot = p_kk;
+    }
+
+    let mut out = vec![vec![Expr::int(0); n]; n];
+    for (i, row) in rhs.into_iter().enumerate() {
+        for (j, poly) in row.into_iter().enumerate() {
+            let signed = if sign == 1 { poly } else { poly.neg() };
+            out[i][j] = unmap_kernels(&signed.to_expr(), kernels);
+        }
+    }
+    Some(out)
 }
 
 /// Compute the inverse matrix $M^{-1} = \frac{1}{\det(M)} \text{adj}(M)$.

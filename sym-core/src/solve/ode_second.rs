@@ -1,7 +1,8 @@
-//! Second-order constant-coefficient linear ODE solver.
+//! Second-order constant-coefficient linear ODE solver (Phase 30 / Phase 50).
 
 use super::ode::OdeSolution;
 use crate::expr::Expr;
+use crate::poly::expand;
 use crate::rational::Rat;
 use num_traits::{Signed, ToPrimitive, Zero};
 
@@ -14,7 +15,16 @@ fn looks_positive(e: &Expr) -> bool {
                     && r.numer().to_i64().map(|n| n % 2 == 0).unwrap_or(false))
         }
         Expr::Mul(a, b) => looks_positive(a) && looks_positive(b),
-        _ => false,
+        _ => {
+            #[cfg(feature = "assume")]
+            {
+                crate::assume::Assumptions::new().csign(e) == crate::assume::Sign::Pos
+            }
+            #[cfg(not(feature = "assume"))]
+            {
+                false
+            }
+        }
     }
 }
 
@@ -22,76 +32,132 @@ fn constants2() -> Vec<String> {
     vec!["_C1".to_string(), "_C2".to_string()]
 }
 
-/// Solve `a·y'' + b·y' + c·y = 0`.
-pub(crate) fn solve_second(a: &Expr, b: &Expr, c: &Expr, x: &str) -> Option<OdeSolution> {
-    if a.is_zero() {
+fn normalize_leading_sign(a: &Expr, b: &Expr, c: &Expr) -> (Expr, Expr, Expr) {
+    if let Expr::Const(r) = a
+        && r.is_negative()
+    {
+        return (
+            expand(&Expr::neg(a.clone())),
+            expand(&Expr::neg(b.clone())),
+            expand(&Expr::neg(c.clone())),
+        );
+    }
+    if let Expr::Neg(inner) = a {
+        return (
+            (**inner).clone(),
+            expand(&Expr::neg(b.clone())),
+            expand(&Expr::neg(c.clone())),
+        );
+    }
+    (a.clone(), b.clone(), c.clone())
+}
+
+/// Return fundamental solution pair `(y1, y2)` for `a·y'' + b·y' + c·y = 0`.
+pub(crate) fn solve_second_bases(a: &Expr, b: &Expr, c: &Expr, x: &str) -> Option<(Expr, Expr)> {
+    let a_f = expand(a);
+    let b_f = expand(b);
+    let c_f = expand(c);
+    if a_f.is_zero() {
         return None;
     }
+    let (a, b, c) = normalize_leading_sign(&a_f, &b_f, &c_f);
     let xv = Expr::var(x);
-    if b.is_zero() {
-        if looks_positive(a) && looks_positive(c) {
-            // Oscillatory: y = C1 cos(q x) + C2 sin(q x), q = sqrt(c/a)
-            let q = Expr::sqrt(Expr::div(c.clone(), a.clone()));
-            let qx = Expr::mul(q, xv);
-            let solution = Expr::add(
-                Expr::mul(Expr::var("_C1"), Expr::cos(qx.clone())),
-                Expr::mul(Expr::var("_C2"), Expr::sin(qx)),
-            );
-            return Some(OdeSolution {
-                solution,
-                constants: constants2(),
-            });
+
+    // Handle c == 0: y'' = 0 -> (1, x); a*y'' + b*y' = 0 -> (1, exp(-(b/a)*x))
+    if c.is_zero() {
+        if b.is_zero() {
+            return Some((Expr::int(1), xv));
         }
-        // Real symmetric roots: y = C1 e^{q x} + C2 e^{-q x}, q = sqrt(-c/a)
-        let q = Expr::sqrt(Expr::neg(Expr::div(c.clone(), a.clone())));
-        let qx = Expr::mul(q, xv);
-        let solution = Expr::add(
-            Expr::mul(Expr::var("_C1"), Expr::exp(qx.clone())),
-            Expr::mul(Expr::var("_C2"), Expr::exp(Expr::neg(qx))),
-        );
-        return Some(OdeSolution {
-            solution,
-            constants: constants2(),
-        });
+        let rate = Expr::neg(Expr::div(b, a));
+        return Some((Expr::int(1), Expr::exp(Expr::mul(rate, xv))));
     }
 
-    let disc = Expr::sub(
-        Expr::pow(b.clone(), Expr::int(2)),
-        Expr::mul(Expr::int(4), Expr::mul(a.clone(), c.clone())),
-    );
-    let Expr::Const(dr) = &disc else {
-        return None;
-    };
-    let two_a = Expr::mul(Expr::int(2), a.clone());
-    if dr.is_negative() {
-        let p = Expr::neg(Expr::div(b.clone(), two_a.clone()));
-        let q = Expr::div(Expr::sqrt(Expr::constant(-dr)), two_a);
-        let px = Expr::mul(p, xv.clone());
+    if b.is_zero() {
+        if looks_positive(&a) && looks_positive(&c) {
+            let q = Expr::sqrt(Expr::div(c, a));
+            let qx = Expr::mul(q, xv);
+            return Some((Expr::cos(qx.clone()), Expr::sin(qx)));
+        }
+        let q = Expr::sqrt(Expr::neg(Expr::div(c, a)));
         let qx = Expr::mul(q, xv);
-        let inner = Expr::add(
-            Expr::mul(Expr::var("_C1"), Expr::cos(qx.clone())),
-            Expr::mul(Expr::var("_C2"), Expr::sin(qx)),
-        );
-        return Some(OdeSolution {
-            solution: Expr::mul(Expr::exp(px), inner),
-            constants: constants2(),
-        });
+        return Some((Expr::exp(qx.clone()), Expr::exp(Expr::neg(qx))));
     }
-    let neg_b = Expr::neg(b.clone());
-    if dr.is_zero() {
-        let r = Expr::div(neg_b, two_a);
-        let poly = Expr::add(Expr::var("_C1"), Expr::mul(Expr::var("_C2"), xv.clone()));
-        return Some(OdeSolution {
-            solution: Expr::mul(poly, Expr::exp(Expr::mul(r, xv))),
-            constants: constants2(),
-        });
+
+    let disc = expand(&Expr::sub(
+        Expr::pow(b.clone(), Expr::int(2)),
+        Expr::mul(Expr::int(4), Expr::mul(a.clone(), c)),
+    ));
+    let two_a = expand(&Expr::mul(Expr::int(2), a));
+    let neg_b = expand(&Expr::neg(b));
+
+    if let Expr::Const(dr) = &disc {
+        if dr.is_negative() {
+            let p = Expr::div(neg_b, two_a.clone());
+            let q = Expr::div(Expr::sqrt(Expr::constant(-dr)), two_a);
+            let px = Expr::mul(p, xv.clone());
+            let qx = Expr::mul(q, xv);
+            let e_px = Expr::exp(px);
+            return Some((
+                Expr::mul(e_px.clone(), Expr::cos(qx.clone())),
+                Expr::mul(e_px, Expr::sin(qx)),
+            ));
+        }
+        if dr.is_zero() {
+            let r = Expr::div(neg_b, two_a);
+            let e_rx = Expr::exp(Expr::mul(r, xv.clone()));
+            return Some((e_rx.clone(), Expr::mul(xv, e_rx)));
+        }
+        let sq = Expr::sqrt(Expr::constant(dr.clone()));
+        let r1 = Expr::div(Expr::add(neg_b.clone(), sq.clone()), two_a.clone());
+        let r2 = Expr::div(Expr::sub(neg_b, sq), two_a);
+        return Some((
+            Expr::exp(Expr::mul(r1, xv.clone())),
+            Expr::exp(Expr::mul(r2, xv)),
+        ));
     }
-    let sq = Expr::sqrt(Expr::constant(dr.clone()));
-    let r1 = Expr::div(Expr::add(neg_b.clone(), sq.clone()), two_a.clone());
-    let r2 = Expr::div(Expr::sub(neg_b, sq), two_a);
+
+    // Symbolic discriminant via Assumptions::csign
+    #[cfg(feature = "assume")]
+    {
+        use crate::assume::{Assumptions, Sign};
+        match Assumptions::new().csign(&disc) {
+            Sign::Pos => {
+                let sq = Expr::sqrt(disc);
+                let r1 = Expr::div(Expr::add(neg_b.clone(), sq.clone()), two_a.clone());
+                let r2 = Expr::div(Expr::sub(neg_b, sq), two_a);
+                return Some((
+                    Expr::exp(Expr::mul(r1, xv.clone())),
+                    Expr::exp(Expr::mul(r2, xv)),
+                ));
+            }
+            Sign::Zero => {
+                let r = Expr::div(neg_b, two_a);
+                let e_rx = Expr::exp(Expr::mul(r, xv.clone()));
+                return Some((e_rx.clone(), Expr::mul(xv, e_rx)));
+            }
+            Sign::Neg => {
+                let p = Expr::div(neg_b, two_a.clone());
+                let q = Expr::div(Expr::sqrt(Expr::neg(disc)), two_a);
+                let e_px = Expr::exp(Expr::mul(p, xv.clone()));
+                let qx = Expr::mul(q, xv);
+                return Some((
+                    Expr::mul(e_px.clone(), Expr::cos(qx.clone())),
+                    Expr::mul(e_px, Expr::sin(qx)),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+/// Solve `a·y'' + b·y' + c·y = 0`.
+pub(crate) fn solve_second(a: &Expr, b: &Expr, c: &Expr, x: &str) -> Option<OdeSolution> {
+    let (y1, y2) = solve_second_bases(a, b, c, x)?;
     let solution = Expr::add(
-        Expr::mul(Expr::var("_C1"), Expr::exp(Expr::mul(r1, xv.clone()))),
-        Expr::mul(Expr::var("_C2"), Expr::exp(Expr::mul(r2, xv))),
+        Expr::mul(Expr::var("_C1"), y1),
+        Expr::mul(Expr::var("_C2"), y2),
     );
     Some(OdeSolution {
         solution,

@@ -14,7 +14,10 @@ fn get_poly_degree(n: &Expr) -> Option<usize> {
         && Rat::is_integer(r)
         && r >= &BigRational::from_integer(0.into())
     {
-        return r.to_integer().try_into().ok();
+        let deg: usize = r.to_integer().try_into().ok()?;
+        if deg <= 100 {
+            return Some(deg);
+        }
     }
     None
 }

@@ -305,3 +305,25 @@ fn test_ic1_and_ic2_ode_integration() {
     let env0 = [("x".to_string(), 0.0_f64)].into_iter().collect();
     assert_eq!(particular.eval(&env0), Some(2.0));
 }
+
+#[test]
+fn test_phase50_transform_errors_partfrac_ilt_and_bvp_simplification() {
+    use sym_core::transform::{try_ilt, try_laplace};
+
+    // Unmatched laplace(sin(t^2), t, s) must return Err, never 1/(s^2+1)
+    let sin_t2 = Expr::sin(Expr::pow(Expr::var("t"), Expr::int(2)));
+    assert!(try_laplace(&sin_t2, "t", "s").is_err());
+
+    // ilt via Phase 48 partfrac: 1 / (s^2 - 1) -> sinh(t)
+    let f = Expr::div(
+        Expr::int(1),
+        Expr::sub(Expr::pow(Expr::var("s"), Expr::int(2)), Expr::int(1)),
+    );
+    let inv = try_ilt(&f, "s", "t").expect("ilt(1/(s^2-1))");
+    let env = [("t".to_string(), 0.7_f64)].into_iter().collect();
+    assert!((inv.eval(&env).unwrap() - 0.7_f64.sinh()).abs() < 1e-9);
+
+    // ic1 with folded zero coefficient: y = _C1 * (x - x) -> Err
+    let bad_sol = Expr::mul(Expr::var("_C1"), Expr::sub(Expr::var("x"), Expr::var("x")));
+    assert!(ic1(&bad_sol, "x", "_C1", &Expr::int(0), &Expr::int(1)).is_err());
+}

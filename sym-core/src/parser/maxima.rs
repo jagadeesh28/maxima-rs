@@ -766,12 +766,121 @@ mod cas_commands {
         Factor(Expr),
         Ratsimp(Expr),
         Partfrac(Expr, String),
+        Diff(Expr, String),
         Limit(Expr, String, Expr),
         Solve(Expr, String),
         Ode2(Expr, String, String),
         Integrate(Expr, String),
         Defint(Expr, String, Expr, Expr),
         Taylor(Expr, String, Expr, i64),
+        Laplace(Expr, String, String),
+        Ilt(Expr, String, String),
+        Ic1(Expr, String, Expr, Expr),
+        Ic2(Expr, String, Expr, Expr, Expr),
+        Bc2(Expr, String, Expr, Expr, Expr, Expr),
+        Determinant(Expr),
+        Invert(Expr),
+        Charpoly(Expr, String),
+        Trace(Expr),
+        Eigenvalues(Expr),
+        Adjoint(Expr),
+        Transpose(Expr),
+        Rectform(Expr),
+        Polarform(Expr),
+        Realpart(Expr),
+        Imagpart(Expr),
+        Conjugate(Expr),
+        Carg(Expr),
+        Cabs(Expr),
+        Bfloat(Expr, usize),
+        Csign(Expr),
+        Assume(Expr),
+        Is(Expr),
+        Orthopoly(String, usize, Expr),
+    }
+
+    impl CasCommand {
+        /// Primary expression carried by the command.
+        pub fn primary_expr(&self) -> &Expr {
+            match self {
+                Self::Expand(e)
+                | Self::Factor(e)
+                | Self::Ratsimp(e)
+                | Self::Partfrac(e, _)
+                | Self::Diff(e, _)
+                | Self::Limit(e, _, _)
+                | Self::Solve(e, _)
+                | Self::Ode2(e, _, _)
+                | Self::Integrate(e, _)
+                | Self::Defint(e, _, _, _)
+                | Self::Taylor(e, _, _, _)
+                | Self::Laplace(e, _, _)
+                | Self::Ilt(e, _, _)
+                | Self::Ic1(e, _, _, _)
+                | Self::Ic2(e, _, _, _, _)
+                | Self::Bc2(e, _, _, _, _, _)
+                | Self::Determinant(e)
+                | Self::Invert(e)
+                | Self::Charpoly(e, _)
+                | Self::Trace(e)
+                | Self::Eigenvalues(e)
+                | Self::Adjoint(e)
+                | Self::Transpose(e)
+                | Self::Rectform(e)
+                | Self::Polarform(e)
+                | Self::Realpart(e)
+                | Self::Imagpart(e)
+                | Self::Conjugate(e)
+                | Self::Carg(e)
+                | Self::Cabs(e)
+                | Self::Bfloat(e, _)
+                | Self::Csign(e)
+                | Self::Assume(e)
+                | Self::Is(e)
+                | Self::Orthopoly(_, _, e) => e,
+            }
+        }
+
+        /// Canonical WebUI operation ID for this command.
+        pub fn operation_id(&self) -> &'static str {
+            match self {
+                Self::Expand(_) => "expand",
+                Self::Factor(_) => "factor",
+                Self::Ratsimp(_) => "ratsimp",
+                Self::Partfrac(_, _) => "partfrac",
+                Self::Diff(_, _) => "differentiate",
+                Self::Limit(_, _, _) => "limit",
+                Self::Solve(_, _) => "solve",
+                Self::Ode2(_, _, _) => "ode2",
+                Self::Integrate(_, _) => "integrate",
+                Self::Defint(_, _, _, _) => "defint",
+                Self::Taylor(_, _, _, _) => "taylor",
+                Self::Laplace(_, _, _) => "laplace",
+                Self::Ilt(_, _, _) => "ilt",
+                Self::Ic1(_, _, _, _) => "ic1",
+                Self::Ic2(_, _, _, _, _) => "ic2",
+                Self::Bc2(_, _, _, _, _, _) => "bc2",
+                Self::Determinant(_) => "determinant",
+                Self::Invert(_) => "invert",
+                Self::Charpoly(_, _) => "charpoly",
+                Self::Trace(_) => "trace",
+                Self::Eigenvalues(_) => "eigenvalues",
+                Self::Adjoint(_) => "adjoint",
+                Self::Transpose(_) => "transpose",
+                Self::Rectform(_) => "rectform",
+                Self::Polarform(_) => "polarform",
+                Self::Realpart(_) => "realpart",
+                Self::Imagpart(_) => "imagpart",
+                Self::Conjugate(_) => "conjugate",
+                Self::Carg(_) => "carg",
+                Self::Cabs(_) => "cabs",
+                Self::Bfloat(_, _) => "bfloat",
+                Self::Csign(_) => "csign",
+                Self::Assume(_) => "assume",
+                Self::Is(_) => "is",
+                Self::Orthopoly(_, _, _) => "orthopoly",
+            }
+        }
     }
 
     fn split_top_level(s: &str) -> Vec<&str> {
@@ -845,6 +954,10 @@ mod cas_commands {
                 need(2)?;
                 Ok(CasCommand::Partfrac(e(0)?, v(1)))
             }
+            "diff" => {
+                need(2)?;
+                Ok(CasCommand::Diff(e(0)?, v(1)))
+            }
             "limit" => {
                 need(3)?;
                 Ok(CasCommand::Limit(e(0)?, v(1), parse_point(args[2])?))
@@ -863,7 +976,12 @@ mod cas_commands {
             }
             "defint" => {
                 need(4)?;
-                Ok(CasCommand::Defint(e(0)?, v(1), e(2)?, e(3)?))
+                Ok(CasCommand::Defint(
+                    e(0)?,
+                    v(1),
+                    parse_point(args[2])?,
+                    parse_point(args[3])?,
+                ))
             }
             "taylor" => {
                 need(4)?;
@@ -872,6 +990,115 @@ mod cas_commands {
                     .parse::<i64>()
                     .map_err(|_| err("bad taylor order"))?;
                 Ok(CasCommand::Taylor(e(0)?, v(1), e(2)?, order))
+            }
+            "laplace" => {
+                need(3)?;
+                Ok(CasCommand::Laplace(e(0)?, v(1), v(2)))
+            }
+            "ilt" => {
+                need(3)?;
+                Ok(CasCommand::Ilt(e(0)?, v(1), v(2)))
+            }
+            "ic1" => {
+                need(4)?;
+                Ok(CasCommand::Ic1(e(0)?, v(1), e(2)?, e(3)?))
+            }
+            "ic2" => {
+                need(5)?;
+                Ok(CasCommand::Ic2(e(0)?, v(1), e(2)?, e(3)?, e(4)?))
+            }
+            "bc2" => {
+                need(6)?;
+                Ok(CasCommand::Bc2(e(0)?, v(1), e(2)?, e(3)?, e(4)?, e(5)?))
+            }
+            "determinant" => {
+                need(1)?;
+                Ok(CasCommand::Determinant(e(0)?))
+            }
+            "invert" => {
+                need(1)?;
+                Ok(CasCommand::Invert(e(0)?))
+            }
+            "charpoly" => {
+                need(2)?;
+                Ok(CasCommand::Charpoly(e(0)?, v(1)))
+            }
+            "trace" | "mat_trace" => {
+                need(1)?;
+                Ok(CasCommand::Trace(e(0)?))
+            }
+            "eigenvalues" => {
+                need(1)?;
+                Ok(CasCommand::Eigenvalues(e(0)?))
+            }
+            "adjoint" => {
+                need(1)?;
+                Ok(CasCommand::Adjoint(e(0)?))
+            }
+            "transpose" => {
+                need(1)?;
+                Ok(CasCommand::Transpose(e(0)?))
+            }
+            "rectform" => {
+                need(1)?;
+                Ok(CasCommand::Rectform(e(0)?))
+            }
+            "polarform" => {
+                need(1)?;
+                Ok(CasCommand::Polarform(e(0)?))
+            }
+            "realpart" => {
+                need(1)?;
+                Ok(CasCommand::Realpart(e(0)?))
+            }
+            "imagpart" => {
+                need(1)?;
+                Ok(CasCommand::Imagpart(e(0)?))
+            }
+            "conjugate" => {
+                need(1)?;
+                Ok(CasCommand::Conjugate(e(0)?))
+            }
+            "carg" => {
+                need(1)?;
+                Ok(CasCommand::Carg(e(0)?))
+            }
+            "cabs" => {
+                need(1)?;
+                Ok(CasCommand::Cabs(e(0)?))
+            }
+            "bfloat" => {
+                if args.len() == 1 {
+                    Ok(CasCommand::Bfloat(e(0)?, 16))
+                } else if args.len() == 2 {
+                    let prec = args[1]
+                        .trim()
+                        .parse::<usize>()
+                        .map_err(|_| err("bad bfloat precision"))?;
+                    Ok(CasCommand::Bfloat(e(0)?, prec))
+                } else {
+                    Err(err("wrong argument count"))
+                }
+            }
+            "csign" => {
+                need(1)?;
+                Ok(CasCommand::Csign(e(0)?))
+            }
+            "assume" => {
+                need(1)?;
+                Ok(CasCommand::Assume(e(0)?))
+            }
+            "is" => {
+                need(1)?;
+                Ok(CasCommand::Is(e(0)?))
+            }
+            "legendre_p" | "chebyshev_t" | "chebyshev_u" | "hermite_h" | "laguerre_l" => {
+                need(2)?;
+                let deg = args[0]
+                    .trim()
+                    .parse::<usize>()
+                    .map_err(|_| err("bad orthopoly degree"))?;
+                Ok(CasCommand::Orthopoly(name.to_string(), deg, e(1)?))
             }
             _ => Err(err("unknown CAS command")),
         }
@@ -884,6 +1111,7 @@ mod cas_commands {
             CasCommand::Factor(e) => Some(crate::poly::factor(e)),
             CasCommand::Ratsimp(e) => crate::poly::ratsimp(e).ok(),
             CasCommand::Partfrac(e, v) => crate::poly::partfrac(e, v).ok(),
+            CasCommand::Diff(e, v) => Some(crate::diff::differentiate(e, v)),
             CasCommand::Limit(e, v, p) => crate::limit::limit(e, v, p),
             CasCommand::Solve(e, v) => {
                 let roots = crate::solve::solve(e, v).0;
@@ -902,6 +1130,94 @@ mod cas_commands {
                 _ => None,
             },
             CasCommand::Taylor(e, v, c, o) => crate::series::taylor(e, v, c, *o),
+            #[cfg(feature = "transform")]
+            CasCommand::Laplace(e, t, s) => crate::transform::try_laplace(e, t, s).ok(),
+            #[cfg(feature = "transform")]
+            CasCommand::Ilt(e, s, t) => crate::transform::try_ilt(e, s, t).ok(),
+            #[cfg(feature = "transform")]
+            CasCommand::Ic1(sol, x, x0, y0) => crate::transform::ic1(sol, x, "_C1", x0, y0).ok(),
+            #[cfg(feature = "transform")]
+            CasCommand::Ic2(sol, x, x0, y0, dy0) => {
+                crate::transform::ic2(sol, x, "_C1", "_C2", x0, y0, dy0).ok()
+            }
+            #[cfg(feature = "transform")]
+            CasCommand::Bc2(sol, x, x0, y0, x1, y1) => {
+                crate::transform::bc2(sol, x, "_C1", "_C2", (x0, y0), (x1, y1)).ok()
+            }
+            #[cfg(feature = "matrix")]
+            CasCommand::Determinant(e) => {
+                let m = crate::matrix::Matrix::from_expr(e).ok()?;
+                crate::matrix::determinant(&m).ok()
+            }
+            #[cfg(feature = "matrix")]
+            CasCommand::Invert(e) => {
+                let m = crate::matrix::Matrix::from_expr(e).ok()?;
+                crate::matrix::invert(&m).ok().map(|inv| inv.to_expr())
+            }
+            #[cfg(feature = "matrix")]
+            CasCommand::Charpoly(e, v) => {
+                let m = crate::matrix::Matrix::from_expr(e).ok()?;
+                crate::matrix::charpoly(&m, v).ok()
+            }
+            #[cfg(feature = "matrix")]
+            CasCommand::Trace(e) => {
+                let m = crate::matrix::Matrix::from_expr(e).ok()?;
+                crate::matrix::trace(&m).ok()
+            }
+            #[cfg(feature = "matrix")]
+            CasCommand::Eigenvalues(e) => {
+                let m = crate::matrix::Matrix::from_expr(e).ok()?;
+                crate::matrix::eigenvalues(&m)
+                    .ok()
+                    .map(|evs| Expr::matrix(vec![evs]))
+            }
+            #[cfg(feature = "matrix")]
+            CasCommand::Adjoint(e) => {
+                let m = crate::matrix::Matrix::from_expr(e).ok()?;
+                crate::matrix::adjoint(&m).ok().map(|adj| adj.to_expr())
+            }
+            #[cfg(feature = "matrix")]
+            CasCommand::Transpose(e) => {
+                let m = crate::matrix::Matrix::from_expr(e).ok()?;
+                Some(m.transpose().to_expr())
+            }
+            #[cfg(feature = "complex")]
+            CasCommand::Rectform(e) => Some(crate::complex::rectform_expr(e)),
+            #[cfg(feature = "complex")]
+            CasCommand::Polarform(e) => Some(crate::complex::polarform_expr(e)),
+            #[cfg(feature = "complex")]
+            CasCommand::Realpart(e) => Some(crate::complex::realpart(e)),
+            #[cfg(feature = "complex")]
+            CasCommand::Imagpart(e) => Some(crate::complex::imagpart(e)),
+            #[cfg(feature = "complex")]
+            CasCommand::Conjugate(e) => Some(crate::complex::conjugate(e)),
+            #[cfg(feature = "complex")]
+            CasCommand::Carg(e) => Some(crate::complex::carg(e)),
+            #[cfg(feature = "complex")]
+            CasCommand::Cabs(e) => Some(crate::complex::cabs(e)),
+            #[cfg(feature = "bfloat")]
+            CasCommand::Bfloat(e, prec) => {
+                Some(crate::bfloat::bfloat(e, Some((*prec).clamp(1, 200))))
+            }
+            #[cfg(feature = "assume")]
+            CasCommand::Csign(e) => Some(Expr::var(
+                &format!("{:?}", crate::assume::Assumptions::new().csign(e)).to_lowercase(),
+            )),
+            #[cfg(feature = "specfn")]
+            CasCommand::Orthopoly(kind, deg, x) => {
+                if *deg > 100 {
+                    return None;
+                }
+                match kind.as_str() {
+                    "legendre_p" => Some(crate::specfn::orthopoly::legendre_p_poly(*deg, x)),
+                    "chebyshev_t" => Some(crate::specfn::orthopoly::chebyshev_t_poly(*deg, x)),
+                    "chebyshev_u" => Some(crate::specfn::orthopoly::chebyshev_u_poly(*deg, x)),
+                    "hermite_h" => Some(crate::specfn::orthopoly::hermite_h_poly(*deg, x)),
+                    "laguerre_l" => Some(crate::specfn::orthopoly::laguerre_l_poly(*deg, x)),
+                    _ => None,
+                }
+            }
+            _ => None,
         }
     }
 }

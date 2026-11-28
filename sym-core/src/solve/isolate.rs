@@ -1,38 +1,83 @@
-//! Variable isolation for invertible elementary functions.
+//! Variable isolation for invertible elementary functions and linear forms.
 
 use crate::expr::Expr;
 
-/// Isolate `var` from equations of the form `f(g(x)) = c`.
+/// Isolate `var` from equations of the form `lhs - rhs = 0` or `lhs + rhs = 0`.
 pub(crate) fn isolate(expr: &Expr, var: &str) -> Option<Expr> {
-    let Expr::Sub(lhs, rhs) = expr else {
-        return None;
-    };
-    let (inner, target) = match lhs.as_ref() {
-        Expr::Exp(u) => ((**u).clone(), Expr::ln((**rhs).clone())),
-        Expr::Ln(u) => ((**u).clone(), Expr::exp((**rhs).clone())),
-        Expr::Sin(u) => ((**u).clone(), Expr::asin((**rhs).clone())),
-        Expr::Cos(u) => ((**u).clone(), Expr::acos((**rhs).clone())),
-        Expr::Tan(u) => ((**u).clone(), Expr::atan((**rhs).clone())),
+    let (lhs, rhs) = match expr {
+        Expr::Sub(a, b) => ((**a).clone(), (**b).clone()),
+        Expr::Add(a, b) => ((**a).clone(), Expr::neg((**b).clone())),
         _ => return None,
     };
-    solve_linear_var(&Expr::sub(inner, target), var)
+
+    // Orient so the side containing `var` is on the left, and reject circular occurrences.
+    let lhs_has = lhs.variables().iter().any(|v| v == var);
+    let rhs_has = rhs.variables().iter().any(|v| v == var);
+    let (func_side, const_side) = match (lhs_has, rhs_has) {
+        (true, false) => (lhs, rhs),
+        (false, true) => (rhs, lhs),
+        _ => return None, // Rejects missing var or circular `exp(x) - x = 0`
+    };
+
+    if let Some(root) = solve_linear_pair(&func_side, &const_side, var) {
+        return Some(root);
+    }
+
+    let (inner, target) = match func_side {
+        Expr::Exp(u) => (*u, Expr::ln(const_side)),
+        Expr::Ln(u) => (*u, Expr::exp(const_side)),
+        Expr::Sin(u) => (*u, Expr::asin(const_side)),
+        Expr::Cos(u) => (*u, Expr::acos(const_side)),
+        Expr::Tan(u) => (*u, Expr::atan(const_side)),
+        Expr::Sqrt(u) => (*u, Expr::pow(const_side, Expr::int(2))),
+        _ => return None,
+    };
+    if target.variables().iter().any(|v| v == var) {
+        return None;
+    }
+    solve_linear_pair(&inner, &target, var)
 }
 
-fn solve_linear_var(eq: &Expr, var: &str) -> Option<Expr> {
-    let Expr::Sub(a, b) = eq else {
-        return None;
-    };
-    if let Expr::Var(n) = a.as_ref()
-        && n.as_str() == var
-    {
-        return Some((**b).clone());
+/// Solve `lhs = rhs` where `lhs` is linear in `var` (`var`, `a*var + b`, `b - var`, etc.).
+fn solve_linear_pair(lhs: &Expr, rhs: &Expr, var: &str) -> Option<Expr> {
+    match lhs {
+        Expr::Var(n) if n == var => {
+            if rhs.variables().iter().any(|v| v == var) {
+                None
+            } else {
+                Some(rhs.clone())
+            }
+        }
+        Expr::Neg(inner) => solve_linear_pair(inner, &Expr::neg(rhs.clone()), var),
+        Expr::Add(a, b) => {
+            if !a.variables().iter().any(|v| v == var) {
+                solve_linear_pair(b, &Expr::sub(rhs.clone(), (**a).clone()), var)
+            } else if !b.variables().iter().any(|v| v == var) {
+                solve_linear_pair(a, &Expr::sub(rhs.clone(), (**b).clone()), var)
+            } else {
+                None
+            }
+        }
+        Expr::Sub(a, b) => {
+            if !b.variables().iter().any(|v| v == var) {
+                solve_linear_pair(a, &Expr::add(rhs.clone(), (**b).clone()), var)
+            } else if !a.variables().iter().any(|v| v == var) {
+                solve_linear_pair(b, &Expr::sub((**a).clone(), rhs.clone()), var)
+            } else {
+                None
+            }
+        }
+        Expr::Mul(a, b) => {
+            if !a.variables().iter().any(|v| v == var) && !a.is_zero() {
+                solve_linear_pair(b, &Expr::div(rhs.clone(), (**a).clone()), var)
+            } else if !b.variables().iter().any(|v| v == var) && !b.is_zero() {
+                solve_linear_pair(a, &Expr::div(rhs.clone(), (**b).clone()), var)
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
-    if let Expr::Var(n) = b.as_ref()
-        && n.as_str() == var
-    {
-        return Some(Expr::neg((**a).clone()));
-    }
-    None
 }
 
 #[cfg(test)]

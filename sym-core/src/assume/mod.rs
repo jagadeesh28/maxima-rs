@@ -551,6 +551,9 @@ impl Assumptions {
                 Sign::Unknown
             }
             Expr::Sub(a, b) => {
+                if let (Expr::Const(ra), Expr::Const(rb)) = (a.as_ref(), b.as_ref()) {
+                    return self.csign(&Expr::constant(ra - rb));
+                }
                 if a == b {
                     return Sign::Zero;
                 }
