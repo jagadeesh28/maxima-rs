@@ -1,6 +1,6 @@
-# Symbolic Rust Optimizer (SymOpt)
+# maxima-rs — Canonical Domain Glossary
 
-A compile-time symbolic mathematics and code optimization engine in Rust, combining algebraic calculus, e-graph equality saturation, and procedural macro code generation.
+A compile-time symbolic mathematics and code optimization engine in Rust, combining algebraic calculus, e-graph equality saturation, procedural CAS algorithms, and procedural macro code generation.
 
 ## Language
 
@@ -37,8 +37,8 @@ The default algebraic mode treating floating-point values as real numbers, enabl
 _Avoid_: Unsafe math, approximate mode
 
 **sym_fn!**:
-The item-level procedural macro declaring a symbolic function with named inputs, expression body, and requested derivative outputs (gradient, Jacobian, Hessian).
-_Avoid_: derive macro, attribute macro
+The item-level procedural macro declaring a symbolic function with named inputs, an expression body (`expr:`), and optional analytical gradient codegen (`gradient:`).
+_Avoid_: derive macro, attribute macro, Jacobian/Hessian macro codegen
 
 **sym_eval!**:
 An inline expression macro returning an optimized closure or value directly within existing Rust code blocks.
@@ -62,7 +62,7 @@ _Avoid_: codegen crate, derive crate
 
 **maxima-rs**:
 The user-facing facade crate that re-exports sym-core utilities and sym-macros procedural macros as a single dependency. Named to acknowledge the project's Maxima heritage.
-_Avoid_: max, sym-opt
+_Avoid_: SymOpt, max, sym-opt
 
 **Saturation Limits**:
 Fixed bounds on e-graph equality saturation (node limit, iteration limit, time limit) that prevent pathological compile-time blowups, with per-invocation overrides available via macro attributes.
@@ -219,6 +219,22 @@ _Avoid_: Tautological test, self-referential assertion
 **Print-Parse Round-Trip Invariant**:
 The invariant that formatting any symbolic `Expr` to a string or LaTeX and parsing it back yields an AST numerically and structurally equivalent to the original.
 _Avoid_: One-way formatting, lossy serialization
+
+**Simplification Flags (`SimpFlags`)**:
+A structured configuration record mirroring Maxima's `globals.lisp` simplification switches (`domain`, `radexpand`, `logexpand`, `triginverses`, `fast_math`) to control domain-sensitive e-graph rewrites safely.
+_Avoid_: Global mutable flags, monolithic fast-math switch
+
+**Singularity Condition Guard**:
+An `egg::Condition` predicate (`is_not_zero`, `is_positive`, `is_nonneg_int`) attached to e-graph rewrite rules to prevent unsound simplifications on `0/0`, `0^0`, `0^(-1)`, or negative factorials.
+_Avoid_: Unconditional zero folding, post-hoc filtering
+
+**Cooperative Cancellation Token (`CancelToken`)**:
+A shared atomic flag (`Arc<AtomicBool>`) checked inside e-graph runner hooks and CAS loops so expired worker threads abort promptly and release owned concurrency permits.
+_Avoid_: Unchecked blocking loops, forced thread kill
+
+**Client-Carried Session Context (`session_context`)**:
+A bounded, server-validated JSON payload carried between client requests and `/api/compute` to persist notebook bindings (`%`, `%oN`, `a: expr`) and scoped `Assumptions` without server-side session state.
+_Avoid_: Unbounded server memory map, global session state
 
 
 
