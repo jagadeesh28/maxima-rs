@@ -35,7 +35,17 @@ export async function initPalette({
       activeOp = opId;
       const btns = opContainer.querySelectorAll('.op-btn');
       btns.forEach(b => {
-        b.classList.toggle('active', b.dataset.op === opId);
+        const isActive = b.dataset.op === opId;
+        b.classList.toggle('active', isActive);
+        if (isActive) {
+          // Auto-expand parent category accordion if collapsed
+          const parentGroup = b.closest('.op-category-group');
+          if (parentGroup && !parentGroup.classList.contains('open')) {
+            parentGroup.classList.add('open');
+            const hdr = parentGroup.querySelector('.op-category-header');
+            if (hdr) hdr.setAttribute('aria-expanded', 'true');
+          }
+        }
       });
       renderParams(paramsContainer, activeOp, onParamsChanged, customParams);
       if (onOpChanged) onOpChanged(activeOp);
@@ -86,15 +96,27 @@ export async function initPalette({
   return paletteApi;
 }
 
-const CATEGORY_NAMES = {
-  algebra: 'Algebra',
-  calculus: 'Calculus',
-  solve: 'Solvers',
-  vector: 'Vector & Multivariable',
-  codegen: 'Code Generation',
-  eval: 'Evaluation',
-  reference: 'Reference & Inspection'
+const CATEGORY_META = {
+  algebra: { name: 'Algebra', icon: '📐' },
+  calculus: { name: 'Calculus', icon: '∫' },
+  solve: { name: 'Solvers & ODEs', icon: '⚡' },
+  matrix: { name: 'Matrix & Linear Algebra', icon: '▦' },
+  complex: { name: 'Complex & Residues', icon: 'ℂ' },
+  vector: { name: 'Vector & Multivariable', icon: '∇' },
+  codegen: { name: 'Code Generation', icon: '⚙️' },
+  reference: { name: 'Reference & Inspection', icon: '📖' }
 };
+
+const CATEGORY_ORDER = [
+  'algebra',
+  'calculus',
+  'solve',
+  'matrix',
+  'complex',
+  'vector',
+  'codegen',
+  'reference'
+];
 
 function renderOperations(container, operations, onSelectOp) {
   container.innerHTML = '';
@@ -107,40 +129,72 @@ function renderOperations(container, operations, onSelectOp) {
     groups[cat].push(op);
   });
 
-  const categoryOrder = ['algebra', 'calculus', 'solve', 'vector', 'codegen', 'eval', 'reference'];
   const allCats = [
-    ...categoryOrder.filter(c => groups[c]),
-    ...Object.keys(groups).filter(c => !categoryOrder.includes(c))
+    ...CATEGORY_ORDER.filter(c => groups[c]),
+    ...Object.keys(groups).filter(c => !CATEGORY_ORDER.includes(c))
   ];
 
-  allCats.forEach(cat => {
+  allCats.forEach((cat, index) => {
     const ops = groups[cat];
     if (!ops || ops.length === 0) return;
 
-    const groupDiv = document.createElement('div');
-    groupDiv.className = 'op-category-group';
+    const meta = CATEGORY_META[cat] || { name: cat, icon: '▪' };
+    const hasActiveOp = ops.some(op => op.id === activeOp);
+    // Expand category containing activeOp, or default to the first (Algebra)
+    const isOpen = hasActiveOp || (index === 0 && !allCats.some(c => (groups[c] || []).some(o => o.id === activeOp)));
 
-    const titleDiv = document.createElement('div');
-    titleDiv.className = 'op-category-title';
-    titleDiv.textContent = CATEGORY_NAMES[cat] || cat;
-    groupDiv.appendChild(titleDiv);
+    const groupDiv = document.createElement('div');
+    groupDiv.className = `op-category-group ${isOpen ? 'open' : ''}`;
+    groupDiv.dataset.cat = cat;
+
+    // Accordion Dropdown Header
+    const headerBtn = document.createElement('button');
+    headerBtn.type = 'button';
+    headerBtn.className = 'op-category-header';
+    headerBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    headerBtn.innerHTML = `
+      <div class="cat-left">
+        <span class="cat-icon">${meta.icon}</span>
+        <span>${meta.name}</span>
+        <span class="cat-badge">${ops.length}</span>
+      </div>
+      <svg class="cat-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+      </svg>
+    `;
+
+    // Dropdown toggle click handler
+    headerBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const willOpen = !groupDiv.classList.contains('open');
+      groupDiv.classList.toggle('open', willOpen);
+      headerBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+
+    // Accordion Dropdown Body
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'op-category-body';
 
     const gridDiv = document.createElement('div');
     gridDiv.className = 'op-grid';
 
     ops.forEach(op => {
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = `op-btn ${op.id === activeOp ? 'active' : ''}`;
       btn.dataset.op = op.id;
       btn.textContent = op.name || op.label || op.id;
       btn.title = op.description || '';
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
         if (onSelectOp) onSelectOp(op.id);
       });
       gridDiv.appendChild(btn);
     });
 
-    groupDiv.appendChild(gridDiv);
+    bodyDiv.appendChild(gridDiv);
+    groupDiv.appendChild(headerBtn);
+    groupDiv.appendChild(bodyDiv);
     container.appendChild(groupDiv);
   });
 }
