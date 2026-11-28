@@ -1208,6 +1208,28 @@ When starting a new session, instruct the AI:
 - `cargo test --workspace --all-features` (exit 0: 159 `sym-core` unit + 28 `maxima-web` unit + all integration/proptest/doctests)
 - `docs/audits/PHASE50_REPORT.md` compiled.
 
+---
+
+## Session 51 — Newbie-First UI/UX Overhaul, Stateless Session Context & Accessibility (Phase 51)
+
+**Date**: 2026-11-28  
+**Scope**: Completed Phase 51 across `sym-core`, `maxima-rs`, `maxima-web` (API, service, static HTML/JS/CSS), and `tests/integration/webui_e2e.rs`.
+
+### Deliverables Built
+1. **Stateless Session Context (`maxima-web/src/{api,service}.rs`, `sym-core`)**: Added bounded client-carried `SessionContext` (`%`, `%oN`, `a: expr` bindings, `assume`/`facts`/`forget`/`kill(all)`), AST-level substitution (`subst_expr_map`), bare `%` parsing in `parser/maxima.rs`, and `Assumptions` threading into `integrate_result_with_assumptions`, `defint_with_assumptions`, `limit_with_assumptions`, `is`, and `csign`.
+2. **Newbie Onboarding & Guided Input (`maxima-web/static/`)**: Added 12-card Interactive Empty-State Onboarding + Quick Syntax Card, mode-aware `#syntaxHintBar`, `#latexDetectBanner`, `fixit.js` (`error_span` caret + 1-click Fix-It suggestions), collapsible `#advancedSettings` (`Fast-Math` + `fpprec`), and `transform`/`assume` categories in `palette.js`.
+3. **Notebook Workflow & Accessibility**: Added per-cell Edit & Re-run, Delete, `.md`/`.tex` Export, mode-aware Use as input, active-tab Copy, `Shift+Enter`/`Ctrl+Enter` in param inputs, `Escape` + focus trap in `#rulesModal`, `<label for>`, `aria-live="polite"`, mobile layout (`<= 768px`), and WCAG AA contrast tokens.
+
+### Passing Gate Verification
+- `cargo fmt --all -- --check` (exit 0)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo test -p maxima-web` (exit 0: 28 passed)
+- `cargo test -p maxima-tests --test webui_e2e` (exit 0: 20 passed)
+- `E:\Anaconda\python.exe scripts/verify_css_classes.py` (exit 0: 129 used, 141 defined, 0 missing)
+- `node --check maxima-web/static/js/*.js` (exit 0)
+- Live browser E2E (`http://127.0.0.1:18080/`): 12/12 starter cards, LaTeX auto-detect, Fix-It, `session_context`, `Escape` modal, and XSS immunity verified.
+- `docs/audits/PHASE51_REPORT.md` compiled.
+
 
 
 

@@ -1,21 +1,49 @@
 /**
- * Live Typeset Preview & Syntax Checker using POST /api/parse and local KaTeX.
+ * Live Typeset Preview, Syntax Hint Bar, LaTeX Auto-Detect & Fix-It Caret Renderer.
  */
 import { parse } from './api.js';
+import { looksLikeLatex, buildErrorDiagnosticEl } from './fixit.js';
 
 let debounceTimer = null;
 let activeController = null;
 let requestSeq = 0;
 
-function showPreviewError(previewEl, message) {
-  const span = document.createElement('span');
-  span.className = 'text-danger text-xs';
-  span.textContent = message;
-  previewEl.replaceChildren(span);
-}
+export function initPreview({
+  inputEl,
+  formatEl,
+  previewEl,
+  varsContainer,
+  syntaxHintEl,
+  latexBannerEl,
+  switchLatexBtn,
+  getActiveOperation,
+  onVariablesDetected
+}) {
+  const updateHintAndBanner = () => {
+    const fmt = formatEl ? formatEl.value : 'maxima';
+    if (syntaxHintEl) {
+      if (fmt === 'latex') {
+        syntaxHintEl.innerHTML = 'LaTeX math mode: use <code>\\frac{a}{b}</code>, <code>\\sin(x)</code>, <code>\\pi</code>, <code>x^{2}</code>, <code>\\int x \\, dx</code>.';
+      } else {
+        syntaxHintEl.innerHTML = 'Maxima syntax: use <code>*</code> for multiply (<code>2*x</code>), <code>^</code> for powers (<code>x^2</code>), <code>%pi</code>, <code>%e</code>, <code>%i</code>, <code>%</code> for last result.';
+      }
+    }
+    if (latexBannerEl) {
+      const show = looksLikeLatex(inputEl.value, fmt);
+      latexBannerEl.style.display = show ? 'flex' : 'none';
+    }
+  };
 
-export function initPreview({ inputEl, formatEl, previewEl, varsContainer, onVariablesDetected }) {
+  if (switchLatexBtn && formatEl) {
+    switchLatexBtn.addEventListener('click', () => {
+      formatEl.value = 'latex';
+      formatEl.dispatchEvent(new Event('change'));
+      inputEl.focus();
+    });
+  }
+
   const update = () => {
+    updateHintAndBanner();
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
       const expression = inputEl.value.trim();
@@ -49,7 +77,19 @@ export function initPreview({ inputEl, formatEl, previewEl, varsContainer, onVar
             previewEl.textContent = res.latex;
           }
         } else {
-          showPreviewError(previewEl, res.error || 'Syntax error');
+          const op = typeof getActiveOperation === 'function' ? getActiveOperation() : '';
+          const diag = buildErrorDiagnosticEl({
+            expr: expression,
+            message: res.error || 'Syntax error',
+            span: res.error_span,
+            operation: op,
+            onApplyFix: (fixed) => {
+              inputEl.value = fixed;
+              inputEl.dispatchEvent(new Event('input'));
+              inputEl.focus();
+            }
+          });
+          previewEl.replaceChildren(diag);
         }
 
         if (varsContainer) {
@@ -71,12 +111,16 @@ export function initPreview({ inputEl, formatEl, previewEl, varsContainer, onVar
       } catch (err) {
         if (err && err.name === 'AbortError') return;
         if (seq !== requestSeq) return;
-        showPreviewError(previewEl, err.message || 'Parse failed');
+        const span = document.createElement('span');
+        span.className = 'text-danger text-xs';
+        span.textContent = err.message || 'Parse failed';
+        previewEl.replaceChildren(span);
       }
     }, 180);
   };
 
   inputEl.addEventListener('input', update);
   formatEl.addEventListener('change', update);
+  updateHintAndBanner();
   return { refresh: update };
 }

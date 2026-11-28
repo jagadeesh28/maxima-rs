@@ -177,6 +177,25 @@ pub fn integrate_result(expr: &Expr, var: &str) -> IntegrationResult {
     }
 }
 
+/// Integrate `expr` with respect to `var` under an optional [`Assumptions`] context,
+/// returning a structured [`IntegrationResult`].
+#[cfg(feature = "assume")]
+pub fn integrate_result_with_assumptions(
+    expr: &Expr,
+    var: &str,
+    assumptions: Option<&Assumptions>,
+) -> IntegrationResult {
+    if is_proven_non_elementary(expr, var) {
+        return IntegrationResult::ProvenNonElementary;
+    }
+    let res = integrate_with_assumptions(expr, var, assumptions);
+    if contains_integral(&res) {
+        IntegrationResult::Unsupported("no elementary antiderivative rule matched".to_string())
+    } else {
+        IntegrationResult::Solved(res)
+    }
+}
+
 #[cfg(feature = "assume")]
 use crate::assume::{Assumptions, Comparison, PredicateResult};
 
@@ -395,6 +414,7 @@ fn integrate_pow_with_assumptions(
     assumptions: Option<&Assumptions>,
 ) -> Expr {
     if is_constant_wrt(exp, var)
+        && as_const(exp).is_none()
         && let Some(ctx) = assumptions
         && matches!(base, Expr::Var(v) if v == var)
         && (ctx.is(exp, Comparison::NotEqual, &Expr::int(-1)) == PredicateResult::True

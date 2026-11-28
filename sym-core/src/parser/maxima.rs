@@ -257,11 +257,12 @@ fn primary(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
         }
     }
 
-    // 2. Maxima constants: %pi, %e (other %-symbols stay symbolic)
+    // 2. Maxima constants: %pi, %e, %i, % (last result), and other %-symbols
     if i.starts_with('%') {
         *i = &i[1..];
-        let name =
-            take_ident(i).ok_or_else(|| winnow::error::ErrMode::Cut(ContextError::default()))?;
+        let Some(name) = take_ident(i) else {
+            return Ok(Expr::var("%"));
+        };
         return match name {
             "pi" => Ok(Expr::pi()),
             "e" => Ok(Expr::e()),

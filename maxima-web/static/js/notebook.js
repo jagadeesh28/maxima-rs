@@ -1,11 +1,113 @@
 /**
- * Interactive Notebook Stream Model (In[n] / Out[n]).
+ * Interactive Notebook Stream Model (In[n] / Out[n]) with Onboarding,
+ * Per-Cell Edit/Delete/Export, Active-Tab Copy, Mode-Aware Use-As-Input,
+ * and Error-Span Fix-It Diagnostics.
  */
+import { buildErrorDiagnosticEl } from './fixit.js';
 
 let cellCounter = 0;
 const cells = [];
 
-export function initNotebook({ container, onUseAsInput }) {
+export const STARTER_EXAMPLES = [
+  {
+    category: 'Algebra',
+    title: 'Trig Identity',
+    expr: 'sin(x)^2 + cos(x)^2',
+    op: 'simplify',
+    params: null
+  },
+  {
+    category: 'Algebra',
+    title: 'Binomial Expansion',
+    expr: '(x + 1)^4',
+    op: 'expand',
+    params: null
+  },
+  {
+    category: 'Algebra',
+    title: 'Cubic Factorization',
+    expr: 'x^3 - 6*x^2 + 11*x - 6',
+    op: 'factor',
+    params: null
+  },
+  {
+    category: 'Algebra',
+    title: 'Partial Fractions',
+    expr: '1/(x^2 - 1)',
+    op: 'partfrac',
+    params: { variable: 'x' }
+  },
+  {
+    category: 'Calculus',
+    title: 'Product Derivative',
+    expr: 'sin(x) * cos(x)',
+    op: 'differentiate',
+    params: { variable: 'x' }
+  },
+  {
+    category: 'Calculus',
+    title: 'Integration by Parts',
+    expr: 'x * exp(x)',
+    op: 'integrate',
+    params: { variable: 'x' }
+  },
+  {
+    category: 'Calculus',
+    title: 'Definite Integral',
+    expr: '1/x^2',
+    op: 'defint',
+    params: { variable: 'x', lower: '1', upper: '2' }
+  },
+  {
+    category: 'Calculus',
+    title: 'Sinc Limit',
+    expr: 'sin(x)/x',
+    op: 'limit',
+    params: { variable: 'x', point: '0' }
+  },
+  {
+    category: 'Calculus',
+    title: 'Taylor Series',
+    expr: 'exp(x)',
+    op: 'taylor',
+    params: { variable: 'x', center: '0', order: '5' }
+  },
+  {
+    category: 'Solvers',
+    title: 'Quadratic Roots',
+    expr: 'x^2 - 5*x + 6',
+    op: 'solve',
+    params: { variable: 'x' }
+  },
+  {
+    category: 'Matrix',
+    title: 'Bareiss Determinant',
+    expr: 'matrix([1, 2], [3, 4])',
+    op: 'determinant',
+    params: null
+  },
+  {
+    category: 'Codegen',
+    title: 'Rosenbrock Rust Gradient',
+    expr: '(1 - x)^2 + 100*(y - x^2)^2',
+    op: 'rust_gradient',
+    params: null
+  }
+];
+
+export function initNotebook({
+  container,
+  onUseAsInput,
+  onEditCell,
+  onRunStarter,
+  onApplyFix
+}) {
+  const showEmpty = () => {
+    renderOnboarding(container, onRunStarter);
+  };
+
+  showEmpty();
+
   return {
     addCell(request, response, durationMs) {
       cellCounter += 1;
@@ -17,18 +119,24 @@ export function initNotebook({ container, onUseAsInput }) {
         timestamp: new Date()
       };
       cells.unshift(cellData);
-      renderCell(container, cellData, onUseAsInput);
+      renderCell(container, cellData, {
+        onUseAsInput,
+        onEditCell,
+        onApplyFix,
+        onDelete: (idx) => {
+          const pos = cells.findIndex(c => c.index === idx);
+          if (pos !== -1) cells.splice(pos, 1);
+          const el = container.querySelector(`#cell-${idx}`);
+          if (el) el.remove();
+          if (cells.length === 0) showEmpty();
+        }
+      });
       return cellData;
     },
     clear() {
       cells.length = 0;
       cellCounter = 0;
-      container.innerHTML = `
-        <div class="empty-notebook-state p-8 text-center text-muted border-2 border-dashed border-app rounded-xl">
-          <p class="font-medium">No computations in notebook yet</p>
-          <p class="text-xs text-dim mt-1">Select an operation and click <strong>Compute</strong> (or press <strong>Shift+Enter</strong>) to evaluate an expression.</p>
-        </div>
-      `;
+      showEmpty();
     },
     getCells() {
       return [...cells];
@@ -36,16 +144,80 @@ export function initNotebook({ container, onUseAsInput }) {
   };
 }
 
-function renderCell(container, cellData, onUseAsInput) {
+function renderOnboarding(container, onRunStarter) {
+  const panel = document.createElement('div');
+  panel.className = 'empty-notebook-state onboarding-panel';
+
+  const header = document.createElement('div');
+  header.className = 'onboarding-header';
+  header.innerHTML = `
+    <h2 style="font-size:1.125rem; font-weight:700; color:var(--text-main);">Welcome to maxima-rs Symbolic Notebook</h2>
+    <p class="text-xs text-muted mt-1">Click any starter example below to run it immediately, or type your own expression on the left.</p>
+  `;
+  panel.appendChild(header);
+
+  const grid = document.createElement('div');
+  grid.className = 'starter-grid';
+
+  STARTER_EXAMPLES.forEach((item, idx) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'starter-card';
+    card.dataset.starterIdx = String(idx);
+
+    const cat = document.createElement('span');
+    cat.className = 'starter-cat';
+    cat.textContent = item.category;
+
+    const title = document.createElement('span');
+    title.className = 'starter-title';
+    title.textContent = item.title;
+
+    const expr = document.createElement('code');
+    expr.className = 'starter-expr';
+    expr.textContent = item.expr;
+
+    card.appendChild(cat);
+    card.appendChild(title);
+    card.appendChild(expr);
+
+    card.addEventListener('click', () => {
+      if (typeof onRunStarter === 'function') {
+        onRunStarter(item);
+      }
+    });
+
+    grid.appendChild(card);
+  });
+  panel.appendChild(grid);
+
+  const syntaxCard = document.createElement('div');
+  syntaxCard.className = 'syntax-card';
+  syntaxCard.innerHTML = `
+    <div class="text-xs font-bold uppercase text-muted mb-2">Quick Syntax Guide</div>
+    <div class="syntax-grid">
+      <div class="syntax-item"><code>2*x^3</code><span>Powers &amp; explicit multiply</span></div>
+      <div class="syntax-item"><code>%pi, %e, %i</code><span>Exact symbolic constants</span></div>
+      <div class="syntax-item"><code>a: x^2 + 1</code><span>Save variable in session</span></div>
+      <div class="syntax-item"><code>%, %o1</code><span>Reference last / N-th output</span></div>
+      <div class="syntax-item"><code>assume(x &gt; 0)</code><span>Add domain assumption</span></div>
+      <div class="syntax-item"><code>kill(all)</code><span>Reset session bindings &amp; facts</span></div>
+    </div>
+  `;
+  panel.appendChild(syntaxCard);
+
+  container.replaceChildren(panel);
+}
+
+function renderCell(container, cellData, callbacks) {
   const emptyState = container.querySelector('.empty-notebook-state');
   if (emptyState) emptyState.remove();
 
   const { index, request, response, durationMs } = cellData;
-  const cell = document.createElement('div');
+  const cell = document.createElement('article');
   cell.className = 'notebook-cell';
   cell.id = `cell-${index}`;
 
-  // 1. Header
   const statusClass = getStatusClass(response.status);
   const statusLabel = response.status || 'ok';
   const verifiedBadge = response.verified === true
@@ -58,27 +230,31 @@ function renderCell(container, cellData, onUseAsInput) {
 
   cell.innerHTML = `
     <div class="cell-header">
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
         <span class="cell-prompt">In[${index}]</span>
         <span class="badge bg-subtle text-muted border border-app">${escapeHtml(request.operation)}</span>
         <span class="badge ${statusClass}">${escapeHtml(statusLabel)}</span>
         ${verifiedBadge}
       </div>
-      <div class="flex items-center gap-2 text-xs text-muted">
-        <span>${Number(durationMs) || 0}ms</span>
-        <button class="btn btn-sm btn-secondary use-as-input-btn" title="Promote output expression to active input">Use as input</button>
-        <button class="btn btn-sm btn-secondary copy-cell-btn" title="Copy result to clipboard">Copy</button>
+      <div class="flex items-center gap-1 flex-wrap text-xs text-muted">
+        <span class="px-2">${Number(durationMs) || 0}ms</span>
+        <button type="button" class="btn btn-sm btn-secondary edit-cell-btn" title="Load back into editor to edit and re-run">Edit</button>
+        <button type="button" class="btn btn-sm btn-secondary use-as-input-btn" title="Promote output expression to active input">Use as input</button>
+        <button type="button" class="btn btn-sm btn-secondary copy-cell-btn" title="Copy active tab content">Copy</button>
+        <button type="button" class="btn btn-sm btn-secondary export-md-btn" title="Export cell as Markdown">.md</button>
+        <button type="button" class="btn btn-sm btn-secondary export-tex-btn" title="Export cell as LaTeX">.tex</button>
+        <button type="button" class="btn btn-sm btn-secondary delete-cell-btn" aria-label="Delete cell ${index}" title="Delete this cell">&times;</button>
       </div>
     </div>
     <div class="cell-input-body">${escapeHtml(request.expression)}</div>
     <div class="cell-output-body">
       ${renderWarnings(response.warnings)}
-      <div class="tab-bar">
-        <button class="tab-btn active" data-tab="typeset">Typeset</button>
-        <button class="tab-btn" data-tab="maxima">Maxima</button>
-        <button class="tab-btn" data-tab="latex">LaTeX</button>
-        ${response.rust_code ? '<button class="tab-btn" data-tab="rust">Rust</button>' : ''}
-        ${rulesList.length ? '<button class="tab-btn" data-tab="rules">Rules (' + rulesList.length + ')</button>' : ''}
+      <div class="tab-bar" role="tablist">
+        <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-tab="typeset">Typeset</button>
+        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="maxima">Maxima</button>
+        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="latex">LaTeX</button>
+        ${response.rust_code ? '<button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="rust">Rust</button>' : ''}
+        ${rulesList.length ? '<button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="rules">Rules (' + rulesList.length + ')</button>' : ''}
       </div>
       <div class="tab-content">
         <div class="tab-pane tab-typeset typeset-view"></div>
@@ -90,11 +266,23 @@ function renderCell(container, cellData, onUseAsInput) {
     </div>
   `;
 
-  // Render Typeset math via local KaTeX
+  // Render Typeset or Error Diagnostic
   const typesetContainer = cell.querySelector('.tab-typeset');
-  renderTypesetOutput(typesetContainer, response);
+  if (response.status === 'error') {
+    const diag = buildErrorDiagnosticEl({
+      expr: request.expression,
+      message: response.error || response.result || 'Computation error',
+      span: response.error_span,
+      operation: request.operation,
+      onApplyFix: callbacks.onApplyFix
+    });
+    typesetContainer.replaceChildren(diag);
+  } else {
+    renderTypesetOutput(typesetContainer, response);
+  }
 
   // Tab switching logic
+  let activeTab = 'typeset';
   const tabBtns = cell.querySelectorAll('.tab-btn');
   const tabPanes = {
     typeset: cell.querySelector('.tab-typeset'),
@@ -106,28 +294,76 @@ function renderCell(container, cellData, onUseAsInput) {
 
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      tabBtns.forEach(b => b.classList.remove('active'));
+      tabBtns.forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
       btn.classList.add('active');
-      const target = btn.dataset.tab;
+      btn.setAttribute('aria-selected', 'true');
+      activeTab = btn.dataset.tab;
       Object.entries(tabPanes).forEach(([key, pane]) => {
-        if (pane) pane.style.display = (key === target) ? 'block' : 'none';
+        if (pane) pane.style.display = (key === activeTab) ? 'block' : 'none';
       });
     });
   });
 
-  // Action buttons
-  const useBtn = cell.querySelector('.use-as-input-btn');
-  useBtn.addEventListener('click', () => {
-    const val = response.result || request.expression;
-    if (onUseAsInput) onUseAsInput(val);
+  // Per-cell action buttons
+  cell.querySelector('.edit-cell-btn').addEventListener('click', () => {
+    if (callbacks.onEditCell) callbacks.onEditCell(request);
+  });
+
+  cell.querySelector('.delete-cell-btn').addEventListener('click', () => {
+    if (callbacks.onDelete) callbacks.onDelete(index);
+  });
+
+  cell.querySelector('.use-as-input-btn').addEventListener('click', () => {
+    if (callbacks.onUseAsInput) callbacks.onUseAsInput(response, request);
   });
 
   const copyBtn = cell.querySelector('.copy-cell-btn');
   copyBtn.addEventListener('click', async () => {
-    const val = response.result || response.result_latex || '';
-    await navigator.clipboard.writeText(val);
+    let val = '';
+    if (activeTab === 'maxima') val = response.result || '';
+    else if (activeTab === 'latex') val = response.result_latex || '';
+    else if (activeTab === 'rust') val = response.rust_code || '';
+    else if (activeTab === 'rules') {
+      val = rulesList.map(r => `${r.name}: ${r.identity || ''} (${r.source_file})`).join('\n');
+    } else {
+      val = response.result || response.result_latex || '';
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(val);
+    }
     copyBtn.textContent = 'Copied!';
     setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+  });
+
+  cell.querySelector('.export-md-btn').addEventListener('click', () => {
+    const md = [
+      `# Cell In[${index}] (${request.operation})`,
+      '',
+      '**Input:**',
+      '```maxima',
+      request.expression,
+      '```',
+      '',
+      '**Result:**',
+      '```maxima',
+      response.result || '',
+      '```',
+      '',
+      response.result_latex ? `$$${response.result_latex}$$` : ''
+    ].join('\n');
+    downloadTextFile(`maxima-cell-${index}.md`, md, 'text/markdown');
+  });
+
+  cell.querySelector('.export-tex-btn').addEventListener('click', () => {
+    const tex = [
+      `% maxima-rs cell In[${index}] (${request.operation})`,
+      `% Input: ${request.expression}`,
+      `\\[${response.result_latex || response.result || ''}\\]`
+    ].join('\n');
+    downloadTextFile(`maxima-cell-${index}.tex`, tex, 'application/x-tex');
   });
 
   container.prepend(cell);
@@ -136,6 +372,18 @@ function renderCell(container, cellData, onUseAsInput) {
   } else {
     cell.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+}
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
 function renderTypesetOutput(container, response) {
@@ -170,7 +418,6 @@ function renderTypesetOutput(container, response) {
     renderMath(outMath, response.result_latex || response.result || '');
     container.appendChild(outMath);
   } else if (response.outputs && response.outputs.length > 1) {
-    // Multi-output (e.g. roots or gradient components)
     container.innerHTML = '';
     response.outputs.forEach(out => {
       const row = document.createElement('div');

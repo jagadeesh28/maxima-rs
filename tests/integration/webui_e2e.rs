@@ -15,6 +15,7 @@ fn req(expr: &str, op: &str, vars: &[&str]) -> ComputeRequest {
         fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
+        session_context: None,
     }
 }
 
@@ -33,6 +34,7 @@ fn req_with_params(expr: &str, op: &str, params: &[(&str, serde_json::Value)]) -
         fast_math: true,
         env: HashMap::new(),
         params: param_map,
+        session_context: None,
     }
 }
 
@@ -317,4 +319,107 @@ fn compute_phase50_new_operations_and_cas_dispatch() {
     let cmd_adj = compute(&req("adjoint(matrix([1, 2], [3, 4]))", "simplify", &[]));
     assert!(cmd_adj.success);
     assert_eq!(cmd_adj.operation, "adjoint");
+}
+
+#[test]
+fn compute_phase51_session_context_continuity_and_bounds() {
+    use maxima_web::api::SessionContext;
+
+    let mut ctx = Some(SessionContext::default());
+
+    // 1. Variable binding: a: x^3
+    let mut r1 = req("a: x^3", "simplify", &[]);
+    r1.session_context = ctx.clone();
+    let resp1 = compute(&r1);
+    assert!(resp1.success, "assign failed: {:?}", resp1.error);
+    assert_eq!(resp1.operation, "assign");
+    ctx = resp1.session_context.clone();
+    assert_eq!(
+        ctx.as_ref()
+            .and_then(|c| c.bindings.get("a"))
+            .map(String::as_str),
+        Some("(x ^ 3)")
+    );
+
+    // 2. Differentiate bound variable `a` w.r.t. x -> 3 * x^2
+    let mut r2 = req("a", "differentiate", &["x"]);
+    r2.session_context = ctx.clone();
+    let resp2 = compute(&r2);
+    assert!(resp2.success, "diff(a, x) failed: {:?}", resp2.error);
+    assert!(resp2.result.contains("3") && resp2.result.contains("x ^ 2"));
+    ctx = resp2.session_context.clone();
+    assert_eq!(
+        ctx.as_ref().and_then(|c| c.last_result.as_deref()),
+        Some(resp2.result.as_str())
+    );
+
+    // 3. Integrate `%` (last result) w.r.t. x -> x^3
+    let mut r3 = req("%", "integrate", &["x"]);
+    r3.session_context = ctx.clone();
+    let resp3 = compute(&r3);
+    assert!(resp3.success, "integrate(%, x) failed: {:?}", resp3.error);
+    assert!(resp3.result.contains("x ^ 3"));
+    ctx = resp3.session_context.clone();
+
+    // 4. Assume `n > 0` and verify `is(n > 0)` + `integrate(x^n, x)` + `limit(x^n, x, inf)`
+    let mut r4 = req("assume(n > 0)", "simplify", &[]);
+    r4.session_context = ctx.clone();
+    let resp4 = compute(&r4);
+    assert!(resp4.success, "assume failed: {:?}", resp4.error);
+    ctx = resp4.session_context.clone();
+    assert_eq!(ctx.as_ref().map(|c| c.facts.len()), Some(1));
+
+    let mut r5 = req("is(n > 0)", "simplify", &[]);
+    r5.session_context = ctx.clone();
+    let resp5 = compute(&r5);
+    assert!(resp5.success);
+    assert_eq!(resp5.result, "true");
+    ctx = resp5.session_context.clone();
+
+    let mut r6 = req("x^n", "integrate", &["x"]);
+    r6.session_context = ctx.clone();
+    let resp6 = compute(&r6);
+    assert!(resp6.success);
+    assert_eq!(resp6.status, Status::Ok);
+    assert!(resp6.result.contains("n + 1"));
+    ctx = resp6.session_context.clone();
+
+    // 5. `facts()` and `forget(n > 0)`
+    let mut r7 = req("facts()", "simplify", &[]);
+    r7.session_context = ctx.clone();
+    let resp7 = compute(&r7);
+    assert!(resp7.success);
+    assert!(resp7.result.contains("n > 0"));
+    ctx = resp7.session_context.clone();
+
+    let mut r8 = req("forget(n > 0)", "simplify", &[]);
+    r8.session_context = ctx.clone();
+    let resp8 = compute(&r8);
+    assert!(resp8.success);
+    ctx = resp8.session_context.clone();
+    assert!(ctx.as_ref().is_some_and(|c| c.facts.is_empty()));
+
+    // 6. `kill(all)` resets bindings, last_result, outputs, and facts
+    let mut r9 = req("kill(all)", "simplify", &[]);
+    r9.session_context = ctx.clone();
+    let resp9 = compute(&r9);
+    assert!(resp9.success);
+    assert_eq!(resp9.result, "done");
+    let cleared = resp9.session_context.expect("session_context returned");
+    assert!(cleared.last_result.is_none());
+    assert!(cleared.bindings.is_empty());
+    assert!(cleared.outputs.is_empty());
+    assert!(cleared.facts.is_empty());
+    assert_eq!(cleared.next_index, 1);
+
+    // 7. Bounds enforcement: > 32 bindings rejected
+    let mut over_ctx = SessionContext::default();
+    for i in 0..33 {
+        over_ctx.bindings.insert(format!("v{i}"), "1".to_string());
+    }
+    let mut r_over = req("x + 1", "simplify", &[]);
+    r_over.session_context = Some(over_ctx);
+    let resp_over = compute(&r_over);
+    assert!(!resp_over.success);
+    assert_eq!(resp_over.status, Status::Error);
 }

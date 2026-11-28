@@ -14,7 +14,7 @@ use maxima_rs::saturate::SaturationConfig;
 
 use crate::api::{
     ComputeRequest, ComputeResponse, ErrorSpan, FileRuleCount, Operation, Output, ParamSpec,
-    ParseRequest, ParseResponse, RuleEntry, RulesResponse, Status,
+    ParseRequest, ParseResponse, RuleEntry, RulesResponse, SessionContext, Status,
 };
 
 static PARAM_VAR: &[ParamSpec] = &[ParamSpec {
@@ -806,8 +806,26 @@ fn run_operation(
 
     validate_request_bounds(req).map_err(|e| (e, None))?;
 
+    let mut session_ctx = req.session_context.clone();
+    let mut assumptions = if let Some(ref ctx) = session_ctx {
+        validate_session_context(ctx).map_err(|e| (e, None))?;
+        build_session_assumptions(ctx).map_err(|e| (e, None))?
+    } else {
+        Assumptions::new()
+    };
+
+    // Handle Maxima session commands (`kill(...)`, `facts()`, `forget(...)`, `a: expr`)
+    if req.input_format != "latex"
+        && let Some(handled) =
+            try_handle_session_command(req, resp, &mut session_ctx, &mut assumptions, start)?
+        && handled
+    {
+        resp.session_context = session_ctx;
+        return Ok(());
+    }
+
     // For jacobian, allow vector `[f1, f2, ...]` inputs in Maxima format.
-    let (expr, vector_exprs) = if req.operation == "jacobian"
+    let (mut expr, mut vector_exprs) = if req.operation == "jacobian"
         && req.input_format != "latex"
         && is_bracket_vector(&req.expression)
     {
@@ -817,6 +835,19 @@ fn run_operation(
     } else {
         (parse_input(req)?, None)
     };
+
+    if let Some(ref ctx) = session_ctx {
+        let exclude = collect_excluded_session_vars(req);
+        let subst_map = build_session_subst_map(ctx, &exclude);
+        if !subst_map.is_empty() {
+            expr = subst_expr_map(&expr, &subst_map, 0);
+            if let Some(ref mut vecs) = vector_exprs {
+                for item in vecs.iter_mut() {
+                    *item = subst_expr_map(item, &subst_map, 0);
+                }
+            }
+        }
+    }
 
     let detected: Vec<String> = if let Some(ref vec_exprs) = vector_exprs {
         let mut set = std::collections::BTreeSet::new();
@@ -991,7 +1022,7 @@ fn run_operation(
             } else {
                 param_var(req, "variable", &detected).map_err(|e| (e, None))?
             };
-            match integrate_result(&expr, &v) {
+            match integrate_result_with_assumptions(&expr, &v, Some(&assumptions)) {
                 IntegrationResult::Solved(res) => {
                     let res_str = res.to_string();
                     let res_latex = latex(&res);
@@ -1083,7 +1114,7 @@ fn run_operation(
                 param_point(req, "upper", Some("1")).map_err(|e| (e, None))?
             };
 
-            let outcome = defint(&expr, &v, &a, &b);
+            let outcome = defint_with_assumptions(&expr, &v, &a, &b, Some(&assumptions));
             match outcome {
                 DefiniteResult::Value(val) => {
                     let res_str = val.to_string();
@@ -1158,7 +1189,7 @@ fn run_operation(
                 param_point(req, "point", Some("0")).map_err(|e| (e, None))?
             };
             let pt_str = pt.to_string();
-            match limit(&expr, &v, &pt) {
+            match limit_with_assumptions(&expr, &v, &pt, Some(&assumptions)) {
                 Some(lim) => {
                     let res_str = lim.to_string();
                     let res_latex = latex(&lim);
@@ -2028,10 +2059,22 @@ fn run_operation(
                 .and_then(|s| s.strip_suffix(')'))
                 .unwrap_or(raw);
             let (lhs, cmp, rhs) = parse_relation(inner).map_err(|e| (e, None))?;
-            let ctx = Assumptions::new()
+            assumptions = assumptions
                 .assume_rel(lhs.clone(), cmp, rhs.clone())
                 .map_err(|e| (e.to_string(), None))?;
-            let sign = format!("{:?}", ctx.csign(&lhs)).to_lowercase();
+            if let Some(ref mut ctx) = session_ctx {
+                let fact_str = inner.trim().to_string();
+                if !ctx.facts.contains(&fact_str) {
+                    if ctx.facts.len() >= MAX_SESSION_FACTS {
+                        return Err((
+                            format!("too many session facts (maximum is {MAX_SESSION_FACTS})"),
+                            None,
+                        ));
+                    }
+                    ctx.facts.push(fact_str);
+                }
+            }
+            let sign = format!("{:?}", assumptions.csign(&lhs)).to_lowercase();
             let res_str = format!("[{lhs} {cmp:?} {rhs}] (csign({lhs}) = {sign})");
             resp.result = res_str.clone();
             resp.result_latex = format!(r"\text{{{res_str}}}");
@@ -2050,7 +2093,7 @@ fn run_operation(
                 .and_then(|s| s.strip_suffix(')'))
                 .unwrap_or(raw);
             let (lhs, cmp, rhs) = parse_relation(inner).map_err(|e| (e, None))?;
-            let pred = Assumptions::new().is(&lhs, cmp, &rhs);
+            let pred = assumptions.is(&lhs, cmp, &rhs);
             let res_str = match pred {
                 PredicateResult::True => "true",
                 PredicateResult::False => "false",
@@ -2064,7 +2107,7 @@ fn run_operation(
             resp.status = Status::Ok;
         }
         "csign" => {
-            let sign = Assumptions::new().csign(&expr);
+            let sign = assumptions.csign(&expr);
             let res_str = format!("{sign:?}").to_lowercase();
             resp.result = res_str.clone();
             resp.result_latex = format!(r"\text{{{res_str}}}");
@@ -2073,6 +2116,16 @@ fn run_operation(
             resp.status = Status::Ok;
         }
         other => return Err((format!("unknown operation: {other}"), None)),
+    }
+
+    if let Some(mut ctx) = session_ctx {
+        if !matches!(op_name, "assume" | "is" | "provenance")
+            && resp.status != Status::Error
+            && !resp.result.is_empty()
+        {
+            record_session_output(&mut ctx, &resp.result);
+        }
+        resp.session_context = Some(ctx);
     }
 
     resp.elapsed_ms = start.elapsed().as_millis() as u64;
@@ -2094,6 +2147,11 @@ pub fn compute(req: &ComputeRequest) -> ComputeResponse {
 
 /// Parse an expression and return live typeset and detected variables.
 pub fn parse(req: &ParseRequest) -> ParseResponse {
+    if req.input_format != "latex"
+        && let Some(resp) = try_parse_session_preview(&req.expression)
+    {
+        return resp;
+    }
     let parsed = match req.input_format.as_str() {
         "latex" => parse_latex(&req.expression),
         _ => {
@@ -2254,7 +2312,11 @@ pub fn parse(req: &ParseRequest) -> ParseResponse {
             ok: true,
             latex: Some(latex(&expr)),
             maxima: Some(expr.to_string()),
-            variables: expr.variables(),
+            variables: expr
+                .variables()
+                .into_iter()
+                .filter(|v| !is_session_output_ref(v))
+                .collect(),
             error: None,
             error_span: None,
         },
@@ -2409,6 +2471,435 @@ fn validate_request_bounds(req: &ComputeRequest) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+const MAX_SESSION_BINDINGS: usize = 32;
+const MAX_SESSION_OUTPUTS: usize = 64;
+const MAX_SESSION_FACTS: usize = 64;
+const MAX_SESSION_VALUE_LEN: usize = 2048;
+const MAX_SESSION_KEY_LEN: usize = 64;
+
+fn validate_session_context(ctx: &SessionContext) -> Result<(), String> {
+    if ctx.bindings.len() > MAX_SESSION_BINDINGS {
+        return Err(format!(
+            "session_context bindings ({}) exceeds maximum of {MAX_SESSION_BINDINGS}",
+            ctx.bindings.len()
+        ));
+    }
+    if ctx.outputs.len() > MAX_SESSION_OUTPUTS {
+        return Err(format!(
+            "session_context outputs ({}) exceeds maximum of {MAX_SESSION_OUTPUTS}",
+            ctx.outputs.len()
+        ));
+    }
+    if ctx.facts.len() > MAX_SESSION_FACTS {
+        return Err(format!(
+            "session_context facts ({}) exceeds maximum of {MAX_SESSION_FACTS}",
+            ctx.facts.len()
+        ));
+    }
+    if ctx.next_index == 0 || ctx.next_index > 100_000 {
+        return Err("session_context next_index out of bounds (1..=100000)".to_string());
+    }
+    if let Some(ref last) = ctx.last_result
+        && last.len() > MAX_SESSION_VALUE_LEN
+    {
+        return Err("session_context last_result exceeds 2048 bytes".to_string());
+    }
+    for (k, v) in &ctx.bindings {
+        if k.is_empty() || k.len() > MAX_SESSION_KEY_LEN || !is_valid_session_ident(k) {
+            return Err(format!("invalid session binding name '{k}'"));
+        }
+        if v.len() > MAX_SESSION_VALUE_LEN {
+            return Err(format!("session binding '{k}' exceeds 2048 bytes"));
+        }
+    }
+    for (k, v) in &ctx.outputs {
+        if k.is_empty() || k.len() > MAX_SESSION_KEY_LEN {
+            return Err(format!("invalid session output key '{k}'"));
+        }
+        if v.len() > MAX_SESSION_VALUE_LEN {
+            return Err(format!("session output '{k}' exceeds 2048 bytes"));
+        }
+    }
+    for f in &ctx.facts {
+        if f.len() > MAX_SESSION_VALUE_LEN {
+            return Err("session fact exceeds 2048 bytes".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn is_valid_session_ident(s: &str) -> bool {
+    let mut chars = s.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn is_session_output_ref(v: &str) -> bool {
+    v == "%"
+        || v.strip_prefix("%o")
+            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
+}
+
+fn build_session_assumptions(ctx: &SessionContext) -> Result<Assumptions, String> {
+    let mut assumptions = Assumptions::new();
+    for fact in &ctx.facts {
+        let (lhs, cmp, rhs) = parse_relation(fact)?;
+        assumptions = assumptions
+            .assume_rel(lhs, cmp, rhs)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(assumptions)
+}
+
+fn collect_excluded_session_vars(req: &ComputeRequest) -> Vec<String> {
+    let mut out = Vec::new();
+    if !req.variable.trim().is_empty() {
+        out.push(req.variable.trim().to_string());
+    }
+    for v in &req.variables {
+        let vt = v.trim();
+        if !vt.is_empty() {
+            out.push(vt.to_string());
+        }
+    }
+    for key in ["variable", "dependent", "t", "s"] {
+        if let Some(val) = get_str_param(req, key) {
+            out.push(val.to_string());
+        }
+    }
+    if let Some(vars) = get_str_param(req, "variables") {
+        for v in vars.split(',') {
+            let vt = v.trim();
+            if !vt.is_empty() {
+                out.push(vt.to_string());
+            }
+        }
+    }
+    out
+}
+
+fn build_session_subst_map(ctx: &SessionContext, exclude_vars: &[String]) -> HashMap<String, Expr> {
+    let mut map = HashMap::new();
+    if let Some(ref last) = ctx.last_result
+        && let Ok(e) = parse_maxima(last)
+    {
+        map.insert("%".to_string(), e);
+    }
+    for (k, v) in &ctx.outputs {
+        if let Ok(e) = parse_maxima(v) {
+            map.insert(k.clone(), e);
+        }
+    }
+    for (k, v) in &ctx.bindings {
+        if !exclude_vars.iter().any(|ex| ex == k)
+            && let Ok(e) = parse_maxima(v)
+        {
+            map.insert(k.clone(), e);
+        }
+    }
+    map
+}
+
+fn subst_expr_map(e: &Expr, map: &HashMap<String, Expr>, depth: usize) -> Expr {
+    if depth > 256 {
+        return e.clone();
+    }
+    match e {
+        Expr::Var(name) => map.get(name).cloned().unwrap_or_else(|| e.clone()),
+        Expr::Const(_) | Expr::Pi | Expr::E | Expr::Bfloat(_) | Expr::I => e.clone(),
+        Expr::Add(a, b) => Expr::add(
+            subst_expr_map(a, map, depth + 1),
+            subst_expr_map(b, map, depth + 1),
+        ),
+        Expr::Sub(a, b) => Expr::sub(
+            subst_expr_map(a, map, depth + 1),
+            subst_expr_map(b, map, depth + 1),
+        ),
+        Expr::Mul(a, b) => Expr::mul(
+            subst_expr_map(a, map, depth + 1),
+            subst_expr_map(b, map, depth + 1),
+        ),
+        Expr::Div(a, b) => Expr::div(
+            subst_expr_map(a, map, depth + 1),
+            subst_expr_map(b, map, depth + 1),
+        ),
+        Expr::Pow(a, b) => Expr::pow(
+            subst_expr_map(a, map, depth + 1),
+            subst_expr_map(b, map, depth + 1),
+        ),
+        Expr::Neg(a) => Expr::neg(subst_expr_map(a, map, depth + 1)),
+        Expr::Sin(a) => Expr::sin(subst_expr_map(a, map, depth + 1)),
+        Expr::Cos(a) => Expr::cos(subst_expr_map(a, map, depth + 1)),
+        Expr::Tan(a) => Expr::tan(subst_expr_map(a, map, depth + 1)),
+        Expr::Exp(a) => Expr::exp(subst_expr_map(a, map, depth + 1)),
+        Expr::Ln(a) => Expr::ln(subst_expr_map(a, map, depth + 1)),
+        Expr::Sqrt(a) => Expr::sqrt(subst_expr_map(a, map, depth + 1)),
+        Expr::Sinh(a) => Expr::sinh(subst_expr_map(a, map, depth + 1)),
+        Expr::Cosh(a) => Expr::cosh(subst_expr_map(a, map, depth + 1)),
+        Expr::Tanh(a) => Expr::tanh(subst_expr_map(a, map, depth + 1)),
+        Expr::Asin(a) => Expr::asin(subst_expr_map(a, map, depth + 1)),
+        Expr::Acos(a) => Expr::acos(subst_expr_map(a, map, depth + 1)),
+        Expr::Atan(a) => Expr::atan(subst_expr_map(a, map, depth + 1)),
+        Expr::Abs(a) => Expr::abs(subst_expr_map(a, map, depth + 1)),
+        Expr::Atan2(y, x) => Expr::atan2(
+            subst_expr_map(y, map, depth + 1),
+            subst_expr_map(x, map, depth + 1),
+        ),
+        Expr::Factorial(a) => Expr::factorial(subst_expr_map(a, map, depth + 1)),
+        Expr::Tensor(n, idx) => Expr::Tensor(n.clone(), idx.clone()),
+        Expr::Derivative(a, b) => Expr::derivative(
+            subst_expr_map(a, map, depth + 1),
+            subst_expr_map(b, map, depth + 1),
+        ),
+        Expr::Integral(a, b) => Expr::integral(
+            subst_expr_map(a, map, depth + 1),
+            subst_expr_map(b, map, depth + 1),
+        ),
+        Expr::Sum(a, b, c, d) => Expr::sum(
+            subst_expr_map(a, map, depth + 1),
+            subst_expr_map(b, map, depth + 1),
+            subst_expr_map(c, map, depth + 1),
+            subst_expr_map(d, map, depth + 1),
+        ),
+        Expr::Matrix(m) => Expr::matrix(
+            m.iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|x| subst_expr_map(x, map, depth + 1))
+                        .collect()
+                })
+                .collect(),
+        ),
+        Expr::SpecialFn(kind, args) => Expr::SpecialFn(
+            *kind,
+            args.iter()
+                .map(|x| subst_expr_map(x, map, depth + 1))
+                .collect(),
+        ),
+    }
+}
+
+fn record_session_output(ctx: &mut SessionContext, result_str: &str) {
+    if result_str.len() <= MAX_SESSION_VALUE_LEN {
+        ctx.last_result = Some(result_str.to_string());
+        if ctx.outputs.len() >= MAX_SESSION_OUTPUTS {
+            // Evict the smallest %oK key to stay bounded
+            let oldest = ctx
+                .outputs
+                .keys()
+                .filter_map(|k| {
+                    k.strip_prefix("%o")
+                        .and_then(|n| n.parse::<usize>().ok())
+                        .map(|n| (n, k.clone()))
+                })
+                .min_by_key(|(n, _)| *n)
+                .map(|(_, k)| k);
+            if let Some(k) = oldest {
+                ctx.outputs.remove(&k);
+            }
+        }
+        let label = format!("%o{}", ctx.next_index);
+        ctx.outputs.insert(label, result_str.to_string());
+        ctx.next_index = ctx.next_index.saturating_add(1).min(100_000);
+    }
+}
+
+fn split_assignment(raw: &str) -> Option<(&str, &str)> {
+    let trimmed = raw.trim();
+    let idx = trimmed.find(':')?;
+    if trimmed[idx..].starts_with(":=") {
+        return None;
+    }
+    let lhs = trimmed[..idx].trim();
+    let rhs = trimmed[idx + 1..].trim();
+    if is_valid_session_ident(lhs) && !rhs.is_empty() {
+        Some((lhs, rhs))
+    } else {
+        None
+    }
+}
+
+fn try_parse_session_preview(raw: &str) -> Option<ParseResponse> {
+    let trimmed = raw.trim();
+    if let Some((lhs, rhs)) = split_assignment(trimmed)
+        && let Ok(rhs_expr) = parse_maxima(rhs)
+    {
+        return Some(ParseResponse {
+            ok: true,
+            latex: Some(format!("{lhs} \\mathrel{{:=}} {}", latex(&rhs_expr))),
+            maxima: Some(format!("{lhs}: {rhs_expr}")),
+            variables: rhs_expr.variables(),
+            error: None,
+            error_span: None,
+        });
+    }
+    if let Some(inner) = trimmed
+        .strip_prefix("assume(")
+        .and_then(|s| s.strip_suffix(')'))
+        && parse_relation(inner).is_ok()
+    {
+        return Some(ParseResponse {
+            ok: true,
+            latex: Some(format!(r"\text{{assume}}\left({inner}\right)")),
+            maxima: Some(trimmed.to_string()),
+            variables: vec![],
+            error: None,
+            error_span: None,
+        });
+    }
+    if let Some(inner) = trimmed
+        .strip_prefix("forget(")
+        .and_then(|s| s.strip_suffix(')'))
+        && parse_relation(inner).is_ok()
+    {
+        return Some(ParseResponse {
+            ok: true,
+            latex: Some(format!(r"\text{{forget}}\left({inner}\right)")),
+            maxima: Some(trimmed.to_string()),
+            variables: vec![],
+            error: None,
+            error_span: None,
+        });
+    }
+    if trimmed == "facts()"
+        || trimmed == "facts"
+        || (trimmed.starts_with("kill(") && trimmed.ends_with(')'))
+    {
+        return Some(ParseResponse {
+            ok: true,
+            latex: Some(format!(r"\text{{{trimmed}}}")),
+            maxima: Some(trimmed.to_string()),
+            variables: vec![],
+            error: None,
+            error_span: None,
+        });
+    }
+    None
+}
+
+fn try_handle_session_command(
+    req: &ComputeRequest,
+    resp: &mut ComputeResponse,
+    session_ctx: &mut Option<SessionContext>,
+    _assumptions: &mut Assumptions,
+    start: Instant,
+) -> Result<Option<bool>, (String, Option<ErrorSpan>)> {
+    let trimmed = req.expression.trim();
+    let allow_auto = req.operation == "simplify" || req.operation.is_empty();
+
+    if allow_auto && (trimmed == "facts()" || trimmed == "facts") {
+        let facts = session_ctx
+            .as_ref()
+            .map(|c| c.facts.clone())
+            .unwrap_or_default();
+        let res_str = format!("[{}]", facts.join(", "));
+        resp.operation = "facts".to_string();
+        resp.result = res_str.clone();
+        resp.result_latex = format!(r"\text{{{res_str}}}");
+        resp.extra.insert("facts".into(), serde_json::json!(facts));
+        resp.outputs = vec![Output::new("facts", res_str, resp.result_latex.clone())];
+        resp.status = Status::Ok;
+        resp.elapsed_ms = start.elapsed().as_millis() as u64;
+        return Ok(Some(true));
+    }
+
+    if allow_auto
+        && let Some(inner) = trimmed
+            .strip_prefix("kill(")
+            .and_then(|s| s.strip_suffix(')'))
+    {
+        let targets: Vec<&str> = inner
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
+        if let Some(ctx) = session_ctx.as_mut() {
+            if targets.is_empty() || targets.contains(&"all") {
+                *ctx = SessionContext::default();
+            } else {
+                for t in targets {
+                    ctx.bindings.remove(t);
+                    ctx.facts.retain(|f| {
+                        !f.split(|c: char| !c.is_alphanumeric() && c != '_')
+                            .any(|tok| tok == t)
+                    });
+                }
+            }
+        }
+        resp.operation = "kill".to_string();
+        resp.result = "done".to_string();
+        resp.result_latex = r"\text{done}".to_string();
+        resp.outputs = vec![Output::new("kill", "done", r"\text{done}")];
+        resp.status = Status::Ok;
+        resp.elapsed_ms = start.elapsed().as_millis() as u64;
+        return Ok(Some(true));
+    }
+
+    if allow_auto
+        && let Some(inner) = trimmed
+            .strip_prefix("forget(")
+            .and_then(|s| s.strip_suffix(')'))
+    {
+        let _ = parse_relation(inner).map_err(|e| (e, None))?;
+        let target = inner.trim();
+        if let Some(ctx) = session_ctx.as_mut() {
+            ctx.facts.retain(|f| f.trim() != target);
+        }
+        resp.operation = "forget".to_string();
+        resp.result = "done".to_string();
+        resp.result_latex = r"\text{done}".to_string();
+        resp.outputs = vec![Output::new("forget", "done", r"\text{done}")];
+        resp.status = Status::Ok;
+        resp.elapsed_ms = start.elapsed().as_millis() as u64;
+        return Ok(Some(true));
+    }
+
+    if allow_auto && let Some((lhs, rhs)) = split_assignment(trimmed) {
+        let mut rhs_expr = parse_maxima(rhs).map_err(|e| {
+            let span = extract_error_span(&e, rhs);
+            (format!("Maxima parse error: {e}"), Some(span))
+        })?;
+        if let Some(ctx) = session_ctx.as_ref() {
+            let map = build_session_subst_map(ctx, &[]);
+            if !map.is_empty() {
+                rhs_expr = subst_expr_map(&rhs_expr, &map, 0);
+            }
+        }
+        let sat_cfg = saturation_config(req);
+        let opt = optimize(&rhs_expr, &sat_cfg);
+        let res_str = opt.to_string();
+        let res_latex = latex(&opt);
+        if let Some(ctx) = session_ctx.as_mut() {
+            if !ctx.bindings.contains_key(lhs) && ctx.bindings.len() >= MAX_SESSION_BINDINGS {
+                return Err((
+                    format!("too many session bindings (maximum is {MAX_SESSION_BINDINGS})"),
+                    None,
+                ));
+            }
+            ctx.bindings.insert(lhs.to_string(), res_str.clone());
+            record_session_output(ctx, &res_str);
+        }
+        resp.operation = "assign".to_string();
+        resp.result = res_str.clone();
+        resp.result_latex = res_latex.clone();
+        resp.extra.insert(
+            "binding".into(),
+            serde_json::json!({ "name": lhs, "value": res_str }),
+        );
+        resp.outputs = vec![Output::new(lhs, res_str, res_latex)];
+        resp.status = Status::Ok;
+        resp.elapsed_ms = start.elapsed().as_millis() as u64;
+        return Ok(Some(true));
+    }
+
+    Ok(None)
 }
 
 fn saturation_config(req: &ComputeRequest) -> SaturationConfig {
@@ -3217,6 +3708,7 @@ mod tests {
             fast_math: true,
             env: HashMap::new(),
             params: HashMap::new(),
+            session_context: None,
         }
     }
 

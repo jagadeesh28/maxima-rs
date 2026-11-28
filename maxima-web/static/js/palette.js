@@ -9,6 +9,8 @@ let detectedVariables = [];
 let undoStack = [];
 let userTouchedParams = new Set();
 
+let onSubmitHandler = null;
+
 export async function initPalette({
   opContainer,
   paramsContainer,
@@ -19,11 +21,13 @@ export async function initPalette({
   inputEl,
   formatEl,
   onOpChanged,
-  onParamsChanged
+  onParamsChanged,
+  onSubmitShortcut
 }) {
+  onSubmitHandler = onSubmitShortcut || null;
   const paletteApi = {
     setDetectedVariables(vars) {
-      detectedVariables = vars;
+      detectedVariables = (vars || []).filter(v => !/^%(?:o\d+)?$/.test(v));
       const preserved = collectParams(paramsContainer);
       const merged = {};
       Object.entries(preserved).forEach(([k, v]) => {
@@ -119,6 +123,8 @@ const CATEGORY_META = {
   calculus: { name: 'Calculus', icon: '∫' },
   solve: { name: 'Solvers & ODEs', icon: '⚡' },
   matrix: { name: 'Matrix & Linear Algebra', icon: '▦' },
+  transform: { name: 'Transforms & BVPs', icon: 'ℒ' },
+  assume: { name: 'Assumptions & Signs', icon: '⚖' },
   complex: { name: 'Complex & Residues', icon: 'ℂ' },
   vector: { name: 'Vector & Multivariable', icon: '∇' },
   codegen: { name: 'Code Generation', icon: '⚙️' },
@@ -130,6 +136,8 @@ const CATEGORY_ORDER = [
   'calculus',
   'solve',
   'matrix',
+  'transform',
+  'assume',
   'complex',
   'vector',
   'codegen',
@@ -305,6 +313,9 @@ export function renderParams(container, opId, onParamsChanged, customParams = nu
       }
     }
 
+    const inputId = `param-${param.name}`;
+    label.htmlFor = inputId;
+    input.id = inputId;
     input.dataset.param = param.name;
     input.className = 'text-xs py-1 px-2 bg-input border border-app rounded';
     input.addEventListener('input', () => {
@@ -314,6 +325,12 @@ export function renderParams(container, opId, onParamsChanged, customParams = nu
     input.addEventListener('change', () => {
       userTouchedParams.add(param.name);
       if (onParamsChanged) onParamsChanged();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (onSubmitHandler) onSubmitHandler();
+      }
     });
 
     field.appendChild(label);
@@ -327,18 +344,27 @@ export function renderParams(container, opId, onParamsChanged, customParams = nu
       const field = document.createElement('div');
       field.className = 'flex-1 min-w-120 flex flex-col gap-1';
 
+      const envId = `env-${v}`;
       const label = document.createElement('label');
       label.className = 'text-xs font-semibold text-muted uppercase';
+      label.htmlFor = envId;
       label.textContent = `${v} =`;
 
       const input = document.createElement('input');
       input.type = 'text';
+      input.id = envId;
       input.dataset.env = v;
       input.className = 'text-xs py-1 px-2 bg-input border border-app rounded';
       input.placeholder = 'e.g. 1.0';
       input.value = (customEnv && customEnv[v] !== undefined) ? customEnv[v] : '1';
       input.addEventListener('input', () => {
         if (onParamsChanged) onParamsChanged();
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
+          e.preventDefault();
+          if (onSubmitHandler) onSubmitHandler();
+        }
       });
 
       field.appendChild(label);

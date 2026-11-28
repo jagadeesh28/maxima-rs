@@ -276,6 +276,7 @@ fn test_complex_web_service_dispatch() {
         fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
+        session_context: None,
     };
     let resp = compute(&req);
     assert!(resp.success);
@@ -292,6 +293,7 @@ fn test_complex_web_service_dispatch() {
         fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
+        session_context: None,
     };
     let resp_re = compute(&req_re);
     assert!(resp_re.success);
@@ -308,6 +310,7 @@ fn test_complex_web_service_dispatch() {
         fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
+        session_context: None,
     };
     let resp_im = compute(&req_im);
     assert!(resp_im.success);
@@ -324,6 +327,7 @@ fn test_complex_web_service_dispatch() {
         fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
+        session_context: None,
     };
     let resp_abs = compute(&req_abs);
     assert!(resp_abs.success);
@@ -343,6 +347,7 @@ fn test_complex_web_service_dispatch() {
         fast_math: true,
         env: HashMap::new(),
         params: params_res,
+        session_context: None,
     };
     let resp_res = compute(&req_res);
     assert!(resp_res.success);

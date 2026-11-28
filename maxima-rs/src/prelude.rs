@@ -43,12 +43,16 @@ pub use sym_core::integrate::{
     IntegrationResult, contains_integral, defint::DefiniteResult, defint::defint, integrate,
     integrate_result, is_proven_non_elementary,
 };
+#[cfg(all(feature = "integrate", feature = "assume"))]
+pub use sym_core::integrate::{defint::defint_with_assumptions, integrate_result_with_assumptions};
 
 #[cfg(feature = "series")]
 pub use sym_core::series::taylor;
 
 #[cfg(feature = "limit")]
 pub use sym_core::limit::limit;
+#[cfg(all(feature = "limit", feature = "assume"))]
+pub use sym_core::limit::limit_with_assumptions;
 
 #[cfg(feature = "solve")]
 pub use sym_core::solve::{AlgebraicSolutions, OdeSolution, ode2, solve};

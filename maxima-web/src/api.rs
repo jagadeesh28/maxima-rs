@@ -58,6 +58,42 @@ pub struct ParamSpec {
     pub accepts: Option<&'static [&'static str]>,
 }
 
+/// Bounded client-carried session context for stateless notebook continuity (ADR-0014).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionContext {
+    /// Last computed result (`%`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_result: Option<String>,
+    /// Numbered outputs (`%o1`, `%o2`, ... -> result string).
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub outputs: HashMap<String, String>,
+    /// User variable bindings (`a: expr` -> `a` -> `expr`).
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub bindings: HashMap<String, String>,
+    /// Scoped assumption facts (e.g. `["x > 0", "a >= 1"]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub facts: Vec<String>,
+    /// Next 1-based output counter for `%oN` labels.
+    #[serde(default = "default_next_index")]
+    pub next_index: usize,
+}
+
+impl Default for SessionContext {
+    fn default() -> Self {
+        Self {
+            last_result: None,
+            outputs: HashMap::new(),
+            bindings: HashMap::new(),
+            facts: Vec::new(),
+            next_index: 1,
+        }
+    }
+}
+
+fn default_next_index() -> usize {
+    1
+}
+
 /// Incoming computation request from the webUI.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ComputeRequest {
@@ -88,6 +124,9 @@ pub struct ComputeRequest {
     /// Typed parameter bag for operations (e.g. variable, lower, upper, order, center, dependent).
     #[serde(default)]
     pub params: HashMap<String, serde_json::Value>,
+    /// Optional client-carried session context for `%`, `%oN`, bindings, and `assume` facts.
+    #[serde(default)]
+    pub session_context: Option<SessionContext>,
 }
 
 fn default_input_format() -> String {
@@ -132,6 +171,9 @@ pub struct ComputeResponse {
     pub error_span: Option<ErrorSpan>,
     /// Server-side processing time in milliseconds.
     pub elapsed_ms: u64,
+    /// Updated client-carried session context (present when `session_context` was supplied).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_context: Option<SessionContext>,
 }
 
 impl ComputeResponse {

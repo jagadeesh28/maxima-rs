@@ -5,9 +5,13 @@
 //! across them (returning [`DefiniteResult::Divergent`]). Improper bounds use the
 //! [`crate::limit`] engine.
 
-use super::{contains_integral, integrate};
+use super::contains_integral;
+#[cfg(not(feature = "assume"))]
+use super::integrate;
 use crate::expr::Expr;
-use crate::limit::{LimitDir, limit_dir};
+use crate::limit::LimitDir;
+#[cfg(not(feature = "assume"))]
+use crate::limit::limit_dir;
 use crate::poly::VarContext;
 use crate::poly::factor::{distinct_rational_roots, factor_poly_list};
 use crate::poly::rat::to_fraction;
@@ -218,9 +222,42 @@ fn flip_ln_if_negative(e: Expr, var: &str, test_val: f64) -> Expr {
 
 /// Compute the definite integral of `expr` with respect to `var` over `[a, b]`.
 pub fn defint(expr: &Expr, var: &str, a: &Expr, b: &Expr) -> DefiniteResult {
+    #[cfg(feature = "assume")]
+    {
+        defint_impl(expr, var, a, b, None)
+    }
+    #[cfg(not(feature = "assume"))]
+    {
+        defint_impl(expr, var, a, b)
+    }
+}
+
+/// Compute the definite integral of `expr` with respect to `var` over `[a, b]`
+/// under an optional [`crate::assume::Assumptions`] context.
+#[cfg(feature = "assume")]
+pub fn defint_with_assumptions(
+    expr: &Expr,
+    var: &str,
+    a: &Expr,
+    b: &Expr,
+    assumptions: Option<&crate::assume::Assumptions>,
+) -> DefiniteResult {
+    defint_impl(expr, var, a, b, assumptions)
+}
+
+fn defint_impl(
+    expr: &Expr,
+    var: &str,
+    a: &Expr,
+    b: &Expr,
+    #[cfg(feature = "assume")] assumptions: Option<&crate::assume::Assumptions>,
+) -> DefiniteResult {
     if has_interior_pole(expr, var, a, b) {
         return DefiniteResult::Divergent;
     }
+    #[cfg(feature = "assume")]
+    let mut f = super::integrate_with_assumptions(expr, var, assumptions);
+    #[cfg(not(feature = "assume"))]
     let mut f = integrate(expr, var);
     if contains_integral(&f) {
         return DefiniteResult::Unevaluated;
@@ -246,10 +283,14 @@ pub fn defint(expr: &Expr, var: &str, a: &Expr, b: &Expr) -> DefiniteResult {
         _ => LimitDir::Both,
     };
 
-    let ub = match limit_dir(&f, var, b, dir_b) {
+    #[cfg(feature = "assume")]
+    let ub_opt = crate::limit::limit_dir_with_assumptions(&f, var, b, dir_b, assumptions);
+    #[cfg(not(feature = "assume"))]
+    let ub_opt = limit_dir(&f, var, b, dir_b);
+
+    let ub = match ub_opt {
         Some(v) => v,
         None => {
-            // Check if endpoint b is a pole of the integrand
             if let (Some(bf), Some((rat_roots, irrat_roots))) =
                 (point_f64(b), rational_poles(expr, var))
                 && (rat_roots
@@ -262,7 +303,13 @@ pub fn defint(expr: &Expr, var: &str, a: &Expr, b: &Expr) -> DefiniteResult {
             return DefiniteResult::Unevaluated;
         }
     };
-    let lb = match limit_dir(&f, var, a, dir_a) {
+
+    #[cfg(feature = "assume")]
+    let lb_opt = crate::limit::limit_dir_with_assumptions(&f, var, a, dir_a, assumptions);
+    #[cfg(not(feature = "assume"))]
+    let lb_opt = limit_dir(&f, var, a, dir_a);
+
+    let lb = match lb_opt {
         Some(v) => v,
         None => {
             if let (Some(af), Some((rat_roots, irrat_roots))) =

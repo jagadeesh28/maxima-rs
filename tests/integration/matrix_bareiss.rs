@@ -289,6 +289,7 @@ fn test_matrix_web_service_dispatch() {
         fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
+        session_context: None,
     };
     let resp = compute(&req);
     assert!(resp.success);
@@ -305,6 +306,7 @@ fn test_matrix_web_service_dispatch() {
         fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
+        session_context: None,
     };
     let resp_tr = compute(&req_tr);
     assert!(resp_tr.success);
