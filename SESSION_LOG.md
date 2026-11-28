@@ -1168,6 +1168,26 @@ When starting a new session, instruct the AI:
 - `cargo test --workspace --all-features` (exit 0: 159 `sym-core` unit + all integration/proptest/doctests)
 - `docs/audits/PHASE48_REPORT.md` compiled.
 
+---
+
+## Session 49 — Calculus Engine Overhaul (`diff`, `series`, `limit`, `integrate`, `defint`) (Phase 49)
+
+**Date**: 2026-11-28  
+**Scope**: Completed Phase 49 overhaul across `sym-core/src/diff.rs`, `sym-core/src/series.rs`, `sym-core/src/limit/*`, `sym-core/src/integrate/*`, and `tests/integration/{differentiation,series,limits,integrate_elementary,integrate_defint}.rs`.
+
+### Deliverables Built
+1. **Differentiation (`sym-core/src/diff.rs`)**: Added `diff(u!, x) = u!*psi(0, u+1)*du`, FTC `d/dx(∫ f dx) = f`, constant-bound `Sum` differentiation with index shadowing, and `0^0`/`0^(-n)` guards.
+2. **Laurent Series (`sym-core/src/series.rs`)**: Fixed truncation orders in `mul`/`inv`/`diff`, added `%pi`-multiple folding and zero/one simplification, and added `Tan`, `Sqrt`, fractional/symbolic `Pow`, `Sinh`/`Cosh`/`Tanh`, `Asin`/`Acos`/`Atan`, and Puiseux/log `taylor` at `0`.
+3. **Limits (`sym-core/src/limit/*`)**: Fixed `is_zero_equivalent` (`s.coeffs.is_empty()`), added `fresh_var` gensym, `LimitDir`, `inf`/`minf`/`und`/`ind` pole/oscillation handling, Gruntz MRV reduction (`mrv.rs`), and L'Hôpital's rule; removed unsound numeric fallback per ADR-0012.
+4. **Integration & Defint (`sym-core/src/integrate/*`)**: Fixed `n < 2`, `exp(0*x^2)` non-elementary guard, `integrate_product` (`Assumptions` + `expand`), $O(n)$ `ibp::trig_powers`, `sin.rs` (`tan`/`tanh`/`sqrt`/inv-trig/`c^x`), Yun+Bezout `hermite.rs` + LRT `lrt.rs`, bidirectional kernel `risch.rs`, and `.reduce()` + irrational/transcendental/endpoint pole checks in `defint.rs`.
+
+### Passing Gate Verification
+- `cargo fmt --all -- --check` (exit 0)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo test -p maxima-tests --test differentiation --test series --test limits --test integrate_elementary --test integrate_risch --test integrate_defint --test integrate_correctness` (exit 0)
+- `cargo test --workspace --all-features` (exit 0: 159 `sym-core` unit + all integration/proptest/doctests)
+- `docs/audits/PHASE49_REPORT.md` compiled.
+
 
 
 

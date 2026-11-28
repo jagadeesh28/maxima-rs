@@ -125,8 +125,8 @@ fn is_gaussian_like(arg: &Expr, var: &str) -> bool {
             false
         }
         Expr::Mul(a, b) => {
-            (is_constant_wrt(a, var) && is_gaussian_like(b, var))
-                || (is_constant_wrt(b, var) && is_gaussian_like(a, var))
+            (is_constant_wrt(a, var) && !a.is_zero() && is_gaussian_like(b, var))
+                || (is_constant_wrt(b, var) && !b.is_zero() && is_gaussian_like(a, var))
         }
         _ => false,
     }
@@ -134,6 +134,13 @@ fn is_gaussian_like(arg: &Expr, var: &str) -> bool {
 
 /// Check if an integrand is formally proven to have no elementary antiderivative (Liouville's theorem).
 pub fn is_proven_non_elementary(expr: &Expr, var: &str) -> bool {
+    // Reject constant-folded zero expressions such as exp(0*x^2)
+    if let Expr::Exp(arg) = expr
+        && let Ok(p) = Poly::from_expr(arg)
+        && p.is_constant()
+    {
+        return false;
+    }
     match expr {
         Expr::Exp(arg) => is_gaussian_like(arg, var),
         Expr::Div(num, den) => {
@@ -225,7 +232,7 @@ fn integrate_core(expr: &Expr, var: &str, assumptions: Option<&Assumptions>) -> 
             integrate_with_assumptions(b, var, assumptions),
         ),
         Expr::Neg(a) => Expr::neg(integrate_with_assumptions(a, var, assumptions)),
-        Expr::Mul(a, b) => integrate_product(expr, a, b, var),
+        Expr::Mul(a, b) => integrate_product(expr, a, b, var, assumptions),
         Expr::Div(a, b) => integrate_quotient(expr, a, b, var),
         Expr::Pow(base, exp) => integrate_pow_with_assumptions(expr, base, exp, var, assumptions),
         _ => {
@@ -255,7 +262,7 @@ fn integrate_core(expr: &Expr, var: &str, _assumptions: Option<()>) -> Expr {
         Expr::Add(a, b) => Expr::add(integrate(a, var), integrate(b, var)),
         Expr::Sub(a, b) => Expr::sub(integrate(a, var), integrate(b, var)),
         Expr::Neg(a) => Expr::neg(integrate(a, var)),
-        Expr::Mul(a, b) => integrate_product(expr, a, b, var),
+        Expr::Mul(a, b) => integrate_product(expr, a, b, var, assumptions),
         Expr::Div(a, b) => integrate_quotient(expr, a, b, var),
         Expr::Pow(base, exp) => integrate_pow(expr, base, exp, var),
         _ => {
@@ -273,7 +280,39 @@ fn integrate_core(expr: &Expr, var: &str, _assumptions: Option<()>) -> Expr {
     }
 }
 
-fn integrate_product(expr: &Expr, a: &Expr, b: &Expr, var: &str) -> Expr {
+#[cfg(feature = "assume")]
+fn integrate_product(
+    expr: &Expr,
+    a: &Expr,
+    b: &Expr,
+    var: &str,
+    assumptions: Option<&Assumptions>,
+) -> Expr {
+    if is_constant_wrt(a, var) {
+        return Expr::mul(a.clone(), integrate_with_assumptions(b, var, assumptions));
+    }
+    if is_constant_wrt(b, var) {
+        return Expr::mul(b.clone(), integrate_with_assumptions(a, var, assumptions));
+    }
+    if let Some(r) = ibp::try_ibp(expr, var) {
+        return r;
+    }
+    // Expand polynomial/distributive products such as x*(x + 1)
+    let expanded = crate::poly::expand(expr);
+    if expanded != *expr {
+        let res = integrate_core(&expanded, var, assumptions);
+        if !contains_integral(&res) {
+            return res;
+        }
+    }
+    if let Some(r) = sin::integrate_elementary(expr, var) {
+        return r;
+    }
+    noun(expr, var)
+}
+
+#[cfg(not(feature = "assume"))]
+fn integrate_product(expr: &Expr, a: &Expr, b: &Expr, var: &str, _assumptions: Option<()>) -> Expr {
     if is_constant_wrt(a, var) {
         return Expr::mul(a.clone(), integrate(b, var));
     }
@@ -281,6 +320,16 @@ fn integrate_product(expr: &Expr, a: &Expr, b: &Expr, var: &str) -> Expr {
         return Expr::mul(b.clone(), integrate(a, var));
     }
     if let Some(r) = ibp::try_ibp(expr, var) {
+        return r;
+    }
+    let expanded = crate::poly::expand(expr);
+    if expanded != *expr {
+        let res = integrate_core(&expanded, var, None);
+        if !contains_integral(&res) {
+            return res;
+        }
+    }
+    if let Some(r) = sin::integrate_elementary(expr, var) {
         return r;
     }
     noun(expr, var)
@@ -303,6 +352,9 @@ fn integrate_quotient(expr: &Expr, a: &Expr, b: &Expr, var: &str) -> Expr {
     if let Some(r) = hermite::integrate_rational(expr, var) {
         return r;
     }
+    if let Some(r) = sin::integrate_elementary(expr, var) {
+        return r;
+    }
     noun(expr, var)
 }
 
@@ -319,7 +371,7 @@ fn integrate_power_denominator(a: &Expr, b: &Expr, var: &str) -> Option<Expr> {
         return None;
     }
     let n = r.numer().to_i64()?;
-    if n < 1 {
+    if n < 2 {
         return None;
     }
     let (coef, _) = linear_in(base, var)?;
@@ -400,6 +452,9 @@ fn integrate_pow(expr: &Expr, base: &Expr, exp: &Expr, var: &str) -> Expr {
                 Expr::constant(scale),
             );
         }
+    }
+    if let Some(r) = sin::integrate_elementary(expr, var) {
+        return r;
     }
     noun(expr, var)
 }

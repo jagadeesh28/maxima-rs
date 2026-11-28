@@ -1,18 +1,32 @@
-//! Asymptotic limits (Phase 27).
+//! Asymptotic limits (Phase 27 / Phase 49).
 //!
-//! `limit(expr, var, point)` reduces the request to a series expansion about the
-//! limit point (via [`crate::series`]) for exact analytic cases, then falls back to
-//! a bounded numeric convergence check that recognises common exact constants
-//! (`0`, integers, small rationals, `e`, `π`). Infinite points (`"inf"`, `"minf"`)
-//! are handled with the substitution `x = ±1/t`.
+//! `limit(expr, var, point)` and `limit_dir(expr, var, point, dir)` compute
+//! exact symbolic limits via:
+//! 1. Truncated Laurent/Taylor series expansion ([`crate::series`]) with gensym
+//!    substitution for `inf`/`minf` and pole/oscillation detection (`inf`, `minf`, `und`, `ind`).
+//! 2. Gruntz MRV asymptotic reduction ([`mrv`]) for `exp`/`ln` towers.
+//! 3. L'Hôpital's rule ([`crate::diff::differentiate`]) for `0/0` and `inf/inf` forms.
+//!
+//! Unsound numeric convergence guessing is removed per ADR-0012.
 
 pub mod mrv;
 pub mod zero;
 
+use crate::diff::differentiate;
 use crate::expr::Expr;
-use crate::rational::Rat;
 use crate::series::series_expand;
 use std::collections::HashMap;
+
+/// Direction of approach for a limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LimitDir {
+    /// Two-sided limit.
+    Both,
+    /// Right-hand limit (`x -> point+`).
+    Plus,
+    /// Left-hand limit (`x -> point-`).
+    Minus,
+}
 
 fn is_pos_inf(point: &Expr) -> bool {
     matches!(point, Expr::Var(n) if n.as_str() == "inf")
@@ -22,8 +36,28 @@ fn is_neg_inf(point: &Expr) -> bool {
     matches!(point, Expr::Var(n) if n.as_str() == "minf")
 }
 
+fn is_inf_like(e: &Expr) -> bool {
+    matches!(e, Expr::Var(n) if n == "inf" || n == "minf")
+}
+
+fn is_ind_or_und(e: &Expr) -> bool {
+    matches!(e, Expr::Var(n) if n == "und" || n == "ind")
+}
+
+/// Generate a fresh variable name not occurring in `expr`.
+pub(super) fn fresh_var(expr: &Expr, prefix: &str) -> String {
+    let vars = expr.variables();
+    for i in 0..10_000 {
+        let cand = format!("{prefix}_{i}");
+        if !vars.contains(&cand) {
+            return cand;
+        }
+    }
+    format!("{prefix}_fallback")
+}
+
 /// Replace every occurrence of variable `name` with `r`.
-fn subst_var(e: &Expr, name: &str, r: &Expr) -> Expr {
+pub(super) fn subst_var(e: &Expr, name: &str, r: &Expr) -> Expr {
     if let Expr::Var(n) = e
         && n.as_str() == name
     {
@@ -84,15 +118,21 @@ use crate::assume::{Assumptions, Sign};
 ///
 /// `point` is an [`Expr`] constant for finite limits, or `Expr::var("inf")` /
 /// `Expr::var("minf")` for infinite limits. Returns `None` when the limit cannot
-/// be determined.
+/// be determined, or `inf`/`minf`/`und`/`ind` when known.
 pub fn limit(expr: &Expr, var: &str, point: &Expr) -> Option<Expr> {
+    limit_dir(expr, var, point, LimitDir::Both)
+}
+
+/// Compute a directional (`Both`, `Plus`, `Minus`) limit of `expr` as `var` approaches `point`.
+pub fn limit_dir(expr: &Expr, var: &str, point: &Expr, dir: LimitDir) -> Option<Expr> {
     #[cfg(feature = "assume")]
     {
-        limit_with_assumptions(expr, var, point, None)
+        limit_dir_with_assumptions(expr, var, point, dir, None)
     }
     #[cfg(not(feature = "assume"))]
     {
-        limit_core(expr, var, point)
+        let _ = dir;
+        limit_at_depth(expr, var, point, dir, 0)
     }
 }
 
@@ -102,6 +142,18 @@ pub fn limit_with_assumptions(
     expr: &Expr,
     var: &str,
     point: &Expr,
+    assumptions: Option<&Assumptions>,
+) -> Option<Expr> {
+    limit_dir_with_assumptions(expr, var, point, LimitDir::Both, assumptions)
+}
+
+/// Compute directional limit with optional [`Assumptions`] context.
+#[cfg(feature = "assume")]
+pub fn limit_dir_with_assumptions(
+    expr: &Expr,
+    var: &str,
+    point: &Expr,
+    dir: LimitDir,
     assumptions: Option<&Assumptions>,
 ) -> Option<Expr> {
     if !expr.variables().iter().any(|v| v == var) {
@@ -121,46 +173,121 @@ pub fn limit_with_assumptions(
             _ => {}
         }
     }
-    limit_core(expr, var, point)
+    limit_at_depth(expr, var, point, dir, 0)
 }
 
-fn limit_core(expr: &Expr, var: &str, point: &Expr) -> Option<Expr> {
+pub(super) fn limit_at_depth(
+    expr: &Expr,
+    var: &str,
+    point: &Expr,
+    dir: LimitDir,
+    depth: usize,
+) -> Option<Expr> {
+    if depth > 12 {
+        return None;
+    }
     if !expr.variables().iter().any(|v| v == var) {
         return Some(expr.clone());
     }
-    if let Some(r) = symbolic_limit(expr, var, point) {
+    // Check oscillatory trig at infinity
+    if (is_pos_inf(point) || is_neg_inf(point))
+        && let Some(osc) = check_oscillatory(expr, var, point, depth)
+    {
+        return Some(osc);
+    }
+    if let Some(r) = symbolic_limit(expr, var, point, dir) {
         return Some(r);
     }
     if let Expr::Pow(base, exp) = expr {
         let e_arg = Expr::mul((**exp).clone(), Expr::ln((**base).clone()));
-        if let Some(l) = limit(&e_arg, var, point) {
-            return Some(exp_of(&l));
+        if let Some(l) = limit_at_depth(&e_arg, var, point, dir, depth + 1) {
+            return exp_limit_of(&l);
         }
     }
-    if let Some(r) = limit_exp_difference(expr, var, point) {
+    if let Some(r) = limit_exp_difference(expr, var, point, dir, depth) {
         return Some(r);
     }
-    numeric_limit(expr, var, point)
+    if is_pos_inf(point)
+        && let Some(r) = mrv::gruntz_limit_inf(expr, var, depth)
+    {
+        return Some(r);
+    }
+    if is_neg_inf(point) {
+        let neg_expr = subst_var(expr, var, &Expr::neg(Expr::var(var)));
+        if let Some(r) = mrv::gruntz_limit_inf(&neg_expr, var, depth) {
+            return Some(r);
+        }
+    }
+    if let Expr::Ln(inner) = expr
+        && let Some(li) = limit_at_depth(inner, var, point, dir, depth + 1)
+    {
+        if matches!(&li, Expr::Var(n) if n == "inf") {
+            return Some(Expr::var("inf"));
+        }
+        if li.is_zero() && (dir == LimitDir::Plus || is_pos_inf(point) || is_neg_inf(point)) {
+            return Some(Expr::var("minf"));
+        }
+    }
+    if let Some(r) = lhopital_limit(expr, var, point, dir, depth) {
+        return Some(r);
+    }
+    None
 }
 
-fn exp_of(l: &Expr) -> Expr {
+fn check_oscillatory(expr: &Expr, var: &str, point: &Expr, depth: usize) -> Option<Expr> {
+    match expr {
+        Expr::Sin(inner) | Expr::Cos(inner) => {
+            if let Some(l) = limit_at_depth(inner, var, point, LimitDir::Both, depth + 1)
+                && is_inf_like(&l)
+            {
+                return Some(Expr::var("ind"));
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn exp_limit_of(l: &Expr) -> Option<Expr> {
     if l.is_zero() {
-        Expr::int(1)
+        Some(Expr::int(1))
     } else if l.is_one() {
-        Expr::e()
+        Some(Expr::e())
+    } else if matches!(l, Expr::Var(n) if n == "inf") {
+        Some(Expr::var("inf"))
+    } else if matches!(l, Expr::Var(n) if n == "minf") {
+        Some(Expr::int(0))
+    } else if is_ind_or_und(l) {
+        None
     } else {
-        Expr::exp(l.clone())
+        Some(Expr::exp(l.clone()))
     }
 }
 
 /// Light algebraic simplification focused on cancellation of common subterms.
-fn simplify_light(e: Expr) -> Expr {
+pub(super) fn simplify_light(e: Expr) -> Expr {
     match e {
+        Expr::Neg(a) => {
+            let a = simplify_light(*a);
+            if a.is_zero() {
+                return Expr::int(0);
+            }
+            if let Expr::Neg(inner) = a {
+                return *inner;
+            }
+            Expr::Neg(Box::new(a))
+        }
         Expr::Sub(a, b) => {
             let a = simplify_light(*a);
             let b = simplify_light(*b);
             if a == b {
                 return Expr::int(0);
+            }
+            if b.is_zero() {
+                return a;
+            }
+            if a.is_zero() {
+                return simplify_light(Expr::Neg(Box::new(b)));
             }
             if let Expr::Add(p, q) = &a {
                 if **p == b {
@@ -181,14 +308,57 @@ fn simplify_light(e: Expr) -> Expr {
             if b.is_zero() {
                 return a;
             }
+            if let Expr::Neg(inner) = &b
+                && **inner == a
+            {
+                return Expr::int(0);
+            }
+            if let Expr::Neg(inner) = &a
+                && **inner == b
+            {
+                return Expr::int(0);
+            }
             Expr::Add(Box::new(a), Box::new(b))
+        }
+        Expr::Mul(a, b) => {
+            let a = simplify_light(*a);
+            let b = simplify_light(*b);
+            if a.is_zero() || b.is_zero() {
+                return Expr::int(0);
+            }
+            if a.is_one() {
+                return b;
+            }
+            if b.is_one() {
+                return a;
+            }
+            if matches!(&a, Expr::Const(r) if *r == crate::rational::Rat::from_int(-1)) {
+                return simplify_light(Expr::Neg(Box::new(b)));
+            }
+            if matches!(&b, Expr::Const(r) if *r == crate::rational::Rat::from_int(-1)) {
+                return simplify_light(Expr::Neg(Box::new(a)));
+            }
+            if let (Expr::Exp(ea), Expr::Exp(eb)) = (&a, &b) {
+                let sum = simplify_light(Expr::add((**ea).clone(), (**eb).clone()));
+                if sum.is_zero() {
+                    return Expr::int(1);
+                }
+                return Expr::exp(sum);
+            }
+            Expr::Mul(Box::new(a), Box::new(b))
         }
         other => other,
     }
 }
 
 /// `e^A - e^B ≈ e^B·(A-B)` when `A - B → 0` (first-order leading term).
-fn limit_exp_difference(expr: &Expr, var: &str, point: &Expr) -> Option<Expr> {
+fn limit_exp_difference(
+    expr: &Expr,
+    var: &str,
+    point: &Expr,
+    dir: LimitDir,
+    depth: usize,
+) -> Option<Expr> {
     let Expr::Sub(a, b) = expr else {
         return None;
     };
@@ -196,137 +366,138 @@ fn limit_exp_difference(expr: &Expr, var: &str, point: &Expr) -> Option<Expr> {
         return None;
     };
     let diff = simplify_light(Expr::sub((**aa).clone(), (**bb).clone()));
-    let ld = limit(&diff, var, point)?;
+    let ld = limit_at_depth(&diff, var, point, dir, depth + 1)?;
     if !ld.is_zero() {
         return None;
     }
-    let approx = Expr::mul(Expr::exp((**bb).clone()), diff);
-    limit(&approx, var, point)
+    let approx = simplify_light(Expr::mul(Expr::exp((**bb).clone()), diff));
+    limit_at_depth(&approx, var, point, dir, depth + 1)
 }
 
-fn symbolic_limit(expr: &Expr, var: &str, point: &Expr) -> Option<Expr> {
+fn coeff_sign(c: &Expr) -> Option<i8> {
+    let empty = HashMap::new();
+    if let Some(v) = c.eval(&empty)
+        && v.is_finite()
+        && v != 0.0
+    {
+        return Some(if v > 0.0 { 1 } else { -1 });
+    }
+    #[cfg(feature = "assume")]
+    {
+        match Assumptions::new().csign(c) {
+            Sign::Pos => return Some(1),
+            Sign::Neg => return Some(-1),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn pole_limit(c: &Expr, valuation: i64, dir: LimitDir) -> Option<Expr> {
+    let sgn = coeff_sign(c)?;
+    let even_pole = valuation % 2 == 0;
+    match dir {
+        LimitDir::Plus => {
+            if sgn > 0 {
+                Some(Expr::var("inf"))
+            } else {
+                Some(Expr::var("minf"))
+            }
+        }
+        LimitDir::Minus => {
+            let eff = if even_pole { sgn } else { -sgn };
+            if eff > 0 {
+                Some(Expr::var("inf"))
+            } else {
+                Some(Expr::var("minf"))
+            }
+        }
+        LimitDir::Both => {
+            if even_pole {
+                if sgn > 0 {
+                    Some(Expr::var("inf"))
+                } else {
+                    Some(Expr::var("minf"))
+                }
+            } else {
+                Some(Expr::var("und"))
+            }
+        }
+    }
+}
+
+fn symbolic_limit(expr: &Expr, var: &str, point: &Expr, dir: LimitDir) -> Option<Expr> {
     if is_pos_inf(point) {
-        let sub = subst_var(expr, var, &Expr::div(Expr::int(1), Expr::var("t")));
-        let s = series_expand(&sub, "t", &Expr::int(0), 8)?;
+        let t_name = fresh_var(expr, "__lim_t");
+        let sub = subst_var(expr, var, &Expr::div(Expr::int(1), Expr::var(&t_name)));
+        let s = series_expand(&sub, &t_name, &Expr::int(0), 8)?;
         return if s.valuation >= 0 {
             s.constant_term()
         } else {
-            None
+            pole_limit(&s.coeff_at(s.valuation), s.valuation, LimitDir::Plus)
         };
     }
     if is_neg_inf(point) {
+        let t_name = fresh_var(expr, "__lim_t");
         let sub = subst_var(
             expr,
             var,
-            &Expr::neg(Expr::div(Expr::int(1), Expr::var("t"))),
+            &Expr::neg(Expr::div(Expr::int(1), Expr::var(&t_name))),
         );
-        let s = series_expand(&sub, "t", &Expr::int(0), 8)?;
+        let s = series_expand(&sub, &t_name, &Expr::int(0), 8)?;
         return if s.valuation >= 0 {
             s.constant_term()
         } else {
-            None
+            pole_limit(&s.coeff_at(s.valuation), s.valuation, LimitDir::Plus)
         };
     }
     let s = series_expand(expr, var, point, 8)?;
     if s.valuation >= 0 {
         s.constant_term()
     } else {
-        None
+        pole_limit(&s.coeff_at(s.valuation), s.valuation, dir)
     }
 }
 
-fn converge(expr: &Expr, var: &str, samples: &[f64]) -> Option<Expr> {
-    let mut vals: Vec<f64> = Vec::new();
-    let mut env: HashMap<String, f64> = HashMap::new();
-    for &x in samples {
-        env.insert(var.to_string(), x);
-        if let Some(v) = expr.eval(&env)
-            && v.is_finite()
-        {
-            vals.push(v);
-        }
-    }
-    if vals.len() < 4 {
+fn lhopital_limit(
+    expr: &Expr,
+    var: &str,
+    point: &Expr,
+    dir: LimitDir,
+    depth: usize,
+) -> Option<Expr> {
+    if depth >= 4 {
         return None;
     }
-    let start = vals.len().saturating_sub(5);
-    let tail = &vals[start..];
-    let min = tail.iter().cloned().fold(f64::INFINITY, f64::min);
-    let max = tail.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    if (max - min).abs() > 1e-6 {
-        return None;
-    }
-    let v = tail.iter().sum::<f64>() / tail.len() as f64;
-    recognize(v)
-}
-
-/// Recognise a converged numeric value as an exact constant.
-fn recognize(v: f64) -> Option<Expr> {
-    if !v.is_finite() {
-        return None;
-    }
-    let tol = 1e-6;
-    if v.abs() < tol {
-        return Some(Expr::int(0));
-    }
-    if (v - std::f64::consts::E).abs() < tol {
-        return Some(Expr::e());
-    }
-    if (v + std::f64::consts::E).abs() < tol {
-        return Some(Expr::neg(Expr::e()));
-    }
-    if (v - std::f64::consts::PI).abs() < tol {
-        return Some(Expr::pi());
-    }
-    let r = v.round();
-    if (v - r).abs() < tol && r.abs() <= 100.0 {
-        return Some(Expr::int(r as i64));
-    }
-    for q in 1..=12i64 {
-        let p = (v * q as f64).round() as i64;
-        if (v - (p as f64) / (q as f64)).abs() < tol {
-            return Some(Expr::frac(p, q));
-        }
-    }
-    None
-}
-
-fn inf_sequences() -> Vec<Vec<f64>> {
-    vec![
-        (6..=12).map(|k| 10f64.powi(k)).collect(),
-        (5..=40).map(|k| 10.0 * k as f64).collect(),
-        (2..=8).map(|k| 10f64.powi(k)).collect(),
-    ]
-}
-
-fn numeric_limit(expr: &Expr, var: &str, point: &Expr) -> Option<Expr> {
-    if is_pos_inf(point) {
-        for seq in inf_sequences() {
-            if let Some(r) = converge(expr, var, &seq) {
-                return Some(r);
+    let (num, den) = match expr {
+        Expr::Div(a, b) => ((**a).clone(), (**b).clone()),
+        Expr::Mul(a, b) => {
+            let la = limit_at_depth(a, var, point, dir, depth + 1);
+            let lb = limit_at_depth(b, var, point, dir, depth + 1);
+            match (la, lb) {
+                (Some(va), Some(vb)) if va.is_zero() && is_inf_like(&vb) => {
+                    ((**a).clone(), Expr::div(Expr::int(1), (**b).clone()))
+                }
+                (Some(va), Some(vb)) if is_inf_like(&va) && vb.is_zero() => {
+                    ((**b).clone(), Expr::div(Expr::int(1), (**a).clone()))
+                }
+                _ => return None,
             }
         }
-        return None;
-    }
-    if is_neg_inf(point) {
-        for seq in inf_sequences() {
-            let neg: Vec<f64> = seq.iter().map(|v| -v).collect();
-            if let Some(r) = converge(expr, var, &neg) {
-                return Some(r);
-            }
-        }
-        return None;
-    }
-    let a = match point {
-        Expr::Const(r) => Rat::to_f64(r),
         _ => return None,
     };
-    let right: Vec<f64> = (1..=10).map(|k| a + 10f64.powi(-k)).collect();
-    let left: Vec<f64> = (1..=10).map(|k| a - 10f64.powi(-k)).collect();
-    match (converge(expr, var, &right), converge(expr, var, &left)) {
-        (Some(x), Some(y)) if x == y => Some(x),
-        (Some(x), None) => Some(x),
-        (None, Some(y)) => Some(y),
-        _ => None,
+
+    let l_num = limit_at_depth(&num, var, point, dir, depth + 1)?;
+    let l_den = limit_at_depth(&den, var, point, dir, depth + 1)?;
+    let is_indet =
+        (l_num.is_zero() && l_den.is_zero()) || (is_inf_like(&l_num) && is_inf_like(&l_den));
+    if !is_indet {
+        return None;
     }
+    let dnum = differentiate(&num, var);
+    let dden = differentiate(&den, var);
+    if dden.is_zero() {
+        return None;
+    }
+    limit_at_depth(&Expr::div(dnum, dden), var, point, dir, depth + 1)
 }

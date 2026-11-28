@@ -30,10 +30,45 @@ pub(crate) fn try_risch(expr: &Expr, var: &str) -> Option<Expr> {
     if let Some(r) = try_derivative_over_function(expr, var) {
         return Some(r);
     }
+    if let Some(r) = try_trig_or_atan_tower(expr, var) {
+        return Some(r);
+    }
     None
 }
 
-/// If `a = k·b` for a rational constant `k`, return `k`.
+/// Map non-polynomial transcendental kernels (sin, cos, exp, ln, sqrt, etc.) to
+/// synthetic variables so `Poly::from_expr` can test proportionality bidirectionally.
+fn map_kernels(e: &Expr, kernels: &mut Vec<Expr>) -> Expr {
+    match e {
+        Expr::Add(a, b) => Expr::add(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Sub(a, b) => Expr::sub(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Mul(a, b) => Expr::mul(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Div(a, b) => Expr::div(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Neg(a) => Expr::neg(map_kernels(a, kernels)),
+        Expr::Pow(b, exp) => {
+            if let Expr::Const(r) = exp.as_ref()
+                && Rat::is_integer(r)
+                && *r >= BigRational::zero()
+            {
+                return Expr::pow(map_kernels(b, kernels), (**exp).clone());
+            }
+            kernel_var(e, kernels)
+        }
+        Expr::Var(_) | Expr::Const(_) => e.clone(),
+        _ => kernel_var(e, kernels),
+    }
+}
+
+fn kernel_var(e: &Expr, kernels: &mut Vec<Expr>) -> Expr {
+    if let Some(idx) = kernels.iter().position(|k| k == e) {
+        return Expr::var(&format!("__rk_{idx}"));
+    }
+    let idx = kernels.len();
+    kernels.push(e.clone());
+    Expr::var(&format!("__rk_{idx}"))
+}
+
+/// If `a = k·b` for a rational constant `k`, return `k` (bidirectional).
 fn proportional_constant(a: &Expr, b: &Expr) -> Option<BigRational> {
     if a == b {
         return Some(BigRational::one());
@@ -50,8 +85,25 @@ fn proportional_constant(a: &Expr, b: &Expr) -> Option<BigRational> {
             return Some(c.clone());
         }
     }
-    let pa = Poly::from_expr(a).ok()?;
-    let pb = Poly::from_expr(b).ok()?;
+    if let Expr::Mul(x, y) = b {
+        if let Expr::Const(c) = x.as_ref()
+            && y.as_ref() == a
+            && !c.is_zero()
+        {
+            return Some(BigRational::one() / c);
+        }
+        if let Expr::Const(c) = y.as_ref()
+            && x.as_ref() == a
+            && !c.is_zero()
+        {
+            return Some(BigRational::one() / c);
+        }
+    }
+    let mut kernels = Vec::new();
+    let ma = map_kernels(a, &mut kernels);
+    let mb = map_kernels(b, &mut kernels);
+    let pa = Poly::from_expr(&ma).ok()?;
+    let pb = Poly::from_expr(&mb).ok()?;
     if pa.is_zero() || pb.is_zero() {
         return None;
     }
@@ -126,6 +178,51 @@ fn try_derivative_over_function(expr: &Expr, var: &str) -> Option<Expr> {
     let dp = differentiate(den.as_ref(), var);
     if let Some(k) = proportional_constant(num.as_ref(), &dp) {
         return Some(Expr::mul(Expr::constant(k), Expr::ln(den.as_ref().clone())));
+    }
+    // ∫ k * g' / (1 + g^2) dx = k * atan(g)
+    if let Expr::Add(p, q) = den.as_ref() {
+        let g_sq = if p.is_one() {
+            Some(q.as_ref())
+        } else if q.is_one() {
+            Some(p.as_ref())
+        } else {
+            None
+        };
+        if let Some(Expr::Pow(g, exp)) = g_sq
+            && let Some(r) = super::as_const(exp)
+            && r == Rat::from_int(2)
+        {
+            let gp = differentiate(g.as_ref(), var);
+            if let Some(k) = proportional_constant(num.as_ref(), &gp) {
+                return Some(Expr::mul(Expr::constant(k), Expr::atan(g.as_ref().clone())));
+            }
+        }
+    }
+    None
+}
+
+/// `∫ k·g'·f(g) dx` for `f in {sin, cos, sinh, cosh, tan, tanh}`.
+fn try_trig_or_atan_tower(expr: &Expr, var: &str) -> Option<Expr> {
+    let Expr::Mul(a, b) = expr else {
+        return None;
+    };
+    for (node, rest) in [(a, b), (b, a)] {
+        let (arg, antideriv) = match node.as_ref() {
+            Expr::Sin(g) => (g.as_ref(), Expr::neg(Expr::cos(g.as_ref().clone()))),
+            Expr::Cos(g) => (g.as_ref(), Expr::sin(g.as_ref().clone())),
+            Expr::Sinh(g) => (g.as_ref(), Expr::cosh(g.as_ref().clone())),
+            Expr::Cosh(g) => (g.as_ref(), Expr::sinh(g.as_ref().clone())),
+            Expr::Tan(g) => (
+                g.as_ref(),
+                Expr::neg(Expr::ln(Expr::cos(g.as_ref().clone()))),
+            ),
+            Expr::Tanh(g) => (g.as_ref(), Expr::ln(Expr::cosh(g.as_ref().clone()))),
+            _ => continue,
+        };
+        let gp = differentiate(arg, var);
+        if let Some(k) = proportional_constant(rest.as_ref(), &gp) {
+            return Some(Expr::mul(Expr::constant(k), antideriv));
+        }
     }
     None
 }

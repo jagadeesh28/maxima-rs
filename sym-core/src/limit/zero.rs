@@ -17,10 +17,8 @@ pub fn is_zero_equivalent(expr: &Expr, var: &str) -> bool {
     {
         return true;
     }
-    if let Some(s) = series_expand(expr, var, &Expr::int(0), 6)
-        && let Some(c) = s.constant_term()
-    {
-        return c.is_zero();
+    if let Some(s) = series_expand(expr, var, &Expr::int(0), 6) {
+        return s.coeffs.is_empty();
     }
     false
 }

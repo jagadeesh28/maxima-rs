@@ -125,7 +125,7 @@ fn sum_exprs(terms: Vec<Expr>) -> Expr {
 }
 
 /// Extended Euclidean algorithm for univariate `Poly` over Q: returns `(g, s, t)` with `s*a + t*b = g`.
-fn poly_ext_gcd(a: &Poly, b: &Poly) -> (Poly, Poly, Poly) {
+pub(crate) fn poly_ext_gcd(a: &Poly, b: &Poly) -> (Poly, Poly, Poly) {
     let ctx = a.ctx.clone();
     let mut old_r = a.clone();
     let mut r = b.clone();

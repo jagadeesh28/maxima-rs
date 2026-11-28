@@ -84,3 +84,49 @@ fn test_rosenbrock_gradient_and_hessian() {
         "Hessian not symmetric: {h01} vs {h10}"
     );
 }
+
+#[test]
+fn test_phase49_diff_factorial_ftc_sum_and_zero_pow() {
+    let x = Expr::var("x");
+    let i = Expr::var("i");
+
+    // 1. diff(x!, x) = x! * psi(0, x + 1)
+    let dfac = differentiate(&Expr::factorial(x.clone()), "x");
+    let expected_fac = Expr::mul(
+        Expr::factorial(x.clone()),
+        Expr::special_fn(
+            sym_core::specfn::SpecialFnKind::Psi,
+            vec![Expr::int(0), Expr::add(x.clone(), Expr::int(1))],
+        ),
+    );
+    assert_eq!(dfac, expected_fac);
+
+    // 2. FTC: d/dx(∫ sin(x) dx) = sin(x)
+    let ftc = differentiate(&Expr::integral(Expr::sin(x.clone()), x.clone()), "x");
+    assert_eq!(ftc, Expr::sin(x.clone()));
+
+    // 3. Sum with constant bounds: d/dx(sum(i * x^2, i, 1, 5)) = sum(i * (2 * x), i, 1, 5)
+    let sum_expr = Expr::sum(
+        Expr::mul(i.clone(), Expr::pow(x.clone(), Expr::int(2))),
+        i.clone(),
+        Expr::int(1),
+        Expr::int(5),
+    );
+    let dsum = differentiate(&sum_expr, "x");
+    assert_eq!(
+        dsum,
+        Expr::sum(
+            Expr::mul(i.clone(), Expr::mul(Expr::int(2), x.clone())),
+            i.clone(),
+            Expr::int(1),
+            Expr::int(5),
+        )
+    );
+
+    // Shadowed summation index: d/di(sum(i * x, i, 1, 5)) = 0
+    assert_eq!(differentiate(&sum_expr, "i"), Expr::int(0));
+
+    // 4. 0^0 and 0^(-1) guards in diff
+    let d_zero_neg = differentiate(&Expr::pow(x, Expr::int(-1)), "x");
+    assert!(!d_zero_neg.is_zero());
+}

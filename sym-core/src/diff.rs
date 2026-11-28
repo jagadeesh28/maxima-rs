@@ -227,8 +227,25 @@ pub fn differentiate(expr: &Expr, var: &str) -> Expr {
         Expr::Pi | Expr::E => Expr::int(0),
         #[cfg(feature = "complex")]
         Expr::I => Expr::int(0),
-        // Factorials are integer-valued; treat as locally constant (Maxima parity).
-        Expr::Factorial(_) => Expr::int(0),
+        // Factorial: d/dx(u!) = u! * psi(0, u + 1) * du (Maxima comm.lisp)
+        Expr::Factorial(u) => {
+            let du = differentiate(u, var);
+            if du.is_zero() {
+                return Expr::int(0);
+            }
+            #[cfg(feature = "specfn")]
+            {
+                let psi = Expr::special_fn(
+                    crate::specfn::SpecialFnKind::Psi,
+                    vec![Expr::int(0), smart_add(*u.clone(), Expr::int(1))],
+                );
+                smart_mul(smart_mul(Expr::factorial(*u.clone()), psi), du)
+            }
+            #[cfg(not(feature = "specfn"))]
+            {
+                Expr::derivative(Expr::factorial(*u.clone()), Expr::var(var))
+            }
+        }
         Expr::Tensor(name, _indices) => {
             // For now, differentiate of a tensor with respect to a scalar variable is 0
             // unless the tensor's exact name matches the variable name.
@@ -244,15 +261,31 @@ pub fn differentiate(expr: &Expr, var: &str) -> Expr {
             Expr::derivative(Expr::derivative(*f.clone(), *v.clone()), Expr::var(var))
         }
         Expr::Integral(f, v) => {
-            // Leibniz rule could be applied, but keep it simple: un-evaluated derivative
-            Expr::derivative(Expr::integral(*f.clone(), *v.clone()), Expr::var(var))
+            // Fundamental Theorem of Calculus: d/dx(∫ f(x) dx) = f(x)
+            if matches!(v.as_ref(), Expr::Var(vname) if vname == var) {
+                *f.clone()
+            } else {
+                Expr::derivative(Expr::integral(*f.clone(), *v.clone()), Expr::var(var))
+            }
         }
         Expr::Sum(f, i, lower, upper) => {
-            // d/dx(sum) = sum(d/dx) + ... keep it simple
-            Expr::derivative(
-                Expr::sum(*f.clone(), *i.clone(), *lower.clone(), *upper.clone()),
-                Expr::var(var),
-            )
+            // If summation index shadows `var`, `var` is bound inside `f`.
+            if matches!(i.as_ref(), Expr::Var(idx) if idx == var) {
+                return Expr::int(0);
+            }
+            if differentiate(lower, var).is_zero() && differentiate(upper, var).is_zero() {
+                let df = differentiate(f, var);
+                if df.is_zero() {
+                    Expr::int(0)
+                } else {
+                    Expr::sum(df, *i.clone(), *lower.clone(), *upper.clone())
+                }
+            } else {
+                Expr::derivative(
+                    Expr::sum(*f.clone(), *i.clone(), *lower.clone(), *upper.clone()),
+                    Expr::var(var),
+                )
+            }
         }
         Expr::Matrix(mat) => {
             // Element-wise differentiation
@@ -399,11 +432,19 @@ fn smart_div(a: Expr, b: Expr) -> Expr {
 
 fn smart_pow(base: Expr, exp: Expr) -> Expr {
     if exp.is_zero() {
+        if base.is_zero() {
+            return Expr::pow(base, exp);
+        }
         Expr::int(1)
     } else if exp.is_one() {
         base
     } else if base.is_zero() {
-        Expr::int(0)
+        if let Expr::Const(r) = &exp
+            && *r > Rat::from_int(0)
+        {
+            return Expr::int(0);
+        }
+        Expr::pow(base, exp)
     } else if base.is_one() {
         Expr::int(1)
     } else {

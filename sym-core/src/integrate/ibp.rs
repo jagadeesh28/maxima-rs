@@ -51,25 +51,71 @@ fn linear_coeff_expr(w: &Expr, var: &str) -> Option<Expr> {
 }
 
 fn trig_powers(n: u32, w: &Expr, var: &str, a: &Expr) -> (Expr, Expr) {
-    let mut s = Expr::div(Expr::neg(Expr::cos(w.clone())), a.clone());
-    let mut c = Expr::div(Expr::sin(w.clone()), a.clone());
-    for k in 1..=n {
-        let xp = x_power(var, k);
-        let ns = Expr::add(
-            Expr::div(
-                Expr::neg(Expr::mul(xp.clone(), Expr::cos(w.clone()))),
-                a.clone(),
-            ),
-            Expr::mul(Expr::div(Expr::int(i64::from(k)), a.clone()), c.clone()),
-        );
-        let nc = Expr::sub(
-            Expr::div(Expr::mul(xp, Expr::sin(w.clone())), a.clone()),
-            Expr::mul(Expr::div(Expr::int(i64::from(k)), a.clone()), s.clone()),
-        );
-        s = ns;
-        c = nc;
+    // O(n) polynomial-size tabular IBP for ∫ x^n sin(a*x + b) dx and ∫ x^n cos(a*x + b) dx
+    let mut sin_acc = Expr::int(0);
+    let mut cos_acc = Expr::int(0);
+    let mut coeff: u128 = 1;
+    let mut a_pow = a.clone();
+
+    for k in 0..=n {
+        let rem_deg = n - k;
+        let xp = if rem_deg == 0 {
+            Expr::int(1)
+        } else {
+            x_power(var, rem_deg)
+        };
+        let mag = if coeff == 1 {
+            xp
+        } else {
+            Expr::mul(Expr::int(coeff as i64), xp)
+        };
+
+        // sin integral: k=0 -> -cos, k=1 -> +sin, k=2 -> +cos, k=3 -> -sin
+        let sin_trig = if k % 2 == 0 {
+            Expr::cos(w.clone())
+        } else {
+            Expr::sin(w.clone())
+        };
+        let sin_neg = k.div_ceil(2).is_multiple_of(2);
+        let sin_term = Expr::div(Expr::mul(mag.clone(), sin_trig), a_pow.clone());
+        sin_acc = if sin_neg {
+            if sin_acc.is_zero() {
+                Expr::neg(sin_term)
+            } else {
+                Expr::sub(sin_acc, sin_term)
+            }
+        } else if sin_acc.is_zero() {
+            sin_term
+        } else {
+            Expr::add(sin_acc, sin_term)
+        };
+
+        // cos integral: k=0 -> +sin, k=1 -> +cos, k=2 -> -sin, k=3 -> -cos
+        let cos_trig = if k % 2 == 0 {
+            Expr::sin(w.clone())
+        } else {
+            Expr::cos(w.clone())
+        };
+        let cos_neg = !(k / 2).is_multiple_of(2);
+        let cos_term = Expr::div(Expr::mul(mag, cos_trig), a_pow.clone());
+        cos_acc = if cos_neg {
+            if cos_acc.is_zero() {
+                Expr::neg(cos_term)
+            } else {
+                Expr::sub(cos_acc, cos_term)
+            }
+        } else if cos_acc.is_zero() {
+            cos_term
+        } else {
+            Expr::add(cos_acc, cos_term)
+        };
+
+        if k < n {
+            coeff = coeff.saturating_mul(u128::from(n - k));
+            a_pow = Expr::pow(a.clone(), Expr::int(i64::from(k + 2)));
+        }
     }
-    (s, c)
+    (sin_acc, cos_acc)
 }
 
 fn ibp_power_times(pow_expr: &Expr, other: &Expr, var: &str) -> Option<Expr> {
