@@ -37,7 +37,6 @@ Converts legacy Maxima algebraic knowledge into an [`egg`](https://crates.io/cra
 ### Roadmap: Phases 14–21 (planned)
 
 The next workstream restores the WebUI and deepens **1:1 parity with Maxima LISP sources**.
-The detailed requirements live in [`AGENTS.md`](AGENTS.md).
 
 | Phase | Workstream | Status | Summary |
 |-------|-----------|--------|---------|
@@ -199,9 +198,8 @@ Current registry: **92 rules across 7 Maxima LISP files** (also exposed live via
 - [`maxima-rs`](maxima-rs/) — Public facade crate re-exporting the engine and macros.
 - [`maxima-web`](maxima-web/) — Interactive browser WebUI & JSON compute API (built with Axum).
 - [`docs/adr/`](docs/adr/) — Architectural Decision Records.
+- [`docs/audits/PARITY_SCOREBOARD.md`](docs/audits/PARITY_SCOREBOARD.md) — Automated Maxima 5.50 `.mac` parity scoreboard.
 - [`GLOSSARY.md`](GLOSSARY.md) — Canonical domain vocabulary.
-- [`AGENTS.md`](AGENTS.md) — Phased implementation plan & operating manual.
-- [`SESSION_LOG.md`](SESSION_LOG.md) — Cross-session context log.
 
 ---
 
