@@ -9,12 +9,14 @@
 //! This crate is usable standalone (without the proc-macro frontend) for
 //! build scripts, CLI tools, or programmatic symbolic computation.
 
+pub mod cancel;
 pub mod expr;
 pub mod latex;
 pub mod matrix;
 pub mod rational;
 pub mod tensor;
 
+pub use cancel::{CancelToken, is_cancelled, with_cancel_token};
 pub use expr::Expr;
 pub use latex::to_latex;
 pub use rational::{BigRational, Rat};
@@ -66,6 +68,9 @@ pub mod limit;
 
 #[cfg(feature = "solve")]
 pub mod solve;
+
+#[cfg(feature = "cas")]
+pub mod maxima_ops;
 
 #[cfg(feature = "bfloat")]
 pub mod bfloat;

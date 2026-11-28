@@ -455,6 +455,9 @@ impl Series {
 /// Expand `expr` as a truncated Laurent/Taylor series about `center`, retaining powers
 /// up to and including degree `order` (truncation cutoff `order + 1`).
 pub fn series_expand(expr: &Expr, var: &str, center: &Expr, order: i64) -> Option<Series> {
+    if crate::cancel::is_cancelled() {
+        return None;
+    }
     expand(expr, var, center, order + 1)
 }
 

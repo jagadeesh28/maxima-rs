@@ -56,6 +56,9 @@ pub fn solve(expr: &Expr, var: &str) -> AlgebraicSolutions {
 
 /// Solve `expr = 0` for `var` and return both roots and [`SolveStatus`].
 pub fn solve_classified(expr: &Expr, var: &str) -> (Vec<Expr>, SolveStatus) {
+    if crate::cancel::is_cancelled() {
+        return (Vec::new(), SolveStatus::Partial);
+    }
     if let Some((roots, status)) = alg::solve_polynomial_classified(expr, var) {
         return (roots, status);
     }

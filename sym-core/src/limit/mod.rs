@@ -198,6 +198,11 @@ pub(super) fn limit_at_depth(
     if let Some(r) = symbolic_limit(expr, var, point, dir) {
         return Some(r);
     }
+    if let Expr::Exp(arg) = expr
+        && let Some(l) = limit_at_depth(arg, var, point, dir, depth + 1)
+    {
+        return exp_limit_of(&l);
+    }
     if let Expr::Pow(base, exp) = expr {
         let e_arg = Expr::mul((**exp).clone(), Expr::ln((**base).clone()));
         if let Some(l) = limit_at_depth(&e_arg, var, point, dir, depth + 1) {

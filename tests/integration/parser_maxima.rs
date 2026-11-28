@@ -150,3 +150,69 @@ fn test_parse_recursion_depth_guard() {
         Err(maxima_rs::parser::ParseError::RecursionLimitExceeded)
     );
 }
+
+#[test]
+fn test_phase52_maxima_550_syntax_parity() {
+    let mut env = std::collections::HashMap::new();
+    env.insert("x".to_string(), 2.0);
+    env.insert("y".to_string(), 3.0);
+
+    // 1. `**` power operator (same precedence & right-associativity as `^`)
+    let p1 = parse_maxima("2**3").expect("2**3");
+    assert_eq!(p1.eval(&env), Some(8.0));
+    let p2 = parse_maxima("-x**2").expect("-x**2");
+    assert_eq!(p2.eval(&env), Some(-4.0));
+
+    // 2. `lhs = rhs` equation -> `lhs - rhs`
+    let eq = parse_maxima("x^2 = 4").expect("x^2 = 4");
+    assert_eq!(eq.eval(&env), Some(0.0));
+
+    // 3. `[a, b, c]` list literal
+    let lst = parse_maxima("[1, x, y]").expect("[1, x, y]");
+    assert_eq!(
+        lst,
+        Expr::matrix(vec![vec![Expr::int(1), Expr::var("x"), Expr::var("y")]])
+    );
+
+    // 4. Reciprocal & inverse trig/hyperbolic + abs + atan2
+    for s in [
+        "sec(0)",
+        "csc(%pi/2)",
+        "cot(%pi/4)",
+        "asec(2)",
+        "acsc(2)",
+        "acot(1)",
+        "asinh(0)",
+        "acosh(1)",
+        "atanh(0)",
+        "atan2(1, 1)",
+        "abs(-5)",
+    ] {
+        let parsed = parse_maxima(s).unwrap_or_else(|e| panic!("failed to parse {s}: {e}"));
+        assert!(parsed.eval(&env).is_some(), "eval failed for {s}");
+    }
+    assert_eq!(parse_maxima("abs(-5)").unwrap().eval(&env), Some(5.0));
+
+    // 5. Higher-order diff(expr, x, n)
+    let d2 = parse_maxima("diff(x^3, x, 2)").expect("diff(x^3, x, 2)");
+    assert_eq!(
+        d2,
+        Expr::derivative(
+            Expr::derivative(Expr::pow(Expr::var("x"), Expr::int(3)), Expr::var("x")),
+            Expr::var("x")
+        )
+    );
+
+    // 6. Noun quote `'`
+    let quoted = parse_maxima("'diff(y, x) + y = 0").expect("'diff(y, x) + y = 0");
+    assert_eq!(
+        quoted,
+        Expr::sub(
+            Expr::add(
+                Expr::derivative(Expr::var("y"), Expr::var("x")),
+                Expr::var("y")
+            ),
+            Expr::int(0)
+        )
+    );
+}

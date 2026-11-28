@@ -1230,6 +1230,24 @@ When starting a new session, instruct the AI:
 - Live browser E2E (`http://127.0.0.1:18080/`): 12/12 starter cards, LaTeX auto-detect, Fix-It, `session_context`, `Escape` modal, and XSS immunity verified.
 - `docs/audits/PHASE51_REPORT.md` compiled.
 
+---
+
+## Session 52 — Maxima 5.50 Language Parity & Cooperative Compute Cancellation (Phase 52)
+
+**Date**: 2026-11-28  
+**Scope**: Completed Phase 52 across `sym-core`, `maxima-rs`, `maxima-web`, and `tests/integration/{web_hardening,parser_maxima,maxima_cas_parity}.rs`.
+
+### Deliverables Built
+1. **Cooperative Cancellation & 8 MB Worker Stacks (`sym-core/src/cancel.rs`, `maxima-web/src/app.rs`)**: Added `CancelToken` (`Arc<AtomicBool>`) + `with_cancel_token`, polled across `egg` saturation hooks, `optimize`/`optimize_gradient`, `series`, `poly_gcd`, `integrate_core`, `bareiss`, and `solve_classified`. Replaced `spawn_blocking` with 8 MB `std::thread` workers that cancel on `tokio::time::timeout` and release `OwnedSemaphorePermit` within 250ms (10/10 runs).
+2. **Maxima 5.50 Syntax & CAS Parity (`sym-core/src/{parser/maxima.rs,maxima_ops.rs,limit/mod.rs}`, `maxima-web/src/service.rs`)**: Added `**`, `lhs = rhs`, `[a, b, c]`, `sec`/`csc`/`cot`/`asec`/`acsc`/`acot`/`asinh`/`acosh`/`atanh`/`atan2`/`abs`, `diff(expr, x, n)`, noun `'`, `trigexpand`, `trigreduce`, `trigsimp`, `radcan`, `demoivre`, `exponentialize`, `subst`, `float`, `divide`/`quotient`/`remainder`, `num`/`denom`, finite `sum`/`product`, and directional `limit(expr, x, 0, plus/minus)`.
+
+### Passing Gate Verification
+- `cargo fmt --all -- --check` (exit 0)
+- `cargo test -p maxima-tests --test web_hardening --test parser_maxima --test maxima_cas_parity` (exit 0: 13, 12, 5 passed)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo test --workspace --all-features` (exit 0)
+- `docs/audits/PHASE52_REPORT.md` compiled.
+
 
 
 

@@ -423,6 +423,9 @@ fn bareiss_poly_det(
     let mut sign = 1i32;
 
     for k in 0..n - 1 {
+        if crate::cancel::is_cancelled() {
+            return None;
+        }
         if a[k][k].is_zero() {
             let swap_row = (k + 1..n).find(|&p| !a[p][k].is_zero());
             match swap_row {
@@ -488,6 +491,9 @@ pub fn determinant(m: &Matrix) -> Result<Expr, MatrixError> {
     let mut sign = 1i32;
 
     for k in 0..n - 1 {
+        if crate::cancel::is_cancelled() {
+            return Err(MatrixError::NotAMatrix("cancelled".to_string()));
+        }
         if is_expr_zero(&a[k][k]) {
             let mut swap_row = None;
             for (p, row) in a.iter().enumerate().skip(k + 1) {

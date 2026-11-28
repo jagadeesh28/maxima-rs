@@ -21,7 +21,23 @@ use crate::parser::{ParseError, parse_latex, parse_maxima};
 
 /// High-level single expression optimization.
 pub fn optimize(expr: &Expr, config: &SaturationConfig) -> Expr {
+    if crate::cancel::is_cancelled()
+        || config
+            .cancel_token
+            .as_ref()
+            .is_some_and(crate::cancel::CancelToken::is_cancelled)
+    {
+        return expr.clone();
+    }
     let (egraph, roots) = saturate(std::slice::from_ref(expr), config);
+    if crate::cancel::is_cancelled()
+        || config
+            .cancel_token
+            .as_ref()
+            .is_some_and(crate::cancel::CancelToken::is_cancelled)
+    {
+        return expr.clone();
+    }
     extract_single(&egraph, roots[0])
 }
 
@@ -32,11 +48,27 @@ pub fn optimize_gradient(
     config: &SaturationConfig,
 ) -> (Expr, Vec<Expr>) {
     let grads = gradient(expr, vars);
+    if crate::cancel::is_cancelled()
+        || config
+            .cancel_token
+            .as_ref()
+            .is_some_and(crate::cancel::CancelToken::is_cancelled)
+    {
+        return (expr.clone(), grads);
+    }
     let mut all_exprs = Vec::with_capacity(1 + grads.len());
     all_exprs.push(expr.clone());
     all_exprs.extend(grads);
 
     let (egraph, roots) = saturate(&all_exprs, config);
+    if crate::cancel::is_cancelled()
+        || config
+            .cancel_token
+            .as_ref()
+            .is_some_and(crate::cancel::CancelToken::is_cancelled)
+    {
+        return (expr.clone(), all_exprs[1..].to_vec());
+    }
     let extracted = extract_all(&egraph, &roots);
 
     let opt_val = extracted[0].clone();

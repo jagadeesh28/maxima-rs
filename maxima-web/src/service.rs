@@ -72,6 +72,13 @@ static PARAM_LIMIT: &[ParamSpec] = &[
         default: Some("0"),
         accepts: Some(&["inf", "minf"]),
     },
+    ParamSpec {
+        name: "dir",
+        param_type: "enum",
+        required: false,
+        default: Some("both"),
+        accepts: Some(&["both", "plus", "minus"]),
+    },
 ];
 
 static PARAM_TAYLOR: &[ParamSpec] = &[
@@ -759,6 +766,87 @@ pub static OPERATIONS: &[Operation] = &[
         needs_env: false,
         params: PARAM_EMPTY,
     },
+    Operation {
+        id: "trigexpand",
+        name: "Trig Expand",
+        category: "algebra",
+        description: "Expand trigonometric angle sums and multiples",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "trigreduce",
+        name: "Trig Reduce",
+        category: "algebra",
+        description: "Reduce products and powers of sines and cosines",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "trigsimp",
+        name: "Trig Simplify",
+        category: "algebra",
+        description: "Simplify trigonometric expressions using Pythagorean identities",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "radcan",
+        name: "Radcan",
+        category: "algebra",
+        description: "Canonicalize radicals, logarithms, and exponentials",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "demoivre",
+        name: "Demoivre",
+        category: "complex",
+        description: "Convert complex exponentials to trigonometric form",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "exponentialize",
+        name: "Exponentialize",
+        category: "complex",
+        description: "Convert trigonometric and hyperbolic functions to exponentials",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "num",
+        name: "Numerator",
+        category: "algebra",
+        description: "Extract numerator of a rational expression",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "denom",
+        name: "Denominator",
+        category: "algebra",
+        description: "Extract denominator of a rational expression",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
+    Operation {
+        id: "float",
+        name: "Numeric Float",
+        category: "algebra",
+        description: "Evaluate constant expressions to IEEE-754 f64",
+        needs_variables: false,
+        needs_env: false,
+        params: PARAM_EMPTY,
+    },
 ];
 
 /// Returns the declarative list of available operations.
@@ -1165,14 +1253,15 @@ fn run_operation(
             }
         }
         "limit" => {
-            let (detected_v, detected_pt) =
-                if let Some(maxima_rs::parser::maxima::CasCommand::Limit(_, ref v, ref pt)) =
-                    cas_cmd
-                {
-                    (Some(v.clone()), Some(pt.clone()))
-                } else {
-                    (None, None)
-                };
+            let (detected_v, detected_pt, detected_dir) = match cas_cmd {
+                Some(maxima_rs::parser::maxima::CasCommand::Limit(_, ref v, ref pt)) => {
+                    (Some(v.clone()), Some(pt.clone()), None)
+                }
+                Some(maxima_rs::parser::maxima::CasCommand::LimitDir(_, ref v, ref pt, d)) => {
+                    (Some(v.clone()), Some(pt.clone()), Some(d))
+                }
+                _ => (None, None, None),
+            };
             let v = if let Some(v_str) = get_str_param(req, "variable") {
                 v_str.to_string()
             } else if let Some(v_str) = detected_v {
@@ -1188,8 +1277,33 @@ fn run_operation(
             } else {
                 param_point(req, "point", Some("0")).map_err(|e| (e, None))?
             };
+            let dir = if let Some(d_str) = get_str_param(req, "dir") {
+                match d_str.trim() {
+                    "plus" => maxima_rs::limit::LimitDir::Plus,
+                    "minus" => maxima_rs::limit::LimitDir::Minus,
+                    "both" | "" => maxima_rs::limit::LimitDir::Both,
+                    other => {
+                        return Err((
+                            format!(
+                                "invalid limit direction '{other}'; expected both, plus, or minus"
+                            ),
+                            None,
+                        ));
+                    }
+                }
+            } else if let Some(d) = detected_dir {
+                d
+            } else {
+                maxima_rs::limit::LimitDir::Both
+            };
             let pt_str = pt.to_string();
-            match limit_with_assumptions(&expr, &v, &pt, Some(&assumptions)) {
+            match maxima_rs::limit::limit_dir_with_assumptions(
+                &expr,
+                &v,
+                &pt,
+                dir,
+                Some(&assumptions),
+            ) {
                 Some(lim) => {
                     let res_str = lim.to_string();
                     let res_latex = latex(&lim);
@@ -2113,6 +2227,68 @@ fn run_operation(
             resp.result_latex = format!(r"\text{{{res_str}}}");
             resp.extra.insert("result".into(), res_str.clone().into());
             resp.outputs = vec![Output::new("csign", res_str, resp.result_latex.clone())];
+            resp.status = Status::Ok;
+        }
+        "trigexpand" | "trigreduce" | "trigsimp" | "radcan" | "demoivre" | "exponentialize" => {
+            let res = match op_name {
+                "trigexpand" => trigexpand(&expr),
+                "trigreduce" => trigreduce(&expr),
+                "trigsimp" => trigsimp(&expr),
+                "radcan" => radcan(&expr),
+                "demoivre" => demoivre(&expr),
+                _ => exponentialize(&expr),
+            };
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.extra
+                .insert("result_latex".into(), res_latex.clone().into());
+            resp.outputs = vec![Output::new(op_name, res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "num" | "denom" => {
+            let (n, d) = num_denom(&expr).map_err(|e| (format!("{op_name} error: {e}"), None))?;
+            let res = if op_name == "num" { n } else { d };
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.outputs = vec![Output::new(op_name, res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "float" => {
+            let res = eval_float(&expr).ok_or_else(|| {
+                (
+                    "expression cannot be evaluated to a constant float".to_string(),
+                    None,
+                )
+            })?;
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.outputs = vec![Output::new("float", res_str, res_latex)];
+            resp.status = Status::Ok;
+        }
+        "subst" | "divide" | "quotient" | "remainder" | "sum" | "product" => {
+            let cmd = cas_cmd.as_ref().ok_or_else(|| {
+                (
+                    format!("{op_name} requires Maxima function call syntax"),
+                    None,
+                )
+            })?;
+            let res = maxima_rs::parser::maxima::execute_cas(cmd)
+                .ok_or_else(|| (format!("{op_name} evaluation failed"), None))?;
+            let res_str = res.to_string();
+            let res_latex = latex(&res);
+            resp.result = res_str.clone();
+            resp.result_latex = res_latex.clone();
+            resp.extra.insert("result".into(), res_str.clone().into());
+            resp.outputs = vec![Output::new(op_name, res_str, res_latex)];
             resp.status = Status::Ok;
         }
         other => return Err((format!("unknown operation: {other}"), None)),

@@ -152,13 +152,33 @@ where
         ));
     }
 
-    let fut = tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
-    });
+    let cancel_token = maxima_rs::cancel::CancelToken::new();
+    let worker_cancel = cancel_token.clone();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let spawn_res = std::thread::Builder::new()
+        .name("maxima-cas-worker".to_string())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(move || {
+            let _permit = permit;
+            let res = maxima_rs::cancel::with_cancel_token(&worker_cancel, || {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+            });
+            let _ = tx.send(res);
+        });
+
+    if let Err(spawn_err) = spawn_res {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("Failed to spawn compute worker thread: {spawn_err}"),
+                "status": "internal_error"
+            })),
+        ));
+    }
 
     let timeout_duration = Duration::from_millis(state.config.timeout_ms);
-    match tokio::time::timeout(timeout_duration, fut).await {
+    match tokio::time::timeout(timeout_duration, rx).await {
         Ok(Ok(Ok(val))) => Ok(val),
         Ok(Ok(Err(_panic_err))) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -167,20 +187,23 @@ where
                 "status": "engine_panic"
             })),
         )),
-        Ok(Err(join_err)) => Err((
+        Ok(Err(recv_err)) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
-                "error": format!("Worker task join error: {join_err}"),
+                "error": format!("Worker channel error: {recv_err}"),
                 "status": "internal_error"
             })),
         )),
-        Err(_elapsed) => Err((
-            StatusCode::REQUEST_TIMEOUT,
-            Json(serde_json::json!({
-                "error": format!("Computation timed out after {}ms", state.config.timeout_ms),
-                "status": "timeout"
-            })),
-        )),
+        Err(_elapsed) => {
+            cancel_token.cancel();
+            Err((
+                StatusCode::REQUEST_TIMEOUT,
+                Json(serde_json::json!({
+                    "error": format!("Computation timed out after {}ms", state.config.timeout_ms),
+                    "status": "timeout"
+                })),
+            ))
+        }
     }
 }
 

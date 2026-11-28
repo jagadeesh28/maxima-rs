@@ -629,3 +629,172 @@ fn test_cli_toml_config_precedence() {
     assert_eq!(cfg.max_body_size, 4096);
     assert_eq!(cfg.max_expr_len, 500);
 }
+
+#[tokio::test]
+async fn test_phase52_cooperative_timeout_releases_permit_10_of_10() {
+    let config = ServerConfig {
+        timeout_ms: 150,
+        concurrency: 1,
+        max_expr_len: 10_000,
+        ..Default::default()
+    };
+    let state = Arc::new(AppState::new(config));
+    let app = build_app(state.clone());
+
+    // Heavy CAS computation that exceeds 150ms and polls CancelToken cooperatively
+    let heavy = "sum(sin(k*x)^2 + cos(k*x)^2, k, 1, 200)".to_string();
+
+    for run in 0..10 {
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/compute")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "expression": heavy,
+                            "operation": "simplify",
+                            "fast_math": true
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        // Either timed out (408) or completed fast (200); if 408, permit must release within 250ms
+        assert!(
+            res.status() == StatusCode::REQUEST_TIMEOUT || res.status() == StatusCode::OK,
+            "run {run}: unexpected status {}",
+            res.status()
+        );
+
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(250);
+        let mut acquired = false;
+        while tokio::time::Instant::now() < deadline {
+            if state.semaphore.available_permits() == 1 {
+                acquired = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(
+            acquired,
+            "run {run}: semaphore permit not released within 250ms after timeout"
+        );
+
+        // Follow-up trivial request must succeed with 200 OK (no 503 leak)
+        let ok_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/parse")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "expression": "1 + 1",
+                            "input_format": "maxima"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(ok_res.status(), StatusCode::OK);
+    }
+}
+
+#[tokio::test]
+async fn test_phase52_adversarial_inputs_never_panic_or_oom() {
+    let app = build_app(test_state());
+
+    // 1. 2^2^... depth 1000
+    let pow_tower = vec!["2"; 1000].join("^");
+    let res_pow = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/compute")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "expression": pow_tower,
+                        "operation": "simplify"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_pow.status(), StatusCode::BAD_REQUEST);
+
+    // 2. 1e1000000000 scientific notation overflow rejection
+    let res_sci = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/compute")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "expression": "1e1000000000",
+                        "operation": "simplify"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_sci.status(), StatusCode::BAD_REQUEST);
+
+    // 3. taylor order 10000 rejection
+    let res_taylor = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/compute")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "expression": "sin(x)",
+                        "operation": "taylor",
+                        "params": { "variable": "x", "center": "0", "order": 10000 }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_taylor.status(), StatusCode::BAD_REQUEST);
+
+    // 4. orthopoly degree 1000 rejection
+    let res_ortho = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/compute")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "expression": "x",
+                        "operation": "orthopoly",
+                        "params": { "kind": "legendre_p", "degree": 1000, "variable": "x" }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_ortho.status(), StatusCode::BAD_REQUEST);
+}

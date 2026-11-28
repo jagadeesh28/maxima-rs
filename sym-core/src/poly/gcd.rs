@@ -119,6 +119,9 @@ pub fn poly_gcd(a: &Poly, b: &Poly) -> Poly {
         let mut u = x;
         let mut v = y;
         while !v.is_zero() {
+            if crate::cancel::is_cancelled() {
+                return Poly::constant(BigRational::one(), ctx);
+            }
             match poly_divrem(&u, &v) {
                 Some((_, r)) => {
                     u = v;

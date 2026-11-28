@@ -10,6 +10,7 @@
 //! ```
 
 // Core AST & exact rational constants
+pub use sym_core::cancel::{CancelToken, is_cancelled, with_cancel_token};
 pub use sym_core::expr::Expr;
 pub use sym_core::latex::to_latex;
 pub use sym_core::rational::{BigRational, Rat};
@@ -56,6 +57,12 @@ pub use sym_core::limit::limit_with_assumptions;
 
 #[cfg(feature = "solve")]
 pub use sym_core::solve::{AlgebraicSolutions, OdeSolution, ode2, solve};
+
+#[cfg(feature = "cas")]
+pub use sym_core::maxima_ops::{
+    demoivre, eval_finite_aggregate, eval_float, exponentialize, num_denom, poly_divide, radcan,
+    subst_expr, trigexpand, trigreduce, trigsimp,
+};
 
 #[cfg(all(feature = "parser", feature = "cas"))]
 pub use sym_core::parser::maxima::{CasCommand, execute_cas, parse_maxima_cas};

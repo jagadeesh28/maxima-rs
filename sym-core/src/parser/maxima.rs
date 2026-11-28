@@ -50,9 +50,20 @@ fn expr(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
     guard
         .enter()
         .map_err(|_| winnow::error::ErrMode::Cut(ContextError::default()))?;
-    let res = additive(i, guard);
+    let res = equation(i, guard);
     guard.leave();
     res
+}
+
+fn equation(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
+    let left = additive(i, guard)?;
+    let _ = multispace0(i)?;
+    if i.starts_with('=') && !i.starts_with("==") {
+        *i = &i[1..];
+        let right = additive(i, guard)?;
+        return Ok(Expr::sub(left, right));
+    }
+    Ok(left)
 }
 
 fn additive(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
@@ -129,7 +140,11 @@ fn power(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
         let left = postfix(i, guard)?;
 
         let _ = multispace0(i)?;
-        if i.starts_with('^') {
+        if i.starts_with("**") {
+            *i = &i[2..];
+            let right = unary(i, guard)?; // right-associative, allows 2**-1 or x**-2
+            Ok(Expr::pow(left, right))
+        } else if i.starts_with('^') {
             *i = &i[1..];
             let right = unary(i, guard)?; // right-associative, allows 2^-1 or x^-2
             Ok(Expr::pow(left, right))
@@ -244,6 +259,19 @@ fn take_ident<'a>(i: &mut &'a str) -> Option<&'a str> {
 fn primary(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
     let _ = multispace0(i)?;
 
+    // 0. Noun quote `'` (e.g. `'diff(y, x)`, `'integrate(f, x)`)
+    if i.starts_with('\'') {
+        *i = &i[1..];
+        return primary(i, guard);
+    }
+
+    // 0b. Bracket list literal `[a, b, c]`
+    if i.starts_with('[') {
+        *i = &i[1..];
+        let items = bracket_list(i, guard)?;
+        return Ok(Expr::matrix(vec![items]));
+    }
+
     // 1. Parenthesized expression
     if i.starts_with('(') {
         *i = &i[1..];
@@ -326,6 +354,29 @@ fn call_args(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Vec<Expr>
     Ok(args)
 }
 
+/// Parse `[a, b, c]` after the opening `[` is consumed.
+fn bracket_list(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Vec<Expr>> {
+    let mut items = Vec::new();
+    let _ = multispace0(i)?;
+    if i.starts_with(']') {
+        *i = &i[1..];
+        return Ok(items);
+    }
+    loop {
+        items.push(expr(i, guard)?);
+        let _ = multispace0(i)?;
+        if i.starts_with(',') {
+            *i = &i[1..];
+        } else if i.starts_with(']') {
+            *i = &i[1..];
+            break;
+        } else {
+            return cut();
+        }
+    }
+    Ok(items)
+}
+
 /// Parse `matrix([a,b],[c,d])` rows; the opening `(` is already consumed.
 fn matrix_rows(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Vec<Vec<Expr>>> {
     let mut rows = Vec::new();
@@ -339,24 +390,7 @@ fn matrix_rows(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Vec<Vec
             return cut();
         }
         *i = &i[1..];
-        let mut row = Vec::new();
-        let _ = multispace0(i)?;
-        if i.starts_with(']') {
-            *i = &i[1..];
-        } else {
-            loop {
-                row.push(expr(i, guard)?);
-                let _ = multispace0(i)?;
-                if i.starts_with(',') {
-                    *i = &i[1..];
-                } else if i.starts_with(']') {
-                    *i = &i[1..];
-                    break;
-                } else {
-                    return cut();
-                }
-            }
-        }
+        let row = bracket_list(i, guard)?;
         rows.push(row);
         let _ = multispace0(i)?;
         if i.starts_with(',') {
@@ -393,6 +427,42 @@ fn build_call(name: &str, args: Vec<Expr>) -> PResult<Expr> {
         "asin" => arity_one(Expr::asin, &mut args),
         "acos" => arity_one(Expr::acos, &mut args),
         "atan" => arity_one(Expr::atan, &mut args),
+        "sec" => arity_one(|u| Expr::div(Expr::int(1), Expr::cos(u)), &mut args),
+        "csc" => arity_one(|u| Expr::div(Expr::int(1), Expr::sin(u)), &mut args),
+        "cot" => arity_one(|u| Expr::div(Expr::cos(u.clone()), Expr::sin(u)), &mut args),
+        "asec" => arity_one(|u| Expr::acos(Expr::div(Expr::int(1), u)), &mut args),
+        "acsc" => arity_one(|u| Expr::asin(Expr::div(Expr::int(1), u)), &mut args),
+        "acot" => arity_one(|u| Expr::atan(Expr::div(Expr::int(1), u)), &mut args),
+        "asinh" => arity_one(
+            |u| {
+                Expr::ln(Expr::add(
+                    u.clone(),
+                    Expr::sqrt(Expr::add(Expr::pow(u, Expr::int(2)), Expr::int(1))),
+                ))
+            },
+            &mut args,
+        ),
+        "acosh" => arity_one(
+            |u| {
+                Expr::ln(Expr::add(
+                    u.clone(),
+                    Expr::sqrt(Expr::sub(Expr::pow(u, Expr::int(2)), Expr::int(1))),
+                ))
+            },
+            &mut args,
+        ),
+        "atanh" => arity_one(
+            |u| {
+                Expr::mul(
+                    Expr::frac(1, 2),
+                    Expr::ln(Expr::div(
+                        Expr::add(Expr::int(1), u.clone()),
+                        Expr::sub(Expr::int(1), u),
+                    )),
+                )
+            },
+            &mut args,
+        ),
         "abs" => arity_one(Expr::abs, &mut args),
         "atan2" => {
             if args.len() != 2 {
@@ -401,10 +471,29 @@ fn build_call(name: &str, args: Vec<Expr>) -> PResult<Expr> {
             Ok(Expr::atan2(args.remove(0), args.remove(0)))
         }
         "diff" => {
-            if args.len() != 2 {
-                return cut();
+            if args.len() == 2 {
+                Ok(Expr::derivative(args.remove(0), args.remove(0)))
+            } else if args.len() == 3 {
+                let mut f = args.remove(0);
+                let v = args.remove(0);
+                let order_expr = args.remove(0);
+                let n = match order_expr {
+                    Expr::Const(r) if crate::rational::Rat::is_integer(&r) => {
+                        use num_traits::ToPrimitive;
+                        r.numer()
+                            .to_usize()
+                            .filter(|&k| k <= 64)
+                            .ok_or_else(|| winnow::error::ErrMode::Cut(ContextError::default()))?
+                    }
+                    _ => return cut(),
+                };
+                for _ in 0..n {
+                    f = Expr::derivative(f, v.clone());
+                }
+                Ok(f)
+            } else {
+                cut()
             }
-            Ok(Expr::derivative(args.remove(0), args.remove(0)))
         }
         "integrate" | "integral" => {
             if args.len() != 2 {
@@ -798,6 +887,23 @@ mod cas_commands {
         Assume(Expr),
         Is(Expr),
         Orthopoly(String, usize, Expr),
+        DiffN(Expr, String, usize),
+        LimitDir(Expr, String, Expr, crate::limit::LimitDir),
+        TrigExpand(Expr),
+        TrigReduce(Expr),
+        TrigSimp(Expr),
+        Radcan(Expr),
+        Demoivre(Expr),
+        Exponentialize(Expr),
+        Subst(Expr, String, Expr),
+        Float(Expr),
+        Divide(Expr, Expr, Option<String>),
+        Quotient(Expr, Expr, Option<String>),
+        Remainder(Expr, Expr, Option<String>),
+        Num(Expr),
+        Denom(Expr),
+        SumEval(Expr, String, Expr, Expr),
+        ProductEval(Expr, String, Expr, Expr),
     }
 
     impl CasCommand {
@@ -838,7 +944,24 @@ mod cas_commands {
                 | Self::Csign(e)
                 | Self::Assume(e)
                 | Self::Is(e)
-                | Self::Orthopoly(_, _, e) => e,
+                | Self::Orthopoly(_, _, e)
+                | Self::DiffN(e, _, _)
+                | Self::LimitDir(e, _, _, _)
+                | Self::TrigExpand(e)
+                | Self::TrigReduce(e)
+                | Self::TrigSimp(e)
+                | Self::Radcan(e)
+                | Self::Demoivre(e)
+                | Self::Exponentialize(e)
+                | Self::Subst(_, _, e)
+                | Self::Float(e)
+                | Self::Divide(e, _, _)
+                | Self::Quotient(e, _, _)
+                | Self::Remainder(e, _, _)
+                | Self::Num(e)
+                | Self::Denom(e)
+                | Self::SumEval(e, _, _, _)
+                | Self::ProductEval(e, _, _, _) => e,
             }
         }
 
@@ -880,6 +1003,23 @@ mod cas_commands {
                 Self::Assume(_) => "assume",
                 Self::Is(_) => "is",
                 Self::Orthopoly(_, _, _) => "orthopoly",
+                Self::DiffN(_, _, _) => "differentiate",
+                Self::LimitDir(_, _, _, _) => "limit",
+                Self::TrigExpand(_) => "trigexpand",
+                Self::TrigReduce(_) => "trigreduce",
+                Self::TrigSimp(_) => "trigsimp",
+                Self::Radcan(_) => "radcan",
+                Self::Demoivre(_) => "demoivre",
+                Self::Exponentialize(_) => "exponentialize",
+                Self::Subst(_, _, _) => "subst",
+                Self::Float(_) => "float",
+                Self::Divide(_, _, _) => "divide",
+                Self::Quotient(_, _, _) => "quotient",
+                Self::Remainder(_, _, _) => "remainder",
+                Self::Num(_) => "num",
+                Self::Denom(_) => "denom",
+                Self::SumEval(_, _, _, _) => "sum",
+                Self::ProductEval(_, _, _, _) => "product",
             }
         }
     }
@@ -956,12 +1096,40 @@ mod cas_commands {
                 Ok(CasCommand::Partfrac(e(0)?, v(1)))
             }
             "diff" => {
-                need(2)?;
-                Ok(CasCommand::Diff(e(0)?, v(1)))
+                if args.len() == 2 {
+                    Ok(CasCommand::Diff(e(0)?, v(1)))
+                } else if args.len() == 3 {
+                    let n = args[2]
+                        .trim()
+                        .parse::<usize>()
+                        .map_err(|_| err("invalid diff order"))?;
+                    if n > 64 {
+                        return Err(err("diff order exceeds 64"));
+                    }
+                    Ok(CasCommand::DiffN(e(0)?, v(1), n))
+                } else {
+                    Err(err("diff expects 2 or 3 arguments"))
+                }
             }
             "limit" => {
-                need(3)?;
-                Ok(CasCommand::Limit(e(0)?, v(1), parse_point(args[2])?))
+                if args.len() == 3 {
+                    Ok(CasCommand::Limit(e(0)?, v(1), parse_point(args[2])?))
+                } else if args.len() == 4 {
+                    let dir = match args[3].trim() {
+                        "plus" => crate::limit::LimitDir::Plus,
+                        "minus" => crate::limit::LimitDir::Minus,
+                        "both" => crate::limit::LimitDir::Both,
+                        _ => return Err(err("limit direction must be plus or minus")),
+                    };
+                    Ok(CasCommand::LimitDir(
+                        e(0)?,
+                        v(1),
+                        parse_point(args[2])?,
+                        dir,
+                    ))
+                } else {
+                    Err(err("limit expects 3 or 4 arguments"))
+                }
             }
             "solve" => {
                 need(2)?;
@@ -1101,6 +1269,81 @@ mod cas_commands {
                     .map_err(|_| err("bad orthopoly degree"))?;
                 Ok(CasCommand::Orthopoly(name.to_string(), deg, e(1)?))
             }
+            "trigexpand" => {
+                need(1)?;
+                Ok(CasCommand::TrigExpand(e(0)?))
+            }
+            "trigreduce" => {
+                need(1)?;
+                Ok(CasCommand::TrigReduce(e(0)?))
+            }
+            "trigsimp" => {
+                need(1)?;
+                Ok(CasCommand::TrigSimp(e(0)?))
+            }
+            "radcan" => {
+                need(1)?;
+                Ok(CasCommand::Radcan(e(0)?))
+            }
+            "demoivre" => {
+                need(1)?;
+                Ok(CasCommand::Demoivre(e(0)?))
+            }
+            "exponentialize" => {
+                need(1)?;
+                Ok(CasCommand::Exponentialize(e(0)?))
+            }
+            "subst" => {
+                need(3)?;
+                Ok(CasCommand::Subst(e(0)?, v(1), e(2)?))
+            }
+            "float" => {
+                need(1)?;
+                Ok(CasCommand::Float(e(0)?))
+            }
+            "divide" => {
+                if args.len() == 2 {
+                    Ok(CasCommand::Divide(e(0)?, e(1)?, None))
+                } else if args.len() == 3 {
+                    Ok(CasCommand::Divide(e(0)?, e(1)?, Some(v(2))))
+                } else {
+                    Err(err("divide expects 2 or 3 arguments"))
+                }
+            }
+            "quotient" => {
+                if args.len() == 2 {
+                    Ok(CasCommand::Quotient(e(0)?, e(1)?, None))
+                } else if args.len() == 3 {
+                    Ok(CasCommand::Quotient(e(0)?, e(1)?, Some(v(2))))
+                } else {
+                    Err(err("quotient expects 2 or 3 arguments"))
+                }
+            }
+            "remainder" => {
+                if args.len() == 2 {
+                    Ok(CasCommand::Remainder(e(0)?, e(1)?, None))
+                } else if args.len() == 3 {
+                    Ok(CasCommand::Remainder(e(0)?, e(1)?, Some(v(2))))
+                } else {
+                    Err(err("remainder expects 2 or 3 arguments"))
+                }
+            }
+            "num" => {
+                need(1)?;
+                Ok(CasCommand::Num(e(0)?))
+            }
+            "denom" => {
+                need(1)?;
+                Ok(CasCommand::Denom(e(0)?))
+            }
+            "sum" => {
+                need(4)?;
+                Ok(CasCommand::SumEval(e(0)?, v(1), e(2)?, e(3)?))
+            }
+            "product" => {
+                need(4)?;
+                Ok(CasCommand::ProductEval(e(0)?, v(1), e(2)?, e(3)?))
+            }
             _ => Err(err("unknown CAS command")),
         }
     }
@@ -1113,7 +1356,40 @@ mod cas_commands {
             CasCommand::Ratsimp(e) => crate::poly::ratsimp(e).ok(),
             CasCommand::Partfrac(e, v) => crate::poly::partfrac(e, v).ok(),
             CasCommand::Diff(e, v) => Some(crate::diff::differentiate(e, v)),
+            CasCommand::DiffN(e, v, n) => {
+                let mut cur = e.clone();
+                for _ in 0..*n {
+                    cur = crate::diff::differentiate(&cur, v);
+                }
+                Some(cur)
+            }
             CasCommand::Limit(e, v, p) => crate::limit::limit(e, v, p),
+            CasCommand::LimitDir(e, v, p, dir) => crate::limit::limit_dir(e, v, p, *dir),
+            CasCommand::TrigExpand(e) => Some(crate::maxima_ops::trigexpand(e)),
+            CasCommand::TrigReduce(e) => Some(crate::maxima_ops::trigreduce(e)),
+            CasCommand::TrigSimp(e) => Some(crate::maxima_ops::trigsimp(e)),
+            CasCommand::Radcan(e) => Some(crate::maxima_ops::radcan(e)),
+            CasCommand::Demoivre(e) => Some(crate::maxima_ops::demoivre(e)),
+            CasCommand::Exponentialize(e) => Some(crate::maxima_ops::exponentialize(e)),
+            CasCommand::Subst(new_val, v, e) => Some(crate::maxima_ops::subst_expr(new_val, v, e)),
+            CasCommand::Float(e) => crate::maxima_ops::eval_float(e),
+            CasCommand::Divide(p, q, v) => crate::maxima_ops::poly_divide(p, q, v.as_deref())
+                .ok()
+                .map(|(quot, rem)| Expr::matrix(vec![vec![quot, rem]])),
+            CasCommand::Quotient(p, q, v) => crate::maxima_ops::poly_divide(p, q, v.as_deref())
+                .ok()
+                .map(|(quot, _)| quot),
+            CasCommand::Remainder(p, q, v) => crate::maxima_ops::poly_divide(p, q, v.as_deref())
+                .ok()
+                .map(|(_, rem)| rem),
+            CasCommand::Num(e) => crate::maxima_ops::num_denom(e).ok().map(|(n, _)| n),
+            CasCommand::Denom(e) => crate::maxima_ops::num_denom(e).ok().map(|(_, d)| d),
+            CasCommand::SumEval(body, v, lo, hi) => {
+                crate::maxima_ops::eval_finite_aggregate(body, v, lo, hi, false).ok()
+            }
+            CasCommand::ProductEval(body, v, lo, hi) => {
+                crate::maxima_ops::eval_finite_aggregate(body, v, lo, hi, true).ok()
+            }
             CasCommand::Solve(e, v) => {
                 let roots = crate::solve::solve(e, v).0;
                 if roots.is_empty() {

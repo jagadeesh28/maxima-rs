@@ -6,6 +6,7 @@
 use egg::{EGraph, Id, Runner};
 use std::time::Duration;
 
+use crate::cancel::{CancelToken, is_cancelled};
 use crate::expr::Expr;
 use crate::lang::{MathAnalysis, MathLang};
 use crate::rules::{RuleConfig, get_rules};
@@ -21,6 +22,8 @@ pub struct SaturationConfig {
     pub time_limit_secs: f64,
     /// Configuration for rule selection.
     pub rule_config: RuleConfig,
+    /// Optional cooperative cancellation token polled on every runner iteration.
+    pub cancel_token: Option<CancelToken>,
 }
 
 impl Default for SaturationConfig {
@@ -30,6 +33,7 @@ impl Default for SaturationConfig {
             iter_limit: 30,
             time_limit_secs: 5.0,
             rule_config: RuleConfig::default(),
+            cancel_token: None,
         }
     }
 }
@@ -42,10 +46,18 @@ pub fn saturate(
     exprs: &[Expr],
     config: &SaturationConfig,
 ) -> (EGraph<MathLang, MathAnalysis>, Vec<Id>) {
+    let token = config.cancel_token.clone();
     let mut runner = Runner::default()
         .with_node_limit(config.node_limit)
         .with_iter_limit(config.iter_limit)
-        .with_time_limit(Duration::from_secs_f64(config.time_limit_secs));
+        .with_time_limit(Duration::from_secs_f64(config.time_limit_secs))
+        .with_hook(move |_runner| {
+            if is_cancelled() || token.as_ref().is_some_and(CancelToken::is_cancelled) {
+                Err("cancelled".to_string())
+            } else {
+                Ok(())
+            }
+        });
 
     let mut roots = Vec::with_capacity(exprs.len());
     for expr in exprs {
@@ -54,6 +66,14 @@ pub fn saturate(
         roots.push(root);
     }
 
+    if is_cancelled()
+        || config
+            .cancel_token
+            .as_ref()
+            .is_some_and(CancelToken::is_cancelled)
+    {
+        return (runner.egraph, roots);
+    }
     let rules = get_rules(&config.rule_config);
     let runner = runner.run(&rules);
 
