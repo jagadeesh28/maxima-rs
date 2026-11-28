@@ -286,6 +286,7 @@ fn test_matrix_web_service_dispatch() {
         variable: String::new(),
         variables: Vec::new(),
         float_type: "f64".into(),
+        fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
     };
@@ -301,6 +302,7 @@ fn test_matrix_web_service_dispatch() {
         variable: String::new(),
         variables: Vec::new(),
         float_type: "f64".into(),
+        fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
     };

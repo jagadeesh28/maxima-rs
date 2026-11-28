@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const varsArr = params.variables
         ? params.variables.split(',').map(s => s.trim()).filter(Boolean)
         : (params.variable ? [params.variable.trim()] : []);
+      const env = palette && palette.getEnv ? palette.getEnv() : {};
 
       const payload = {
         expression,
@@ -129,6 +130,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         operation,
         variable: varStr,
         variables: varsArr,
+        float_type: params.float_type || 'f64',
+        env,
         params,
         fast_math
       };
@@ -140,7 +143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const errResponse = {
         status: 'error',
         result: err.message,
-        result_latex: `\\text{Error: } ${err.message}`,
+        result_latex: '',
         warnings: [err.message],
         outputs: []
       };
@@ -193,7 +196,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const data = await fetchRules();
         renderRulesModal(rulesList, data.rules || []);
       } catch (err) {
-        rulesList.innerHTML = `<div class="text-sm text-danger">${err.message}</div>`;
+        const errDiv = document.createElement('div');
+        errDiv.className = 'text-sm text-danger';
+        errDiv.textContent = err.message || 'Failed to load rules';
+        rulesList.replaceChildren(errDiv);
       }
     });
 
@@ -259,16 +265,25 @@ function renderRulesModal(container, rules) {
     container.innerHTML = '<div class="text-sm text-muted">No rules reported.</div>';
     return;
   }
-  container.innerHTML = rules.map(r => `
+  container.innerHTML = rules.map(r => {
+    const fnName = r.source_fn || r.source_function || '';
+    const identity = r.identity || r.rule || '';
+    const fastBadge = r.fast_math_only
+      ? '<span class="badge badge-partial">fast-math</span>'
+      : '';
+    return `
     <div class="p-3 border-b border-app flex flex-col gap-1">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-2">
         <span class="font-bold text-sm text-primary">${escapeHtml(r.name)}</span>
-        <span class="text-xs text-muted">${escapeHtml(r.source_file)} (${escapeHtml(r.source_function)})</span>
+        <div class="flex items-center gap-2">
+          ${fastBadge}
+          <span class="text-xs text-muted">${escapeHtml(r.source_file)} (${escapeHtml(fnName)})</span>
+        </div>
       </div>
-      <div class="text-xs font-mono bg-subtle p-2 rounded">${escapeHtml(r.rule)}</div>
-      <div class="text-xs text-dim">${escapeHtml(r.description || '')}</div>
+      <div class="text-xs font-mono bg-subtle p-2 rounded">${escapeHtml(identity)}</div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function showToast(message, type = 'info') {

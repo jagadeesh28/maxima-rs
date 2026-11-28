@@ -273,6 +273,7 @@ fn test_complex_web_service_dispatch() {
         variable: String::new(),
         variables: Vec::new(),
         float_type: "f64".into(),
+        fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
     };
@@ -288,6 +289,7 @@ fn test_complex_web_service_dispatch() {
         variable: String::new(),
         variables: Vec::new(),
         float_type: "f64".into(),
+        fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
     };
@@ -303,6 +305,7 @@ fn test_complex_web_service_dispatch() {
         variable: String::new(),
         variables: Vec::new(),
         float_type: "f64".into(),
+        fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
     };
@@ -318,6 +321,7 @@ fn test_complex_web_service_dispatch() {
         variable: String::new(),
         variables: Vec::new(),
         float_type: "f64".into(),
+        fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
     };
@@ -336,6 +340,7 @@ fn test_complex_web_service_dispatch() {
         variable: "z".into(),
         variables: vec!["z".into()],
         float_type: "f64".into(),
+        fast_math: true,
         env: HashMap::new(),
         params: params_res,
     };

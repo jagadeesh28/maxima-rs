@@ -8,7 +8,6 @@
 # Build artifacts & targets
 target/
 target-dir/
-Cargo.lock
 
 # Documentation & large reference archives
 docs/

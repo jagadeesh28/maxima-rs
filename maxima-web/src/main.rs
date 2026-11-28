@@ -23,6 +23,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.timeout_ms, config.concurrency, config.max_body_size
     );
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
 }

@@ -16,28 +16,28 @@ use std::path::{Path, PathBuf};
 )]
 pub struct Cli {
     /// Bind address (e.g. 127.0.0.1 or 0.0.0.0)
-    #[arg(long, default_value = "127.0.0.1")]
-    pub bind: String,
+    #[arg(long)]
+    pub bind: Option<String>,
 
     /// TCP port to listen on
-    #[arg(long, default_value_t = 3000)]
-    pub port: u16,
+    #[arg(long)]
+    pub port: Option<u16>,
 
     /// Maximum computation timeout in milliseconds
-    #[arg(long, default_value_t = 8000)]
-    pub timeout_ms: u64,
+    #[arg(long)]
+    pub timeout_ms: Option<u64>,
 
     /// Maximum concurrent compute executions (defaults to logical CPU cores)
     #[arg(long)]
     pub concurrency: Option<usize>,
 
     /// Maximum request body size in bytes
-    #[arg(long, default_value_t = 65536)]
-    pub max_body_size: usize,
+    #[arg(long)]
+    pub max_body_size: Option<usize>,
 
     /// Maximum expression string length in characters
-    #[arg(long, default_value_t = 10000)]
-    pub max_expr_len: usize,
+    #[arg(long)]
+    pub max_expr_len: Option<usize>,
 
     /// Path to an optional TOML configuration file
     #[arg(long)]
@@ -81,15 +81,25 @@ impl ServerConfig {
             Self::default()
         };
 
-        // Override with explicit CLI flags
-        config.bind = cli.bind.clone();
-        config.port = cli.port;
-        config.timeout_ms = cli.timeout_ms;
+        // Override with explicit CLI flags only when provided
+        if let Some(bind) = &cli.bind {
+            config.bind = bind.clone();
+        }
+        if let Some(port) = cli.port {
+            config.port = port;
+        }
+        if let Some(timeout_ms) = cli.timeout_ms {
+            config.timeout_ms = timeout_ms;
+        }
         if let Some(c) = cli.concurrency {
             config.concurrency = c;
         }
-        config.max_body_size = cli.max_body_size;
-        config.max_expr_len = cli.max_expr_len;
+        if let Some(max_body_size) = cli.max_body_size {
+            config.max_body_size = max_body_size;
+        }
+        if let Some(max_expr_len) = cli.max_expr_len {
+            config.max_expr_len = max_expr_len;
+        }
 
         Ok(config)
     }

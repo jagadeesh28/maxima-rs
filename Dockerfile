@@ -9,12 +9,12 @@
 # ==============================================================================
 
 # ── Stage 1: Build & Optimization ─────────────────────────────────────────────
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.88-bookworm AS builder
 
 WORKDIR /usr/src/maxima
 
 # Copy workspace manifests
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY sym-core/Cargo.toml sym-core/
 COPY sym-macros/Cargo.toml sym-macros/
 COPY maxima-rs/Cargo.toml maxima-rs/
@@ -30,7 +30,7 @@ COPY maxima-web/static maxima-web/static
 COPY tests/ tests/
 
 # Compile production release binary with thin LTO & stripped symbols
-RUN cargo build --release -p maxima-web
+RUN cargo build --release --locked -p maxima-web
 
 # ── Stage 2: Minimal Runtime ──────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
@@ -54,10 +54,13 @@ RUN groupadd -g 1001 maxima && \
 USER maxima
 WORKDIR /app
 
-# Expose default HTTP ports (3000 for standalone, 8080 for Lambda Web Adapter)
-EXPOSE 3000
+# AWS Lambda Web Adapter readiness & port alignment (infrastructure-only)
+ENV AWS_LWA_READINESS_CHECK_PATH=/api/health
+ENV AWS_LWA_PORT=8080
+
+# Expose default HTTP port (8080 for both standalone & Lambda Web Adapter)
 EXPOSE 8080
 
 # Explicit CLI entrypoint and parameters
 ENTRYPOINT ["/app/maxima-web"]
-CMD ["--bind", "0.0.0.0", "--port", "3000", "--timeout-ms", "8000"]
+CMD ["--bind", "0.0.0.0", "--port", "8080", "--timeout-ms", "8000"]

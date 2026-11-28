@@ -79,6 +79,9 @@ pub struct ComputeRequest {
     /// "f64" (default) or "f32" — target float type for codegen/eval.
     #[serde(default = "default_float_type")]
     pub float_type: String,
+    /// Enable fast-math e-graph simplifications (default: true).
+    #[serde(default = "default_fast_math")]
+    pub fast_math: bool,
     /// Variable -> numeric value for the evaluate operation.
     #[serde(default)]
     pub env: HashMap<String, String>,
@@ -93,6 +96,10 @@ fn default_input_format() -> String {
 
 fn default_float_type() -> String {
     "f64".into()
+}
+
+fn default_fast_math() -> bool {
+    true
 }
 
 /// Outgoing computation response.

@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="/static/vendor/katex/katex.min.css" />
   <link rel="stylesheet" href="/static/vendor/app.css" />
   <script defer src="/static/vendor/katex/katex.min.js"></script>
-  <script defer src="/static/vendor/katex/auto-render.min.js"></script>
   <script type="module" src="/static/js/main.js"></script>
 </head>
 <body>
@@ -60,7 +59,7 @@
           <div style="display:flex; gap:0.375rem; overflow-x:auto; padding-bottom:0.25rem;">
             <button class="chip exampleChip" data-expr="sin(x)^2 + cos(x)^2" data-op="simplify">sin(x)² + cos(x)²</button>
             <button class="chip exampleChip" data-expr="sin(x) * cos(x)" data-op="differentiate" data-params='{"variable":"x"}'>d/dx(sin(x)·cos(x))</button>
-            <button class="chip exampleChip" data-expr="x^3 * y^2" data-op="differentiate" data-params='{"variable":"x, y"}'>d/d[x,y](x³·y²)</button>
+            <button class="chip exampleChip" data-expr="x^3 * y^2" data-op="differentiate" data-params='{"variables":"x, y"}'>d/d[x,y](x³·y²)</button>
             <button class="chip exampleChip" data-expr="(x + 1)^4" data-op="expand">expand((x+1)⁴)</button>
             <button class="chip exampleChip" data-expr="x^3 - 6*x^2 + 11*x - 6" data-op="factor">factor(cubic)</button>
             <button class="chip exampleChip" data-expr="1/(x^2 - 1)" data-op="partfrac" data-params='{"variable":"x"}'>partfrac</button>

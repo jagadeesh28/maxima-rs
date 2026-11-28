@@ -12,6 +12,7 @@ fn req(expr: &str, op: &str, vars: &[&str]) -> ComputeRequest {
         variables: vars.iter().map(|s| s.to_string()).collect(),
         variable: vars.first().map(|s| s.to_string()).unwrap_or_default(),
         float_type: "f64".to_string(),
+        fast_math: true,
         env: HashMap::new(),
         params: HashMap::new(),
     }
@@ -29,6 +30,7 @@ fn req_with_params(expr: &str, op: &str, params: &[(&str, serde_json::Value)]) -
         variables: Vec::new(),
         variable: String::new(),
         float_type: "f64".to_string(),
+        fast_math: true,
         env: HashMap::new(),
         params: param_map,
     }

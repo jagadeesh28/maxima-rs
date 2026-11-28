@@ -510,7 +510,9 @@ impl Expr {
     pub fn variables(&self) -> Vec<String> {
         let mut vars = std::collections::HashSet::new();
         self.collect_vars(&mut vars);
-        vars.into_iter().collect()
+        let mut sorted: Vec<String> = vars.into_iter().collect();
+        sorted.sort();
+        sorted
     }
 
     fn collect_vars(&self, vars: &mut std::collections::HashSet<String>) {

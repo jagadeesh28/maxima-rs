@@ -2,8 +2,9 @@
 
 use axum::{
     Router,
-    extract::{DefaultBodyLimit, Path, State},
+    extract::{DefaultBodyLimit, Path, Request, State},
     http::{HeaderValue, StatusCode, header},
+    middleware::{self, Next},
     response::{Html, IntoResponse, Json, Response},
     routing::{get, post},
 };
@@ -58,8 +59,26 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .route("/index.html", get(serve_index))
         .route("/static/{*path}", get(serve_static))
         .fallback(serve_index)
+        .layer(middleware::from_fn(security_headers))
         .layer(DefaultBodyLimit::max(max_body))
         .with_state(state)
+}
+
+async fn security_headers(req: Request, next: Next) -> Response {
+    let mut res = next.run(req).await;
+    let headers = res.headers_mut();
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        ),
+    );
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    res
 }
 
 async fn health() -> Json<HealthResponse> {
@@ -91,42 +110,25 @@ async fn api_not_found() -> (StatusCode, Json<serde_json::Value>) {
     )
 }
 
-/// Isolated parse endpoint with length check.
-async fn parse_isolated(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<ParseRequest>,
-) -> Result<Json<ParseResponse>, (StatusCode, Json<serde_json::Value>)> {
-    if req.expression.len() > state.config.max_expr_len {
+async fn run_isolated<T, F>(
+    state: &AppState,
+    expr_len: usize,
+    work: F,
+) -> Result<T, (StatusCode, Json<serde_json::Value>)>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    if expr_len > state.config.max_expr_len {
         return Err((
             StatusCode::PAYLOAD_TOO_LARGE,
             Json(serde_json::json!({
-                "error": format!("Expression length {} exceeds limit of {}", req.expression.len(), state.config.max_expr_len),
+                "error": format!("Expression length {expr_len} exceeds limit of {}", state.config.max_expr_len),
                 "status": "payload_too_large"
             })),
         ));
     }
 
-    let resp = service::parse(&req);
-    Ok(Json(resp))
-}
-
-/// Hardened compute endpoint with timeout, concurrency throttle, and panic isolation.
-async fn compute_isolated(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<ComputeRequest>,
-) -> Result<Json<api::ComputeResponse>, (StatusCode, Json<serde_json::Value>)> {
-    // 1. Check expression length
-    if req.expression.len() > state.config.max_expr_len {
-        return Err((
-            StatusCode::PAYLOAD_TOO_LARGE,
-            Json(serde_json::json!({
-                "error": format!("Expression length {} exceeds limit of {}", req.expression.len(), state.config.max_expr_len),
-                "status": "payload_too_large"
-            })),
-        ));
-    }
-
-    // 2. Concurrency throttling: acquire owned permit
     let permit = match state.semaphore.clone().try_acquire_owned() {
         Ok(permit) => permit,
         Err(_) => {
@@ -140,7 +142,6 @@ async fn compute_isolated(
         }
     };
 
-    // 3. Isolated execution via spawn_blocking + catch_unwind with timeout
     if state.config.timeout_ms == 0 {
         return Err((
             StatusCode::REQUEST_TIMEOUT,
@@ -151,49 +152,57 @@ async fn compute_isolated(
         ));
     }
 
-    let req_clone = req.clone();
-    let compute_future = tokio::task::spawn_blocking(move || {
+    let fut = tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| compute(&req_clone)))
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
     });
 
     let timeout_duration = Duration::from_millis(state.config.timeout_ms);
-    let result = match tokio::time::timeout(timeout_duration, compute_future).await {
-        Ok(task_res) => match task_res {
-            Ok(unwind_res) => match unwind_res {
-                Ok(resp) => resp,
-                Err(_panic_err) => {
-                    return Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({
-                            "error": "Engine panic caught during symbolic computation",
-                            "status": "engine_panic"
-                        })),
-                    ));
-                }
-            },
-            Err(join_err) => {
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({
-                        "error": format!("Worker task join error: {join_err}"),
-                        "status": "internal_error"
-                    })),
-                ));
-            }
-        },
-        Err(_elapsed) => {
-            return Err((
-                StatusCode::REQUEST_TIMEOUT,
-                Json(serde_json::json!({
-                    "error": format!("Computation timed out after {}ms", state.config.timeout_ms),
-                    "status": "timeout"
-                })),
-            ));
-        }
-    };
+    match tokio::time::timeout(timeout_duration, fut).await {
+        Ok(Ok(Ok(val))) => Ok(val),
+        Ok(Ok(Err(_panic_err))) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Engine panic caught during symbolic computation",
+                "status": "engine_panic"
+            })),
+        )),
+        Ok(Err(join_err)) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("Worker task join error: {join_err}"),
+                "status": "internal_error"
+            })),
+        )),
+        Err(_elapsed) => Err((
+            StatusCode::REQUEST_TIMEOUT,
+            Json(serde_json::json!({
+                "error": format!("Computation timed out after {}ms", state.config.timeout_ms),
+                "status": "timeout"
+            })),
+        )),
+    }
+}
 
-    // 4. If status is Error due to invalid parameter / parse failure, return HTTP 400
+/// Isolated parse endpoint with length check, semaphore, panic catch, and timeout.
+async fn parse_isolated(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ParseRequest>,
+) -> Result<Json<ParseResponse>, (StatusCode, Json<serde_json::Value>)> {
+    let expr_len = req.expression.len();
+    let resp = run_isolated(&state, expr_len, move || service::parse(&req)).await?;
+    Ok(Json(resp))
+}
+
+/// Hardened compute endpoint with timeout, concurrency throttle, and panic isolation.
+async fn compute_isolated(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ComputeRequest>,
+) -> Result<Json<api::ComputeResponse>, (StatusCode, Json<serde_json::Value>)> {
+    let expr_len = req.expression.len();
+    let result = run_isolated(&state, expr_len, move || compute(&req)).await?;
+
+    // If status is Error due to invalid parameter / parse failure, return HTTP 400
     if result.status == Status::Error {
         let error_msg = result.error.unwrap_or(result.result);
         return Err((

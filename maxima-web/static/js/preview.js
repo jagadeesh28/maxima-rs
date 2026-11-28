@@ -4,6 +4,15 @@
 import { parse } from './api.js';
 
 let debounceTimer = null;
+let activeController = null;
+let requestSeq = 0;
+
+function showPreviewError(previewEl, message) {
+  const span = document.createElement('span');
+  span.className = 'text-danger text-xs';
+  span.textContent = message;
+  previewEl.replaceChildren(span);
+}
 
 export function initPreview({ inputEl, formatEl, previewEl, varsContainer, onVariablesDetected }) {
   const update = () => {
@@ -12,14 +21,24 @@ export function initPreview({ inputEl, formatEl, previewEl, varsContainer, onVar
       const expression = inputEl.value.trim();
       const input_format = formatEl.value;
 
+      if (activeController) {
+        activeController.abort();
+        activeController = null;
+      }
+
       if (!expression) {
         previewEl.innerHTML = '<span class="text-dim text-xs">Enter an expression to see live typeset preview...</span>';
         if (varsContainer) varsContainer.innerHTML = '';
         return;
       }
 
+      const seq = ++requestSeq;
+      activeController = new AbortController();
+
       try {
-        const res = await parse({ expression, input_format });
+        const res = await parse({ expression, input_format }, activeController.signal);
+        if (seq !== requestSeq) return;
+
         if (res.ok && res.latex) {
           if (window.katex) {
             previewEl.innerHTML = window.katex.renderToString(res.latex, {
@@ -30,7 +49,7 @@ export function initPreview({ inputEl, formatEl, previewEl, varsContainer, onVar
             previewEl.textContent = res.latex;
           }
         } else {
-          previewEl.innerHTML = `<span class="text-danger text-xs">${res.error || 'Syntax error'}</span>`;
+          showPreviewError(previewEl, res.error || 'Syntax error');
         }
 
         if (varsContainer) {
@@ -50,7 +69,9 @@ export function initPreview({ inputEl, formatEl, previewEl, varsContainer, onVar
           onVariablesDetected(res.variables);
         }
       } catch (err) {
-        previewEl.innerHTML = `<span class="text-danger text-xs">${err.message}</span>`;
+        if (err && err.name === 'AbortError') return;
+        if (seq !== requestSeq) return;
+        showPreviewError(previewEl, err.message || 'Parse failed');
       }
     }, 180);
   };

@@ -9,6 +9,7 @@ use std::time::Instant;
 use maxima_rs::codegen::{CodegenConfig, FloatType};
 use maxima_rs::cse::eliminate_common_subexprs;
 use maxima_rs::prelude::*;
+use maxima_rs::rules::RuleConfig;
 use maxima_rs::saturate::SaturationConfig;
 
 use crate::api::{
@@ -528,12 +529,39 @@ fn run_operation(
         return Ok(());
     }
 
-    let expr = parse_input(req)?;
-    let detected: Vec<String> = expr.variables();
-    resp.extra
-        .insert("variables".into(), serde_json::to_value(&detected).unwrap());
+    validate_request_bounds(req).map_err(|e| (e, None))?;
 
-    let cas_cmd = maxima_rs::parser::maxima::parse_maxima_cas(&req.expression).ok();
+    // For jacobian, allow vector `[f1, f2, ...]` inputs in Maxima format.
+    let (expr, vector_exprs) = if req.operation == "jacobian"
+        && req.input_format != "latex"
+        && is_bracket_vector(&req.expression)
+    {
+        let vec_exprs = parse_bracket_vector(&req.expression)?;
+        let first = vec_exprs.first().cloned().unwrap_or_else(|| Expr::int(0));
+        (first, Some(vec_exprs))
+    } else {
+        (parse_input(req)?, None)
+    };
+
+    let detected: Vec<String> = if let Some(ref vec_exprs) = vector_exprs {
+        let mut set = std::collections::BTreeSet::new();
+        for e in vec_exprs {
+            for v in e.variables() {
+                set.insert(v);
+            }
+        }
+        set.into_iter().collect()
+    } else {
+        expr.variables()
+    };
+    resp.extra
+        .insert("variables".into(), serde_json::json!(detected));
+
+    let cas_cmd = if req.input_format != "latex" {
+        maxima_rs::parser::maxima::parse_maxima_cas(&req.expression).ok()
+    } else {
+        None
+    };
     let op_name = if req.operation == "simplify" || req.operation.is_empty() {
         if let Some(ref cmd) = cas_cmd {
             match cmd {
@@ -554,10 +582,13 @@ fn run_operation(
     } else {
         req.operation.as_str()
     };
+    resp.operation = op_name.to_string();
+
+    let sat_cfg = saturation_config(req);
 
     match op_name {
         "simplify" | "optimize" => {
-            let opt = optimize(&expr, &SaturationConfig::default());
+            let opt = optimize(&expr, &sat_cfg);
             let res_str = opt.to_string();
             let res_latex = latex(&opt);
             resp.result = res_str.clone();
@@ -641,7 +672,7 @@ fn run_operation(
             resp.status = Status::Ok;
         }
         "differentiate" => {
-            let vars = resolve_vars(req, &detected);
+            let vars = resolve_vars(req, &detected).map_err(|e| (e, None))?;
             if vars.is_empty() {
                 return Err(("differentiate requires at least one variable".into(), None));
             }
@@ -917,6 +948,12 @@ fn run_operation(
             } else {
                 param_int(req, "order", 5).map_err(|e| (e, None))?
             };
+            if !(0..=64).contains(&order) {
+                return Err((
+                    format!("taylor order must be between 0 and 64, got {order}"),
+                    None,
+                ));
+            }
             match taylor(&expr, &v, &center, order) {
                 Some(series_expr) => {
                     let (base_str, base_latex) = if center.is_zero() {
@@ -1079,7 +1116,7 @@ fn run_operation(
             }
         }
         "gradient" => {
-            let vars = resolve_vars(req, &detected);
+            let vars = resolve_vars(req, &detected).map_err(|e| (e, None))?;
             if vars.is_empty() {
                 return Err(("gradient requires at least one variable".into(), None));
             }
@@ -1117,7 +1154,7 @@ fn run_operation(
             resp.status = Status::Ok;
         }
         "jacobian" | "hessian" => {
-            let vars = resolve_vars(req, &detected);
+            let vars = resolve_vars(req, &detected).map_err(|e| (e, None))?;
             if vars.is_empty() {
                 return Err((
                     format!("{} requires at least one variable", req.operation),
@@ -1126,7 +1163,16 @@ fn run_operation(
             }
             let var_refs: Vec<&str> = vars.iter().map(|s| s.as_str()).collect();
             let matrix = match req.operation.as_str() {
-                "jacobian" => jacobian(std::slice::from_ref(&expr), &var_refs),
+                "jacobian" => {
+                    if let Some(ref vec_exprs) = vector_exprs {
+                        jacobian(vec_exprs, &var_refs)
+                    } else if let Expr::Matrix(ref rows) = expr {
+                        let flat: Vec<Expr> = rows.iter().flatten().cloned().collect();
+                        jacobian(&flat, &var_refs)
+                    } else {
+                        jacobian(std::slice::from_ref(&expr), &var_refs)
+                    }
+                }
                 _ => hessian(&expr, &var_refs),
             };
             let matrix_latex = format_matrix_latex(&matrix);
@@ -1158,7 +1204,7 @@ fn run_operation(
             resp.status = Status::Ok;
         }
         "cse" => {
-            let opt = optimize(&expr, &SaturationConfig::default());
+            let opt = optimize(&expr, &sat_cfg);
             let cse = eliminate_common_subexprs(&[opt]);
             let bindings: Vec<CseBinding> = cse
                 .bindings
@@ -1190,10 +1236,11 @@ fn run_operation(
             resp.status = Status::Ok;
         }
         "rust_code" => {
-            let float_type = parse_float_type(&req.float_type);
-            let vars = resolve_vars(req, &detected);
+            let float_type = parse_float_type(req).map_err(|e| (e, None))?;
+            let vars = resolve_vars(req, &detected).map_err(|e| (e, None))?;
+            validate_rust_idents(&vars).map_err(|e| (e, None))?;
             let var_refs: Vec<&str> = vars.iter().map(|s| s.as_str()).collect();
-            let opt = optimize(&expr, &SaturationConfig::default());
+            let opt = optimize(&expr, &sat_cfg);
             let code = emit_rust_fn(&opt, &var_refs, "compute", float_type);
             resp.rust_code = Some(code.clone());
             let res_str = opt.to_string();
@@ -1204,19 +1251,19 @@ fn run_operation(
             resp.extra
                 .insert("result_latex".into(), res_latex.clone().into());
             resp.extra
-                .insert("variables".into(), serde_json::to_value(&vars).unwrap());
+                .insert("variables".into(), serde_json::json!(vars));
             resp.outputs = vec![Output::new("rust_code", code, res_latex)];
             resp.status = Status::Ok;
         }
         "rust_gradient" => {
-            let float_type = parse_float_type(&req.float_type);
-            let vars = resolve_vars(req, &detected);
+            let float_type = parse_float_type(req).map_err(|e| (e, None))?;
+            let vars = resolve_vars(req, &detected).map_err(|e| (e, None))?;
             if vars.is_empty() {
                 return Err(("rust_gradient requires at least one variable".into(), None));
             }
+            validate_rust_idents(&vars).map_err(|e| (e, None))?;
             let var_refs: Vec<&str> = vars.iter().map(|s| s.as_str()).collect();
-            let (opt_val, opt_grads) =
-                optimize_gradient(&expr, &var_refs, &SaturationConfig::default());
+            let (opt_val, opt_grads) = optimize_gradient(&expr, &var_refs, &sat_cfg);
             let mut all_exprs = Vec::with_capacity(1 + opt_grads.len());
             all_exprs.push(opt_val.clone());
             all_exprs.extend(opt_grads.clone());
@@ -1324,8 +1371,8 @@ fn run_operation(
         }
         "charpoly" => {
             let mat = Matrix::from_expr(&expr).map_err(|e| (e.to_string(), None))?;
-            let v = get_str_param(req, "variable").unwrap_or("%lambda");
-            let cp = charpoly(&mat, v).map_err(|e| (e.to_string(), None))?;
+            let v = param_var(req, "variable", &[]).unwrap_or_else(|_| "%lambda".to_string());
+            let cp = charpoly(&mat, &v).map_err(|e| (e.to_string(), None))?;
             let res_str = cp.to_string();
             let res_latex = latex(&cp);
             resp.result = res_str.clone();
@@ -1456,9 +1503,9 @@ fn run_operation(
             resp.status = Status::Ok;
         }
         "residue" => {
-            let v = get_str_param(req, "variable").unwrap_or("z");
+            let v = param_var(req, "variable", &[]).unwrap_or_else(|_| "z".to_string());
             let pt = param_point(req, "point", Some("0")).map_err(|e| (e, None))?;
-            let res = residue(&expr, v, &pt).map_err(|e| (e, None))?;
+            let res = residue(&expr, &v, &pt).map_err(|e| (e, None))?;
             let res_str = res.to_string();
             let res_latex = latex(&res);
             resp.result = res_str.clone();
@@ -1740,8 +1787,6 @@ fn parse_input(req: &ComputeRequest) -> Result<Expr, (String, Option<ErrorSpan>)
                     maxima_rs::parser::maxima::CasCommand::Ratsimp(e) => Ok(e),
                     maxima_rs::parser::maxima::CasCommand::Ode2(e, _, _) => Ok(e),
                 }
-            } else if let Ok(expr) = parse_maxima(&req.expression) {
-                Ok(expr)
             } else {
                 parse_maxima(&req.expression).map_err(|e| {
                     let span = extract_error_span(&e, &req.expression);
@@ -1750,6 +1795,172 @@ fn parse_input(req: &ComputeRequest) -> Result<Expr, (String, Option<ErrorSpan>)
             }
         }
     }
+}
+
+fn validate_request_bounds(req: &ComputeRequest) -> Result<(), String> {
+    if req.variables.len() > 16 {
+        return Err(format!(
+            "too many variables ({}; maximum is 16)",
+            req.variables.len()
+        ));
+    }
+    if req.env.len() > 64 {
+        return Err(format!(
+            "too many environment bindings ({}; maximum is 64)",
+            req.env.len()
+        ));
+    }
+    if req.params.len() > 32 {
+        return Err(format!(
+            "too many parameters ({}; maximum is 32)",
+            req.params.len()
+        ));
+    }
+    for (k, v) in &req.params {
+        if k.len() > 64 {
+            return Err(format!("parameter name '{k}' exceeds 64 bytes"));
+        }
+        if let Some(s) = v.as_str()
+            && s.len() > 1024
+        {
+            return Err(format!("parameter '{k}' exceeds 1024 bytes"));
+        }
+    }
+    Ok(())
+}
+
+fn saturation_config(req: &ComputeRequest) -> SaturationConfig {
+    SaturationConfig {
+        rule_config: RuleConfig {
+            fast_math: req.fast_math,
+            ..RuleConfig::default()
+        },
+        ..SaturationConfig::default()
+    }
+}
+
+fn is_bracket_vector(input: &str) -> bool {
+    let trimmed = input.trim();
+    trimmed.starts_with('[') && trimmed.ends_with(']')
+}
+
+fn parse_bracket_vector(input: &str) -> Result<Vec<Expr>, (String, Option<ErrorSpan>)> {
+    let trimmed = input.trim();
+    let inner = trimmed
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or("")
+        .trim();
+    if inner.is_empty() {
+        return Err(("empty vector expression '[]'".into(), None));
+    }
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    for (idx, ch) in inner.char_indices() {
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(inner[start..idx].trim());
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(inner[start..].trim());
+    let mut exprs = Vec::with_capacity(parts.len());
+    for part in parts {
+        if part.is_empty() {
+            return Err(("empty element in vector expression".into(), None));
+        }
+        let e = parse_maxima(part).map_err(|e| {
+            let span = extract_error_span(&e, part);
+            (
+                format!("Maxima parse error in vector element: {e}"),
+                Some(span),
+            )
+        })?;
+        exprs.push(e);
+    }
+    Ok(exprs)
+}
+
+fn is_rust_keyword(s: &str) -> bool {
+    matches!(
+        s,
+        "as" | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "try"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+    )
+}
+
+fn validate_rust_idents(vars: &[String]) -> Result<(), String> {
+    for v in vars {
+        let mut chars = v.chars();
+        let Some(first) = chars.next() else {
+            return Err("empty Rust identifier is not allowed".into());
+        };
+        if !(first.is_ascii_alphabetic() || first == '_') || v == "_" {
+            return Err(format!("invalid Rust identifier '{v}'"));
+        }
+        if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(format!("invalid Rust identifier '{v}'"));
+        }
+        if is_rust_keyword(v) {
+            return Err(format!(
+                "Rust keyword '{v}' cannot be used as an identifier"
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn get_str_param<'a>(req: &'a ComputeRequest, key: &str) -> Option<&'a str> {
@@ -1879,20 +2090,48 @@ fn param_int(req: &ComputeRequest, key: &str, default: i64) -> Result<i64, Strin
     Ok(default)
 }
 
-fn resolve_vars(req: &ComputeRequest, detected: &[String]) -> Vec<String> {
-    if !req.variables.is_empty() {
-        return req.variables.clone();
+fn resolve_vars(req: &ComputeRequest, detected: &[String]) -> Result<Vec<String>, String> {
+    let vars: Vec<String> = if !req.variables.is_empty() {
+        req.variables.clone()
+    } else if let Some(val) = req.params.get("variables") {
+        if let Some(arr) = val.as_array() {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.trim().to_string()))
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else if let Some(s) = val.as_str() {
+            s.split(',')
+                .map(|p| p.trim().to_string())
+                .filter(|p| !p.is_empty())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    } else if !req.variable.trim().is_empty() {
+        vec![req.variable.trim().to_string()]
+    } else if let Some(v) = get_str_param(req, "variable") {
+        vec![v.to_string()]
+    } else {
+        detected.to_vec()
+    };
+
+    if vars.len() > 16 {
+        return Err(format!(
+            "too many variables ({}; maximum is 16)",
+            vars.len()
+        ));
     }
-    if !req.variable.is_empty() {
-        return vec![req.variable.clone()];
-    }
-    detected.to_vec()
+    Ok(vars)
 }
 
-fn parse_float_type(s: &str) -> FloatType {
-    match s {
-        "f32" => FloatType::F32,
-        _ => FloatType::F64,
+fn parse_float_type(req: &ComputeRequest) -> Result<FloatType, String> {
+    let raw = get_str_param(req, "float_type").unwrap_or(req.float_type.as_str());
+    match raw.trim() {
+        "f64" | "" => Ok(FloatType::F64),
+        "f32" => Ok(FloatType::F32),
+        other => Err(format!(
+            "invalid float_type '{other}'; expected 'f64' or 'f32'"
+        )),
     }
 }
 
@@ -2284,7 +2523,7 @@ pub fn functions_catalog() -> crate::api::FunctionCatalog {
             latex_template: format!("{name}({{}})"),
         });
     }
-    for name in ["diff", "integrate", "limit", "solve"] {
+    for name in ["diff", "integrate", "solve"] {
         functions.push(FunctionCatalogEntry {
             name: name.to_string(),
             arity: 2,
@@ -2297,6 +2536,13 @@ pub fn functions_catalog() -> crate::api::FunctionCatalog {
             },
         });
     }
+    functions.push(FunctionCatalogEntry {
+        name: "limit".to_string(),
+        arity: 3,
+        kind: "cas",
+        maxima_template: "limit({}, x, 0)".to_string(),
+        latex_template: "\\lim_{x \\to 0} {}".to_string(),
+    });
     functions.push(FunctionCatalogEntry {
         name: "defint".to_string(),
         arity: 4,
@@ -2335,6 +2581,7 @@ mod tests {
             variables: Vec::new(),
             variable: String::new(),
             float_type: "f64".into(),
+            fast_math: true,
             env: HashMap::new(),
             params: HashMap::new(),
         }

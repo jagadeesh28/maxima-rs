@@ -2,18 +2,19 @@
 name = "maxima-web"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Modern webUI for maxima-rs: symbolic math in the browser"
 publish = false
 
 [dependencies]
 maxima-rs = { path = "../maxima-rs", features = ["full"] }
-axum = "0.8"
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-num-rational = "0.4"
-num-traits = "0.2"
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+num-rational = { workspace = true }
+num-traits = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 rust-embed = "8"
 mime_guess = "2"

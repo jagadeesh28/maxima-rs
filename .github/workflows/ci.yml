@@ -88,6 +88,12 @@ jobs:
           - limit
           - solve
           - cas
+          - bfloat
+          - matrix
+          - complex
+          - specfn
+          - transform
+          - assume
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
@@ -95,14 +101,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo build -p sym-core --no-default-features --features ${{ matrix.feature }}
         run: cargo build -p sym-core --no-default-features --features ${{ matrix.feature }}
+      - name: cargo build -p maxima-rs --no-default-features --features ${{ matrix.feature }}
+        run: cargo build -p maxima-rs --no-default-features --features ${{ matrix.feature }}
 
   webui-script:
-    name: webui script syntax
+    name: webui script & CSS verification
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: node --check
-        run: node --check maxima-web/static/app.js
+      - name: node --check (all JS files)
+        run: for f in maxima-web/static/js/*.js; do node --check "$f" || exit 1; done
+      - name: verify CSS classes
+        run: python3 scripts/verify_css_classes.py

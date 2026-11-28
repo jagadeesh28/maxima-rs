@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **All Phases 1–45 Complete ✅**
+### Current Phase: **Phase 46 Complete ✅ (Next: Phase 47)**
 
 ### Phase Completion Tracker
 
@@ -139,6 +139,7 @@ When starting a new session, instruct the AI:
 | 43. Operational Laplace Transforms & ODE Initial Values | `transform` | ✅ Completed | Operational forward Laplace (`laplace`), inverse Laplace (`ilt`), frequency shift, multiplier, derivative rules, IVP/BVP solvers (`ic1`, `ic2`, `bc2`) |
 | 44. Scoped Deductive Inference & Assumptions Context | `assume` | ✅ Completed | Thread-safe `Assumptions` context, inequality DAG inference, interval bound propagation, sign deduction (`csign`, `asksign`), predicate evaluation (`is`), domain properties (`PropertyKind`), and reversibility (`forget`) |
 | 45. Maxima 5.50 Parity Test Suite & Golden Verification | `tests` | ✅ Completed | Full upstream golden test suite ported from Maxima 5.50 (`rtest_integrate`, `rtest_limit`, `rtest_taylor`, `rtest_solve`, `rtest_laplace`, `rtest_bessel`), 100% test pass rate across workspace |
+| 46. Security, Build/CI Integrity & WebUI Contract Hotfixes | `maxima-web`/`ci`/`cargo` | ✅ Completed | Eliminated DOM XSS sinks, added CSP/nosniff/DENY headers, isolated `/api/parse`, fixed `Cli` TOML precedence, wired `fast_math`/`float_type`/bounds/Rust ident checks, fixed CI/Docker (`rust:1.88-bookworm` + `--locked`), centralized `[workspace.dependencies]`, added `tensor` to `maxima-rs`, fixed WebUI param wipe/`env`/`enum`/Rules/`{}`/CSS |
 
 
 ---
@@ -1106,6 +1107,28 @@ When starting a new session, instruct the AI:
    - `cargo test --workspace --all-features` (all unit, integration, and doc tests passed, exit 0)
    - `cargo test -p sym-core --all-features --doc` (17 passed, exit 0)
    - `docs/audits/PHASE45_REPORT.md` compiled.
+
+---
+
+## Session 46 — Security, Build/CI Integrity & WebUI Contract Hotfixes (Phase 46)
+
+**Date**: 2026-11-28  
+**Scope**: Completed Phase 46 stop-ship remediation across `maxima-web` (frontend + backend), `sym-core`, `maxima-rs`, workspace `Cargo.toml`, CI workflow, `Dockerfile`, and `template.yaml`.
+
+### Deliverables Built
+1. **XSS & Security Headers**: Escaped dynamic text via `textContent` and `escapeHtml` in `preview.js`, `notebook.js`, and `main.js`; added `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY` middleware in `app.rs`.
+2. **CI, Docker & Cargo Workspace**: Fixed `.github/workflows/ci.yml` (`node --check` on all JS files, `verify_css_classes.py`, expanded `feature-matrix`), upgraded `Dockerfile` to `rust:1.88-bookworm` with `--locked`, `Cargo.lock`, `AWS_LWA_READINESS_CHECK_PATH=/api/health`, port `8080`, raised `template.yaml` `MemorySize` to `1536`, centralized `[workspace.dependencies]` + `rust-version = "1.88"`, and added `tensor` to `maxima-rs/Cargo.toml`.
+3. **Backend Config, Isolation & Contracts**: Switched `Cli` fields to `Option<T>`, added `with_graceful_shutdown`, isolated `/api/parse` via `run_isolated`, wired `fast_math`, validated `float_type` and Rust identifiers (`400`), bounded `taylor`/`variables`/`env`/`params`, gated `parse_maxima_cas` on `!= "latex"`, updated `resp.operation` on auto-dispatch, supported `[f1, f2]` in `jacobian`, and sorted `Expr::variables()`.
+4. **Frontend Fixes**: Preserved user/example params across `preview.js` variable updates, added `AbortController`, rendered `env` for `evaluate` and `enum` `<select>`s, fixed Rules modal/tab fields, fixed binary `{}` wrap & `limit` arity, handled non-JSON HTTP errors in `api.js`, added `.opacity-75`/`.border-danger`/`.border-info` in `app.css`, and removed `auto-render.min.js`.
+
+### Passing Gate Verification
+- `cargo fmt --all -- --check` (exit 0)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo test --workspace --all-features` (exit 0)
+- `cargo build -p maxima-rs --no-default-features --features tensor` (exit 0)
+- `E:\Anaconda\python.exe scripts/verify_css_classes.py` (exit 0; 107 used, 114 defined, 0 missing)
+- `node --check` on `maxima-web/static/js/*.js` (exit 0)
+- `docs/audits/PHASE46_REPORT.md` compiled.
 
 
 

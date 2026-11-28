@@ -7,6 +7,7 @@ let activeOp = 'simplify';
 let operationsCatalog = [];
 let detectedVariables = [];
 let undoStack = [];
+let userTouchedParams = new Set();
 
 export async function initPalette({
   opContainer,
@@ -23,7 +24,17 @@ export async function initPalette({
   const paletteApi = {
     setDetectedVariables(vars) {
       detectedVariables = vars;
-      renderParams(paramsContainer, activeOp, onParamsChanged);
+      const preserved = collectParams(paramsContainer);
+      const merged = {};
+      Object.entries(preserved).forEach(([k, v]) => {
+        if (k === 'variable' || k === 'variables') {
+          if (userTouchedParams.has(k)) merged[k] = v;
+        } else {
+          merged[k] = v;
+        }
+      });
+      const preservedEnv = collectEnv(paramsContainer);
+      renderParams(paramsContainer, activeOp, onParamsChanged, merged, preservedEnv);
     },
     getActiveOperation() {
       return activeOp;
@@ -31,8 +42,15 @@ export async function initPalette({
     getParams() {
       return collectParams(paramsContainer);
     },
+    getEnv() {
+      return collectEnv(paramsContainer);
+    },
     setActiveOperation(opId, customParams = null) {
       activeOp = opId;
+      userTouchedParams.clear();
+      if (customParams) {
+        Object.keys(customParams).forEach(k => userTouchedParams.add(k));
+      }
       const btns = opContainer.querySelectorAll('.op-btn');
       btns.forEach(b => {
         const isActive = b.dataset.op === opId;
@@ -199,13 +217,16 @@ function renderOperations(container, operations, onSelectOp) {
   });
 }
 
-export function renderParams(container, opId, onParamsChanged, customParams = null) {
+export function renderParams(container, opId, onParamsChanged, customParams = null, customEnv = null) {
   container.innerHTML = '';
   const op = operationsCatalog.find(o => o.id === opId);
   const paramsSection = document.getElementById('paramsSection');
   const activeOpBadge = document.getElementById('activeOpBadge');
 
-  if (!op || !op.params || op.params.length === 0) {
+  const hasParams = op && op.params && op.params.length > 0;
+  const needsEnv = op && op.needs_env;
+
+  if (!op || (!hasParams && !needsEnv)) {
     container.style.display = 'none';
     if (paramsSection) paramsSection.style.display = 'none';
     return;
@@ -221,7 +242,7 @@ export function renderParams(container, opId, onParamsChanged, customParams = nu
   container.style.display = 'flex';
   container.className = 'flex flex-wrap gap-3 p-3 bg-subtle rounded-lg border border-app mt-2';
 
-  op.params.forEach(param => {
+  (op.params || []).forEach(param => {
     const field = document.createElement('div');
     field.className = 'flex-1 min-w-120 flex flex-col gap-1';
 
@@ -239,7 +260,7 @@ export function renderParams(container, opId, onParamsChanged, customParams = nu
               ? 'Series Order (N)'
               : param.name))));
 
-    const defaultValue = (customParams && customParams[param.name] !== undefined)
+    const defaultValue = (customParams && customParams[param.name] !== undefined && customParams[param.name] !== '')
       ? customParams[param.name]
       : ((param.default !== undefined && param.default !== null)
         ? param.default
@@ -248,7 +269,17 @@ export function renderParams(container, opId, onParamsChanged, customParams = nu
     const paramType = param.type || param.param_type;
 
     let input;
-    if (param.name === 'variable') {
+    if (paramType === 'enum' && Array.isArray(param.accepts) && param.accepts.length > 0) {
+      input = document.createElement('select');
+      input.name = param.name;
+      param.accepts.forEach(optVal => {
+        const opt = document.createElement('option');
+        opt.value = optVal;
+        opt.textContent = optVal;
+        if (defaultValue === optVal) opt.selected = true;
+        input.appendChild(opt);
+      });
+    } else if (param.name === 'variable') {
       input = document.createElement('input');
       input.type = 'text';
       input.name = param.name;
@@ -277,9 +308,11 @@ export function renderParams(container, opId, onParamsChanged, customParams = nu
     input.dataset.param = param.name;
     input.className = 'text-xs py-1 px-2 bg-input border border-app rounded';
     input.addEventListener('input', () => {
+      userTouchedParams.add(param.name);
       if (onParamsChanged) onParamsChanged();
     });
     input.addEventListener('change', () => {
+      userTouchedParams.add(param.name);
       if (onParamsChanged) onParamsChanged();
     });
 
@@ -287,6 +320,45 @@ export function renderParams(container, opId, onParamsChanged, customParams = nu
     field.appendChild(input);
     container.appendChild(field);
   });
+
+  if (needsEnv) {
+    const envVars = detectedVariables.length > 0 ? detectedVariables : ['x'];
+    envVars.forEach(v => {
+      const field = document.createElement('div');
+      field.className = 'flex-1 min-w-120 flex flex-col gap-1';
+
+      const label = document.createElement('label');
+      label.className = 'text-xs font-semibold text-muted uppercase';
+      label.textContent = `${v} =`;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.dataset.env = v;
+      input.className = 'text-xs py-1 px-2 bg-input border border-app rounded';
+      input.placeholder = 'e.g. 1.0';
+      input.value = (customEnv && customEnv[v] !== undefined) ? customEnv[v] : '1';
+      input.addEventListener('input', () => {
+        if (onParamsChanged) onParamsChanged();
+      });
+
+      field.appendChild(label);
+      field.appendChild(input);
+      container.appendChild(field);
+    });
+  }
+}
+
+export function collectEnv(container) {
+  const env = {};
+  if (!container) return env;
+  container.querySelectorAll('[data-env]').forEach(inp => {
+    const key = inp.dataset.env;
+    const val = inp.value.trim();
+    if (key && val !== '') {
+      env[key] = val;
+    }
+  });
+  return env;
 }
 
 export function collectParams(container) {
@@ -351,7 +423,14 @@ function wrapCurrentExpression(inputEl, formatEl, fnName, selectEl) {
 
   let wrapped;
   if (template && template.includes('{}')) {
-    wrapped = template.replace('{}', selectedText || 'x');
+    let first = true;
+    wrapped = template.replace(/\{\}/g, () => {
+      if (first) {
+        first = false;
+        return selectedText || 'x';
+      }
+      return 'y';
+    });
   } else if (isLatex) {
     wrapped = `\\${fnName}{${selectedText || 'x'}}`;
   } else {

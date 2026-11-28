@@ -2,6 +2,7 @@
 name = "maxima-rs"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Compile-time symbolic math optimization via e-graph equality saturation"
 keywords = ["symbolic", "mathematics", "optimization", "codegen", "macro"]
@@ -9,7 +10,8 @@ categories = ["mathematics", "compilers"]
 
 [features]
 default = ["full"]
-full = ["diff", "egraph", "cse", "codegen", "parser", "pipeline", "macros", "poly", "integrate", "series", "limit", "solve", "cas", "bfloat", "matrix", "complex", "specfn", "transform", "assume"]
+full = ["diff", "egraph", "cse", "codegen", "parser", "pipeline", "macros", "tensor", "poly", "integrate", "series", "limit", "solve", "cas", "bfloat", "matrix", "complex", "specfn", "transform", "assume"]
+tensor = ["sym-core/tensor"]
 diff = ["sym-core/diff"]
 egraph = ["sym-core/egraph"]
 cse = ["sym-core/cse"]

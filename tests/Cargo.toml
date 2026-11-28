@@ -2,6 +2,7 @@
 name = "maxima-tests"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 publish = false
 
 [dependencies]
@@ -9,12 +10,12 @@ maxima-rs = { path = "../maxima-rs", features = ["full"] }
 sym-core = { path = "../sym-core", features = ["full"] }
 sym-macros = { path = "../sym-macros" }
 maxima-web = { path = "../maxima-web" }
-serde_json = "1"
+serde_json = { workspace = true }
 proptest = { workspace = true }
-axum = "0.8"
+axum = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true }
 
 [[test]]
 name = "basic_arithmetic"

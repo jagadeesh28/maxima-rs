@@ -678,7 +678,10 @@ button, .btn {
 .border-b { border-bottom: 1px solid var(--border-app); }
 .border-dashed { border-style: dashed; }
 .border-app { border-color: var(--border-app); }
+.border-danger { border-color: var(--danger); }
+.border-info { border-color: var(--primary); }
 .border-warning-border { border-color: var(--warning-border); }
+.opacity-75 { opacity: 0.75; }
 
 .rounded { border-radius: 0.25rem; }
 .rounded-md { border-radius: 0.375rem; }

@@ -54,16 +54,18 @@ function renderCell(container, cellData, onUseAsInput) {
       ? '<span class="badge badge-unevaluated" title="Verification could not confirm or unevaluated">? unverified</span>'
       : '';
 
+  const rulesList = response.provenance || (response.extra && response.extra.rules) || [];
+
   cell.innerHTML = `
     <div class="cell-header">
       <div class="flex items-center gap-2">
         <span class="cell-prompt">In[${index}]</span>
-        <span class="badge bg-subtle text-muted border border-app">${request.operation}</span>
-        <span class="badge ${statusClass}">${statusLabel}</span>
+        <span class="badge bg-subtle text-muted border border-app">${escapeHtml(request.operation)}</span>
+        <span class="badge ${statusClass}">${escapeHtml(statusLabel)}</span>
         ${verifiedBadge}
       </div>
       <div class="flex items-center gap-2 text-xs text-muted">
-        <span>${durationMs}ms</span>
+        <span>${Number(durationMs) || 0}ms</span>
         <button class="btn btn-sm btn-secondary use-as-input-btn" title="Promote output expression to active input">Use as input</button>
         <button class="btn btn-sm btn-secondary copy-cell-btn" title="Copy result to clipboard">Copy</button>
       </div>
@@ -76,14 +78,14 @@ function renderCell(container, cellData, onUseAsInput) {
         <button class="tab-btn" data-tab="maxima">Maxima</button>
         <button class="tab-btn" data-tab="latex">LaTeX</button>
         ${response.rust_code ? '<button class="tab-btn" data-tab="rust">Rust</button>' : ''}
-        ${response.provenance && response.provenance.length ? '<button class="tab-btn" data-tab="rules">Rules (' + response.provenance.length + ')</button>' : ''}
+        ${rulesList.length ? '<button class="tab-btn" data-tab="rules">Rules (' + rulesList.length + ')</button>' : ''}
       </div>
       <div class="tab-content">
         <div class="tab-pane tab-typeset typeset-view"></div>
         <div class="tab-pane tab-maxima code-view" style="display:none;">${escapeHtml(response.result || '')}</div>
         <div class="tab-pane tab-latex code-view" style="display:none;">${escapeHtml(response.result_latex || '')}</div>
         ${response.rust_code ? `<div class="tab-pane tab-rust code-view" style="display:none;">${escapeHtml(response.rust_code)}</div>` : ''}
-        ${response.provenance && response.provenance.length ? `<div class="tab-pane tab-rules code-view" style="display:none;">${renderProvenance(response.provenance)}</div>` : ''}
+        ${rulesList.length ? `<div class="tab-pane tab-rules code-view" style="display:none;">${renderProvenance(rulesList)}</div>` : ''}
       </div>
     </div>
   `;
@@ -231,10 +233,12 @@ function renderWarnings(warnings) {
 
 function renderProvenance(provenance) {
   return provenance.map(p => {
+    const fnName = p.source_fn || p.source_function || '';
+    const identity = p.identity || p.rule || '';
     return `<div class="mb-2 pb-1 border-b border-app">
       <div class="font-bold text-primary">${escapeHtml(p.name)}</div>
-      <div class="text-xs text-muted">Rule: ${escapeHtml(p.rule)}</div>
-      <div class="text-xs text-dim">Citation: ${escapeHtml(p.source_file)} (${escapeHtml(p.source_function)})</div>
+      <div class="text-xs text-muted">Identity: ${escapeHtml(identity)}</div>
+      <div class="text-xs text-dim">Citation: ${escapeHtml(p.source_file)} (${escapeHtml(fnName)})</div>
     </div>`;
   }).join('');
 }

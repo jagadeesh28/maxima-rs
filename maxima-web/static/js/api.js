@@ -26,13 +26,23 @@ export async function fetchRules() {
   return res.json();
 }
 
+async function readJsonSafe(res) {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return { error: text };
+  }
+}
+
 export async function compute(payload) {
   const res = await fetch('/api/compute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  const data = await res.json();
+  const data = await readJsonSafe(res);
   if (!res.ok) {
     const msg = data.error || `Compute failed with HTTP ${res.status}`;
     const err = new Error(msg);
@@ -43,13 +53,14 @@ export async function compute(payload) {
   return data;
 }
 
-export async function parse(payload) {
+export async function parse(payload, signal = undefined) {
   const res = await fetch('/api/parse', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal
   });
-  const data = await res.json();
+  const data = await readJsonSafe(res);
   if (!res.ok) {
     const msg = data.error || `Parse failed with HTTP ${res.status}`;
     const err = new Error(msg);
