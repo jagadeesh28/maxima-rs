@@ -392,6 +392,13 @@ fn build_call(name: &str, args: Vec<Expr>) -> PResult<Expr> {
         "asin" => arity_one(Expr::asin, &mut args),
         "acos" => arity_one(Expr::acos, &mut args),
         "atan" => arity_one(Expr::atan, &mut args),
+        "abs" => arity_one(Expr::abs, &mut args),
+        "atan2" => {
+            if args.len() != 2 {
+                return cut();
+            }
+            Ok(Expr::atan2(args.remove(0), args.remove(0)))
+        }
         "diff" => {
             if args.len() != 2 {
                 return cut();

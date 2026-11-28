@@ -33,6 +33,8 @@ define_language! {
         "asin" = Asin([Id; 1]),
         "acos" = Acos([Id; 1]),
         "atan" = Atan([Id; 1]),
+        "abs" = Abs([Id; 1]),
+        "atan2" = Atan2([Id; 2]),
         "fac" = Factorial([Id; 1]),
 
         // Leaf nodes
@@ -146,6 +148,8 @@ impl Analysis<MathLang> for MathAnalysis {
             | MathLang::Asin(_)
             | MathLang::Acos(_)
             | MathLang::Atan(_)
+            | MathLang::Abs(_)
+            | MathLang::Atan2(_)
             | MathLang::Derivative(_)
             | MathLang::Integral(_)
             | MathLang::Sum(_)
@@ -251,6 +255,15 @@ impl Expr {
                 let id_a = a.build_recexpr(recexpr);
                 recexpr.add(MathLang::Atan([id_a]))
             }
+            Expr::Abs(a) => {
+                let id_a = a.build_recexpr(recexpr);
+                recexpr.add(MathLang::Abs([id_a]))
+            }
+            Expr::Atan2(y, x) => {
+                let id_y = y.build_recexpr(recexpr);
+                let id_x = x.build_recexpr(recexpr);
+                recexpr.add(MathLang::Atan2([id_y, id_x]))
+            }
             Expr::Pi => recexpr.add(MathLang::Pi),
             Expr::E => recexpr.add(MathLang::E),
             #[cfg(feature = "complex")]
@@ -348,6 +361,11 @@ impl Expr {
             MathLang::Asin([a]) => Expr::asin(Self::from_recexpr_id(nodes, *a)),
             MathLang::Acos([a]) => Expr::acos(Self::from_recexpr_id(nodes, *a)),
             MathLang::Atan([a]) => Expr::atan(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Abs([a]) => Expr::abs(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Atan2([y, x]) => Expr::atan2(
+                Self::from_recexpr_id(nodes, *y),
+                Self::from_recexpr_id(nodes, *x),
+            ),
             MathLang::Factorial([a]) => Expr::factorial(Self::from_recexpr_id(nodes, *a)),
             MathLang::Pi => Expr::Pi,
             MathLang::E => Expr::E,

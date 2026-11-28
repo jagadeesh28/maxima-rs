@@ -24,7 +24,7 @@ impl CostFunction<MathLang> for FlopCost {
     {
         let op_cost = match enode {
             MathLang::Var(_) | MathLang::Const(_) | MathLang::Bfloat(_) => 0,
-            MathLang::Add(_) | MathLang::Sub(_) | MathLang::Neg(_) => 1,
+            MathLang::Add(_) | MathLang::Sub(_) | MathLang::Neg(_) | MathLang::Abs(_) => 1,
             MathLang::Mul(_) => 2,
             MathLang::Div(_) => 8,
             MathLang::Pow(_) | MathLang::Sqrt(_) => 10,
@@ -38,7 +38,8 @@ impl CostFunction<MathLang> for FlopCost {
             | MathLang::Tanh(_)
             | MathLang::Asin(_)
             | MathLang::Acos(_)
-            | MathLang::Atan(_) => 25,
+            | MathLang::Atan(_)
+            | MathLang::Atan2(_) => 25,
             // Iterative product; heavier than a single flop, cheaper than a transcendental.
             MathLang::Factorial(_) => 20,
             MathLang::Tensor(_)

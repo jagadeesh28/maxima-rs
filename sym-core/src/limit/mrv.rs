@@ -40,7 +40,12 @@ fn collect(e: &Expr, var: &str, out: &mut Vec<Expr>) {
         | Expr::Asin(a)
         | Expr::Acos(a)
         | Expr::Atan(a)
+        | Expr::Abs(a)
         | Expr::Factorial(a) => collect(a, var, out),
+        Expr::Atan2(y, x) => {
+            collect(y, var, out);
+            collect(x, var, out);
+        }
         _ => {}
     }
 }

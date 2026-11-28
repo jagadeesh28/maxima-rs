@@ -348,3 +348,41 @@ fn test_complex_web_service_dispatch() {
     assert!(resp_res.success);
     assert_eq!(resp_res.result, "1/2");
 }
+
+#[test]
+fn test_phase48_carg_quadrants_cabs_and_rectform() {
+    use std::collections::HashMap;
+    let empty = HashMap::new();
+
+    // All 4 quadrants of carg(±1 ± %i)
+    let q1 = carg(&Expr::add(Expr::int(1), Expr::i()));
+    let q2 = carg(&Expr::add(Expr::int(-1), Expr::i()));
+    let q3 = carg(&Expr::sub(Expr::int(-1), Expr::i()));
+    let q4 = carg(&Expr::sub(Expr::int(1), Expr::i()));
+
+    let pi = std::f64::consts::PI;
+    assert!((q1.eval(&empty).expect("q1") - pi / 4.0).abs() < 1e-12);
+    assert!((q2.eval(&empty).expect("q2") - 3.0 * pi / 4.0).abs() < 1e-12);
+    assert!((q3.eval(&empty).expect("q3") + 3.0 * pi / 4.0).abs() < 1e-12);
+    assert!((q4.eval(&empty).expect("q4") + pi / 4.0).abs() < 1e-12);
+
+    // cabs(x) preserves abs(x) for real symbolic x
+    let x = Expr::var("x");
+    assert_eq!(cabs(&x), Expr::abs(x));
+
+    // rectform(2^%i) = cos(ln(2)) + %i * sin(ln(2))
+    let (u_pow, v_pow) = rectform(&Expr::pow(Expr::int(2), Expr::i()));
+    let ln2 = 2.0_f64.ln();
+    assert!((u_pow.eval(&empty).expect("u_pow") - ln2.cos()).abs() < 1e-12);
+    assert!((v_pow.eval(&empty).expect("v_pow") - ln2.sin()).abs() < 1e-12);
+
+    // rectform(atan(1 + %i)): Re = (pi/2 - atan2(0, 1 - 2) ...), verify against analytic atan(1+i)
+    // atan(z) = (i/2) * ln((1 - iz)/(1 + iz))
+    // For z = 1 + i: Re(atan(1+i)) = 1/2 * atan2(2, -1) = 1/2 * (pi - atan(2)) ≈ 1.0172219678978514
+    // Im(atan(1+i)) = 1/4 * ln((1 + 1 + 2)/(1 + 1 - 2)?) -> actually 1/4 * ln(((1)^2 + (1+1)^2) / ((1)^2 + (1-1)^2)) = 1/4 * ln(5) ≈ 0.40235947810852507
+    let (u_atan, v_atan) = rectform(&Expr::atan(Expr::add(Expr::int(1), Expr::i())));
+    let expected_u = 0.5 * (pi - 2.0_f64.atan());
+    let expected_v = 0.25 * 5.0_f64.ln();
+    assert!((u_atan.eval(&empty).expect("u_atan") - expected_u).abs() < 1e-12);
+    assert!((v_atan.eval(&empty).expect("v_atan") - expected_v).abs() < 1e-12);
+}

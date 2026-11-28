@@ -18,7 +18,7 @@ pub mod rat;
 
 pub use expand::expand;
 pub use factor::factor;
-pub use gcd::{poly_derivative, poly_div_exact, poly_gcd};
+pub use gcd::{poly_derivative, poly_derivative_var, poly_div_exact, poly_gcd};
 pub use heap::{heap_mul, pseudo_divmod};
 pub use monomial::{Monomial, PACKED_MAX_VARS, VarContext};
 pub use partfrac::partfrac;
@@ -160,6 +160,9 @@ impl Poly {
 
     /// Scale every coefficient by `c`.
     pub fn scale(&self, c: &BigRational) -> Poly {
+        if c.is_zero() {
+            return Poly::zero(self.ctx.clone());
+        }
         Poly {
             terms: self
                 .terms

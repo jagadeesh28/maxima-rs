@@ -616,6 +616,19 @@ fn bfloat_eval(expr: &Expr, p: usize) -> Expr {
                 Expr::Atan(Box::new(ea))
             }
         }
+        Expr::Abs(a) => {
+            let ea = bfloat_eval(a, p);
+            if let Expr::Bfloat(ba) = ea {
+                if ba.value < DBig::ZERO {
+                    Expr::Bfloat(ba.neg())
+                } else {
+                    Expr::Bfloat(ba)
+                }
+            } else {
+                Expr::Abs(Box::new(ea))
+            }
+        }
+        Expr::Atan2(y, x) => Expr::Atan2(Box::new(bfloat_eval(y, p)), Box::new(bfloat_eval(x, p))),
         Expr::Factorial(a) => Expr::Factorial(Box::new(bfloat_eval(a, p))),
         Expr::Matrix(rows) => {
             let new_rows = rows

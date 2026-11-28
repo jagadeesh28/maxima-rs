@@ -148,8 +148,13 @@ fn count_subexprs(
         | Expr::Asin(a)
         | Expr::Acos(a)
         | Expr::Atan(a)
+        | Expr::Abs(a)
         | Expr::Factorial(a) => {
             count_subexprs(a, bound, counts);
+        }
+        Expr::Atan2(y, x) => {
+            count_subexprs(y, bound, counts);
+            count_subexprs(x, bound, counts);
         }
         Expr::Pi | Expr::E => {}
         #[cfg(feature = "complex")]
@@ -229,6 +234,11 @@ fn substitute_bindings(expr: &Expr, binding_map: &HashMap<Expr, String>) -> Expr
         Expr::Asin(a) => Expr::asin(substitute_bindings(a, binding_map)),
         Expr::Acos(a) => Expr::acos(substitute_bindings(a, binding_map)),
         Expr::Atan(a) => Expr::atan(substitute_bindings(a, binding_map)),
+        Expr::Abs(a) => Expr::abs(substitute_bindings(a, binding_map)),
+        Expr::Atan2(y, x) => Expr::atan2(
+            substitute_bindings(y, binding_map),
+            substitute_bindings(x, binding_map),
+        ),
         Expr::Factorial(a) => Expr::factorial(substitute_bindings(a, binding_map)),
         Expr::Pi => Expr::Pi,
         Expr::E => Expr::E,

@@ -107,6 +107,12 @@ pub enum Expr {
     /// `atan(a)` — inverse tangent
     Atan(Box<Expr>),
 
+    /// `abs(a)` — absolute value
+    Abs(Box<Expr>),
+
+    /// `atan2(y, x)` — two-argument arctangent
+    Atan2(Box<Expr>, Box<Expr>),
+
     /// π — the circle constant (irrational, kept symbolic until evaluation)
     Pi,
 
@@ -315,6 +321,16 @@ impl Expr {
     /// `atan(a)` — inverse tangent
     pub fn atan(a: Expr) -> Self {
         Expr::Atan(Box::new(a))
+    }
+
+    /// `abs(a)` — absolute value
+    pub fn abs(a: Expr) -> Self {
+        Expr::Abs(Box::new(a))
+    }
+
+    /// `atan2(y, x)` — two-argument arctangent
+    pub fn atan2(y: Expr, x: Expr) -> Self {
+        Expr::Atan2(Box::new(y), Box::new(x))
     }
 
     /// π constant
@@ -544,8 +560,13 @@ impl Expr {
             | Expr::Asin(a)
             | Expr::Acos(a)
             | Expr::Atan(a)
+            | Expr::Abs(a)
             | Expr::Factorial(a) => {
                 a.collect_vars(vars);
+            }
+            Expr::Atan2(y, x) => {
+                y.collect_vars(vars);
+                x.collect_vars(vars);
             }
             Expr::Pi | Expr::E => {}
             #[cfg(feature = "complex")]
@@ -651,6 +672,8 @@ impl Expr {
                 }
             }
             Expr::Atan(a) => Some(a.eval(env)?.atan()),
+            Expr::Abs(a) => Some(a.eval(env)?.abs()),
+            Expr::Atan2(y, x) => Some(y.eval(env)?.atan2(x.eval(env)?)),
             Expr::Pi => Some(std::f64::consts::PI),
             Expr::E => Some(std::f64::consts::E),
             #[cfg(feature = "complex")]
@@ -716,7 +739,9 @@ impl Expr {
             | Expr::Asin(a)
             | Expr::Acos(a)
             | Expr::Atan(a)
+            | Expr::Abs(a)
             | Expr::Factorial(a) => 1 + a.node_count(),
+            Expr::Atan2(y, x) => 1 + y.node_count() + x.node_count(),
             Expr::Pi | Expr::E => 1,
             #[cfg(feature = "complex")]
             Expr::I => 1,
@@ -777,6 +802,8 @@ impl fmt::Display for Expr {
             Expr::Asin(a) => write!(f, "asin({a})"),
             Expr::Acos(a) => write!(f, "acos({a})"),
             Expr::Atan(a) => write!(f, "atan({a})"),
+            Expr::Abs(a) => write!(f, "abs({a})"),
+            Expr::Atan2(y, x) => write!(f, "atan2({y}, {x})"),
             Expr::Pi => write!(f, "%pi"),
             Expr::E => write!(f, "%e"),
             #[cfg(feature = "complex")]

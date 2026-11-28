@@ -102,6 +102,9 @@ fn smart_mul(a: Expr, b: Expr) -> Expr {
 
 /// Smart constructor: $a / b$ with immediate zero, one, and constant folding.
 fn smart_div(a: Expr, b: Expr) -> Expr {
+    if b.is_zero() {
+        return Expr::div(a, b);
+    }
     if a.is_zero() {
         return Expr::int(0);
     }
@@ -124,14 +127,20 @@ fn smart_div(a: Expr, b: Expr) -> Expr {
 
 /// Smart constructor: $a^b$ with immediate zero, one, and constant folding.
 fn smart_pow(base: Expr, exp: Expr) -> Expr {
+    if base.is_zero() {
+        if let Expr::Const(re) = &exp {
+            if re.is_positive() {
+                return Expr::int(0);
+            }
+            return Expr::pow(base, exp);
+        }
+        return Expr::pow(base, exp);
+    }
     if exp.is_zero() {
         return Expr::int(1);
     }
     if exp.is_one() {
         return base;
-    }
-    if base.is_zero() {
-        return Expr::int(0);
     }
     if base.is_one() {
         return Expr::int(1);
@@ -451,11 +460,57 @@ pub fn rectform(expr: &Expr) -> (Expr, Expr) {
             )
         }
 
-        // Fallthrough for higher calculus constructs or unexpanded inverse trigs
-        Expr::Asin(_)
-        | Expr::Acos(_)
-        | Expr::Atan(_)
-        | Expr::Factorial(_)
+        // Inverse trigonometric functions: real if v == 0 (when real-domain), else logarc
+        Expr::Atan(a) => {
+            let (u, v) = rectform(a);
+            if v.is_zero() {
+                return (Expr::atan(u), Expr::int(0));
+            }
+            // logarc: atan(z) = -i/2 * ln((1 + i*z) / (1 - i*z))
+            let z = smart_add(u, smart_mul(Expr::i(), v));
+            let iz = smart_mul(Expr::i(), z);
+            let num = smart_add(Expr::int(1), iz.clone());
+            let den = smart_sub(Expr::int(1), iz);
+            let log_term = Expr::ln(smart_div(num, den));
+            let coeff = smart_mul(Expr::frac(-1, 2), Expr::i());
+            rectform(&smart_mul(coeff, log_term))
+        }
+        Expr::Asin(a) => {
+            let (u, v) = rectform(a);
+            if v.is_zero() {
+                return (Expr::asin(u), Expr::int(0));
+            }
+            // logarc: asin(z) = -i * ln(i*z + sqrt(1 - z^2))
+            let z = smart_add(u, smart_mul(Expr::i(), v));
+            let inner = smart_add(
+                smart_mul(Expr::i(), z.clone()),
+                Expr::sqrt(smart_sub(Expr::int(1), smart_pow(z, Expr::int(2)))),
+            );
+            rectform(&smart_mul(smart_neg(Expr::i()), Expr::ln(inner)))
+        }
+        Expr::Acos(a) => {
+            let (u, v) = rectform(a);
+            if v.is_zero() {
+                return (Expr::acos(u), Expr::int(0));
+            }
+            let (au, av) = rectform(&Expr::asin(*a.clone()));
+            (
+                smart_sub(smart_mul(Expr::frac(1, 2), Expr::pi()), au),
+                smart_neg(av),
+            )
+        }
+        Expr::Abs(a) => (cabs(a), Expr::int(0)),
+        Expr::Atan2(y, x) => {
+            let (uy, vy) = rectform(y);
+            let (ux, vx) = rectform(x);
+            if vy.is_zero() && vx.is_zero() {
+                (Expr::atan2(uy, ux), Expr::int(0))
+            } else {
+                (expr.clone(), Expr::int(0))
+            }
+        }
+        // Fallthrough for higher calculus constructs
+        Expr::Factorial(_)
         | Expr::Derivative(_, _)
         | Expr::Integral(_, _)
         | Expr::Sum(_, _, _, _)
@@ -578,31 +633,103 @@ fn pow_pairs(base: &Expr, exp: &Expr) -> (Expr, Expr) {
         }
     }
 
-    // 4. General power: z^w = exp(w * ln(z))
-    let ln_base = Expr::ln(base.clone());
-    let w_ln_z = smart_mul(exp.clone(), ln_base);
-    rectform(&Expr::exp(w_ln_z))
+    // 4. General power: z^w = exp(w * ln(z)) without recursive rectform(&Pow)
+    let (lu, lv) = rectform(&Expr::ln(base.clone()));
+    let (eu, ev) = rectform(exp);
+    let (pu, pv) = mul_pairs((eu, ev), (lu, lv));
+    let mag = if pu.is_zero() {
+        Expr::int(1)
+    } else {
+        Expr::exp(pu)
+    };
+    let (cos_v, sin_v) = trig_angle(&pv);
+    let cos_term = cos_v.unwrap_or_else(|| smart_cos(pv.clone()));
+    let sin_term = sin_v.unwrap_or_else(|| smart_sin(pv));
+    (smart_mul(mag.clone(), cos_term), smart_mul(mag, sin_term))
 }
 
-/// Helper: compute $\operatorname{carg}(u + iv) = \operatorname{atan2}(v, u)$.
+/// Helper: compute $\operatorname{carg}(u + iv) = \operatorname{atan2}(v, u)$ with quadrant awareness.
 fn carg_pair(u: &Expr, v: &Expr) -> Expr {
+    #[cfg(feature = "assume")]
+    let ctx = crate::assume::Assumptions::new();
+
     if v.is_zero() {
-        if let Expr::Const(r) = u
-            && r.is_negative()
-        {
+        #[cfg(feature = "assume")]
+        if ctx.csign(u) == crate::assume::Sign::Neg {
             return Expr::pi();
         }
-        return Expr::int(0);
+        #[cfg(feature = "assume")]
+        if ctx.csign(u) == crate::assume::Sign::Pos {
+            return Expr::int(0);
+        }
+        if let Expr::Const(r) = u {
+            if r.is_negative() {
+                return Expr::pi();
+            }
+            if r.is_positive() {
+                return Expr::int(0);
+            }
+        }
+        return Expr::atan2(Expr::int(0), u.clone());
     }
     if u.is_zero() {
-        if let Expr::Const(r) = v
-            && r.is_negative()
-        {
+        #[cfg(feature = "assume")]
+        if ctx.csign(v) == crate::assume::Sign::Neg {
             return smart_neg(Expr::frac(1, 2) * Expr::pi());
         }
-        return Expr::frac(1, 2) * Expr::pi();
+        #[cfg(feature = "assume")]
+        if ctx.csign(v) == crate::assume::Sign::Pos {
+            return Expr::frac(1, 2) * Expr::pi();
+        }
+        if let Expr::Const(r) = v {
+            if r.is_negative() {
+                return smart_neg(Expr::frac(1, 2) * Expr::pi());
+            }
+            if r.is_positive() {
+                return Expr::frac(1, 2) * Expr::pi();
+            }
+        }
+        return Expr::atan2(v.clone(), Expr::int(0));
     }
-    Expr::atan(smart_div(v.clone(), u.clone()))
+
+    // Exact diagonal shortcuts for (±a, ±a)
+    if u == v
+        && let Expr::Const(r) = u
+    {
+        if r.is_positive() {
+            return Expr::frac(1, 4) * Expr::pi();
+        }
+        if r.is_negative() {
+            return smart_neg(Expr::frac(3, 4) * Expr::pi());
+        }
+    }
+    if let (Expr::Const(ru), Expr::Const(rv)) = (u, v)
+        && ru == &-rv.clone()
+    {
+        if ru.is_negative() {
+            return Expr::frac(3, 4) * Expr::pi();
+        }
+        if ru.is_positive() {
+            return smart_neg(Expr::frac(1, 4) * Expr::pi());
+        }
+    }
+
+    #[cfg(feature = "assume")]
+    {
+        use crate::assume::Sign;
+        match (ctx.csign(u), ctx.csign(v)) {
+            (Sign::Pos, _) => Expr::atan(smart_div(v.clone(), u.clone())),
+            (Sign::Neg, Sign::Pos) => {
+                smart_add(Expr::atan(smart_div(v.clone(), u.clone())), Expr::pi())
+            }
+            (Sign::Neg, Sign::Neg) => {
+                smart_sub(Expr::atan(smart_div(v.clone(), u.clone())), Expr::pi())
+            }
+            _ => Expr::atan2(v.clone(), u.clone()),
+        }
+    }
+    #[cfg(not(feature = "assume"))]
+    Expr::atan2(v.clone(), u.clone())
 }
 
 /// Construct a single [`Expr`] in rectangular form $u + i \cdot v$.
@@ -674,22 +801,32 @@ pub fn carg(expr: &Expr) -> Expr {
 pub fn cabs(expr: &Expr) -> Expr {
     let (u, v) = rectform(expr);
     if v.is_zero() {
-        if let Expr::Const(r) = &u
-            && r.is_negative()
-        {
-            return Expr::constant(-r);
-        }
-        return u;
+        return real_abs(u);
     }
     if u.is_zero() {
-        if let Expr::Const(r) = &v
-            && r.is_negative()
-        {
-            return Expr::constant(-r);
-        }
-        return v;
+        return real_abs(v);
     }
     smart_sqrt(smart_add(smart_mul(u.clone(), u), smart_mul(v.clone(), v)))
+}
+
+fn real_abs(x: Expr) -> Expr {
+    if let Expr::Const(r) = &x {
+        return if r.is_negative() {
+            Expr::constant(-r)
+        } else {
+            x
+        };
+    }
+    #[cfg(feature = "assume")]
+    {
+        use crate::assume::{Assumptions, Sign};
+        match Assumptions::new().csign(&x) {
+            Sign::Pos | Sign::Zero | Sign::NonNeg => return x,
+            Sign::Neg | Sign::NonPos => return smart_neg(x),
+            _ => {}
+        }
+    }
+    Expr::abs(x)
 }
 
 /// Decompose an expression into polar coordinates $(r, \theta)$ where $r = |expr|$ and $\theta = \operatorname{carg}(expr)$.
@@ -719,13 +856,19 @@ pub fn polarform_expr(expr: &Expr) -> Expr {
 /// $(z - z_0)^{-1}$ in its Laurent series expansion.
 /// Uses [`crate::series::series_expand`] to compute the Laurent series up to order 6.
 pub fn residue(expr: &Expr, var: &str, point: &Expr) -> Result<Expr, String> {
-    if let Some(s) = crate::series::series_expand(expr, var, point, 6) {
-        Ok(s.coeff_at(-1))
-    } else {
-        Err(format!(
-            "Could not compute Laurent series for residue of {expr} at {var} = {point}"
-        ))
+    for order in [6_i64, 12, 24] {
+        if let Some(s) = crate::series::series_expand(expr, var, point, order) {
+            if s.valuation <= -1 || order == 24 {
+                return Ok(s.coeff_at(-1));
+            }
+            if !s.coeffs.is_empty() {
+                return Ok(s.coeff_at(-1));
+            }
+        }
     }
+    Err(format!(
+        "Could not compute Laurent series for residue of {expr} at {var} = {point}"
+    ))
 }
 
 #[cfg(test)]

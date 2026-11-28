@@ -87,7 +87,9 @@ pub fn contains_integral(e: &Expr) -> bool {
         | Expr::Asin(a)
         | Expr::Acos(a)
         | Expr::Atan(a)
+        | Expr::Abs(a)
         | Expr::Factorial(a) => contains_integral(a),
+        Expr::Atan2(y, x) => contains_integral(y) || contains_integral(x),
         _ => false,
     }
 }

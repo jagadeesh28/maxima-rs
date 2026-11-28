@@ -260,3 +260,47 @@ fn test_limit_with_assumptions() {
     let lim_neg = limit_with_assumptions(&expr, "x", &inf, Some(&ctx_neg));
     assert_eq!(lim_neg, Some(Expr::int(0)));
 }
+
+#[test]
+fn test_phase48_assume_transitivity_cycles_and_csign() {
+    let a = Expr::var("a");
+    let b = Expr::var("b");
+    let c = Expr::var("c");
+
+    // Mixed strict/non-strict transitivity: a < b and b <= c => a < c
+    let ctx = Assumptions::new()
+        .assume_rel(a.clone(), Comparison::LessThan, b.clone())
+        .expect("a < b")
+        .assume_rel(b.clone(), Comparison::LessThanOrEqual, c.clone())
+        .expect("b <= c");
+
+    assert_eq!(ctx.is(&a, Comparison::LessThan, &c), PredicateResult::True);
+    assert_eq!(
+        ctx.is(&a, Comparison::LessThanOrEqual, &c),
+        PredicateResult::True
+    );
+    assert_eq!(ctx.is(&c, Comparison::LessThan, &a), PredicateResult::False);
+    assert_eq!(ctx.is(&b, Comparison::LessThan, &a), PredicateResult::False);
+
+    // Strict cycle contradiction: c <= a contradicts a < b <= c
+    assert!(
+        ctx.assume_rel(c.clone(), Comparison::LessThanOrEqual, a.clone())
+            .is_err(),
+        "c <= a should contradict a < b <= c"
+    );
+
+    // assume(a > b) => is(a < b) == False
+    let gt_ctx = Assumptions::new()
+        .assume_rel(a.clone(), Comparison::GreaterThan, b.clone())
+        .expect("a > b");
+    assert_eq!(
+        gt_ctx.is(&a, Comparison::LessThan, &b),
+        PredicateResult::False
+    );
+
+    // csign(exp(%i * %pi)) == Neg, csign(0^(-1)) == Unknown
+    let e_ipi = Expr::exp(Expr::mul(Expr::i(), Expr::pi()));
+    assert_eq!(ctx.csign(&e_ipi), Sign::Neg);
+    let zero_inv = Expr::pow(Expr::int(0), Expr::int(-1));
+    assert_eq!(ctx.csign(&zero_inv), Sign::Unknown);
+}

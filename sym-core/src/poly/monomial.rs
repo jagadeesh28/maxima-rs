@@ -57,7 +57,7 @@ impl Monomial {
         self.exps.iter().all(|&e| e == 0)
     }
 
-    /// Multiply two monomials (component-wise exponent addition).
+    /// Multiply two monomials (component-wise exponent addition, saturating).
     pub fn mul(&self, other: &Monomial) -> Monomial {
         debug_assert_eq!(self.exps.len(), other.exps.len());
         Monomial {
@@ -65,9 +65,21 @@ impl Monomial {
                 .exps
                 .iter()
                 .zip(&other.exps)
-                .map(|(&a, &b)| a + b)
+                .map(|(&a, &b)| a.saturating_add(b))
                 .collect(),
         }
+    }
+
+    /// Checked monomial multiplication, returning `None` on `u32` exponent overflow.
+    pub fn checked_mul(&self, other: &Monomial) -> Option<Monomial> {
+        if self.exps.len() != other.exps.len() {
+            return None;
+        }
+        let mut exps = Vec::with_capacity(self.exps.len());
+        for (&a, &b) in self.exps.iter().zip(&other.exps) {
+            exps.push(a.checked_add(b)?);
+        }
+        Some(Monomial { exps })
     }
 
     /// Divide by `other`, returning `None` if not exactly divisible.
@@ -83,11 +95,20 @@ impl Monomial {
         Some(Monomial { exps })
     }
 
-    /// Raise the monomial to the `n`-th power.
+    /// Raise the monomial to the `n`-th power (saturating).
     pub fn pow(&self, n: u32) -> Monomial {
         Monomial {
-            exps: self.exps.iter().map(|&e| e * n).collect(),
+            exps: self.exps.iter().map(|&e| e.saturating_mul(n)).collect(),
         }
+    }
+
+    /// Checked monomial power, returning `None` on `u32` exponent overflow.
+    pub fn checked_pow(&self, n: u32) -> Option<Monomial> {
+        let mut exps = Vec::with_capacity(self.exps.len());
+        for &e in &self.exps {
+            exps.push(e.checked_mul(n)?);
+        }
+        Some(Monomial { exps })
     }
 
     /// Pack the exponent vector into one 64-bit word when possible.

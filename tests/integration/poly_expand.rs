@@ -87,3 +87,32 @@ fn test_poly_roundtrip_is_numerically_exact() {
         );
     }
 }
+
+#[test]
+fn test_phase48_poly_scale_zero_and_structural_expand() {
+    let x = Expr::var("x");
+    let y = Expr::var("y");
+    let p = Poly::from_expr(&Expr::add(x.clone(), y.clone())).expect("poly");
+    let scaled_zero = p.scale(&sym_core::Rat::from_int(0));
+    assert!(
+        scaled_zero.is_zero(),
+        "Poly::scale(0) must produce zero poly"
+    );
+
+    // expand(-(x + y)) distributes negation
+    let neg_sum = expand(&Expr::neg(Expr::add(x.clone(), y.clone())));
+    for (xv, yv) in [(1.0, 2.0), (-3.0, 4.5)] {
+        assert!((eval(&neg_sum, &[("x", xv), ("y", yv)]) - (-(xv + yv))).abs() < 1e-12);
+    }
+    assert!(!matches!(neg_sum, Expr::Neg(_)));
+
+    // expand(sin((x + 1)^2)) recurses inside function arguments
+    let nested = expand(&Expr::sin(Expr::pow(
+        Expr::add(x.clone(), Expr::int(1)),
+        Expr::int(2),
+    )));
+    for xv in [-1.5_f64, 0.0, 2.0] {
+        let expected = ((xv + 1.0).powi(2)).sin();
+        assert!((eval(&nested, &[("x", xv)]) - expected).abs() < 1e-12);
+    }
+}

@@ -230,6 +230,12 @@ fn format_expr(expr: &Expr, parent_prec: u8, is_right: bool) -> String {
             "\\arctan\\left( {} \\right)",
             format_expr(a, PREC_NONE, false)
         ),
+        Expr::Abs(a) => format!("\\left| {} \\right|", format_expr(a, PREC_NONE, false)),
+        Expr::Atan2(y, x) => format!(
+            "\\operatorname{{atan2}}\\left( {}, {} \\right)",
+            format_expr(y, PREC_NONE, false),
+            format_expr(x, PREC_NONE, false)
+        ),
 
         Expr::Exp(a) => format!("e^{{{}}}", format_expr(a, PREC_NONE, false)),
         Expr::Ln(a) => format!("\\ln\\left( {} \\right)", format_expr(a, PREC_NONE, false)),

@@ -422,6 +422,8 @@ pub fn subst(expr: &Expr, var: &str, val: &Expr) -> Expr {
         Expr::Asin(a) => Expr::asin(subst(a, var, val)),
         Expr::Acos(a) => Expr::acos(subst(a, var, val)),
         Expr::Atan(a) => Expr::atan(subst(a, var, val)),
+        Expr::Abs(a) => Expr::abs(subst(a, var, val)),
+        Expr::Atan2(y, x) => Expr::atan2(subst(y, var, val), subst(x, var, val)),
         Expr::Factorial(a) => Expr::factorial(subst(a, var, val)),
         Expr::Tensor(name, idx) => Expr::tensor(name, idx.clone()),
         Expr::Derivative(a, b) => Expr::derivative(subst(a, var, val), subst(b, var, val)),

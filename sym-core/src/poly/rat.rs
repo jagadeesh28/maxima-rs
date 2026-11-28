@@ -44,11 +44,14 @@ impl Fraction {
         }
     }
 
-    fn div(&self, other: &Fraction) -> Fraction {
-        Fraction {
+    fn div(&self, other: &Fraction) -> Result<Fraction, PolyError> {
+        if other.num.is_zero() {
+            return Err(PolyError::DivisionByZero);
+        }
+        Ok(Fraction {
             num: self.num.mul(&other.den),
             den: self.den.mul(&other.num),
-        }
+        })
     }
 
     fn neg(&self) -> Fraction {
@@ -120,7 +123,7 @@ pub fn to_fraction(expr: &Expr, ctx: &VarContext) -> Result<Fraction, PolyError>
         Expr::Add(a, b) => Ok(to_fraction(a, ctx)?.add(&to_fraction(b, ctx)?)),
         Expr::Sub(a, b) => Ok(to_fraction(a, ctx)?.sub(&to_fraction(b, ctx)?)),
         Expr::Mul(a, b) => Ok(to_fraction(a, ctx)?.mul(&to_fraction(b, ctx)?)),
-        Expr::Div(a, b) => Ok(to_fraction(a, ctx)?.div(&to_fraction(b, ctx)?)),
+        Expr::Div(a, b) => to_fraction(a, ctx)?.div(&to_fraction(b, ctx)?),
         Expr::Neg(a) => Ok(to_fraction(a, ctx)?.neg()),
         Expr::Pow(base, exp) => {
             let f = to_fraction(base, ctx)?;
@@ -135,6 +138,9 @@ pub fn to_fraction(expr: &Expr, ctx: &VarContext) -> Result<Fraction, PolyError>
                             den: f.den.pow(n_abs),
                         })
                     } else {
+                        if f.num.is_zero() {
+                            return Err(PolyError::DivisionByZero);
+                        }
                         Ok(Fraction {
                             num: f.den.pow(n_abs),
                             den: f.num.pow(n_abs),
@@ -148,15 +154,67 @@ pub fn to_fraction(expr: &Expr, ctx: &VarContext) -> Result<Fraction, PolyError>
     }
 }
 
-/// Canonically simplify an expression to a single reduced fraction.
+fn map_kernels(expr: &Expr, kernels: &mut Vec<Expr>) -> Expr {
+    match expr {
+        Expr::Const(_) | Expr::Var(_) => expr.clone(),
+        Expr::Add(a, b) => Expr::add(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Sub(a, b) => Expr::sub(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Mul(a, b) => Expr::mul(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Div(a, b) => Expr::div(map_kernels(a, kernels), map_kernels(b, kernels)),
+        Expr::Neg(a) => Expr::neg(map_kernels(a, kernels)),
+        Expr::Pow(base, exp) if matches!(exp.as_ref(), Expr::Const(r) if Rat::is_integer(r)) => {
+            Expr::pow(map_kernels(base, kernels), (**exp).clone())
+        }
+        other => {
+            if let Some(idx) = kernels.iter().position(|k| k == other) {
+                Expr::var(&format!("__kern_{idx}"))
+            } else {
+                let idx = kernels.len();
+                kernels.push(other.clone());
+                Expr::var(&format!("__kern_{idx}"))
+            }
+        }
+    }
+}
+
+fn unmap_kernels(expr: &Expr, kernels: &[Expr]) -> Expr {
+    match expr {
+        Expr::Var(name) => {
+            if let Some(rest) = name.strip_prefix("__kern_")
+                && let Ok(idx) = rest.parse::<usize>()
+                && let Some(orig) = kernels.get(idx)
+            {
+                return orig.clone();
+            }
+            expr.clone()
+        }
+        Expr::Add(a, b) => Expr::add(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Sub(a, b) => Expr::sub(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Mul(a, b) => Expr::mul(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Div(a, b) => Expr::div(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Pow(a, b) => Expr::pow(unmap_kernels(a, kernels), unmap_kernels(b, kernels)),
+        Expr::Neg(a) => Expr::neg(unmap_kernels(a, kernels)),
+        other => other.clone(),
+    }
+}
+
+/// Canonically simplify an expression to a single reduced fraction,
+/// mapping transcendental/radical subexpressions to algebraic kernels.
 pub fn ratsimp(expr: &Expr) -> Result<Expr, PolyError> {
-    let mut names = expr.variables();
+    let mut kernels = Vec::new();
+    let mapped = map_kernels(expr, &mut kernels);
+    let mut names = mapped.variables();
     names.sort();
     let mut ctx = VarContext::new();
     for n in &names {
         ctx.add(n);
     }
-    Ok(to_fraction(expr, &ctx)?.to_expr())
+    let simplified = to_fraction(&mapped, &ctx)?.to_expr();
+    if kernels.is_empty() {
+        Ok(simplified)
+    } else {
+        Ok(unmap_kernels(&simplified, &kernels))
+    }
 }
 
 #[cfg(test)]

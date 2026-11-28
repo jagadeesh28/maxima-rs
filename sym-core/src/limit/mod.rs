@@ -53,6 +53,8 @@ fn subst_var(e: &Expr, name: &str, r: &Expr) -> Expr {
         Expr::Asin(a) => Expr::asin(subst_var(a, name, r)),
         Expr::Acos(a) => Expr::acos(subst_var(a, name, r)),
         Expr::Atan(a) => Expr::atan(subst_var(a, name, r)),
+        Expr::Abs(a) => Expr::abs(subst_var(a, name, r)),
+        Expr::Atan2(y, x) => Expr::atan2(subst_var(y, name, r), subst_var(x, name, r)),
         Expr::Factorial(a) => Expr::factorial(subst_var(a, name, r)),
         Expr::Tensor(n, idx) => Expr::Tensor(n.clone(), idx.clone()),
         Expr::Derivative(a, b) => Expr::derivative(subst_var(a, name, r), subst_var(b, name, r)),

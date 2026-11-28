@@ -229,7 +229,10 @@ pub struct Assumptions {
     facts: Vec<Fact>,
     var_bounds: HashMap<String, Bound>,
     var_props: HashMap<String, HashSet<PropertyKind>>,
-    edges: Vec<(Expr, Comparison, Expr)>,
+    /// Normalized directed inequality edges `(u, strict, v)` meaning `u > v` (if strict) or `u >= v`.
+    edges: Vec<(Expr, bool, Expr)>,
+    /// Symmetric `!=` pairs.
+    not_equals: HashSet<(Expr, Expr)>,
 }
 
 impl Assumptions {
@@ -344,9 +347,64 @@ impl Assumptions {
             }
         }
 
-        // Transitive DAG reachability check
-        if self.dag_reachable(lhs, op, rhs) {
-            return PredicateResult::True;
+        // Transitive DAG reachability check (supports >, >=, <, <=, =, != and negation)
+        match op {
+            Comparison::GreaterThan => {
+                if self.dag_path(lhs, rhs) == Some(true) {
+                    return PredicateResult::True;
+                }
+                if self.dag_path(rhs, lhs).is_some() {
+                    return PredicateResult::False;
+                }
+            }
+            Comparison::GreaterThanOrEqual => {
+                if self.dag_path(lhs, rhs).is_some() {
+                    return PredicateResult::True;
+                }
+                if self.dag_path(rhs, lhs) == Some(true) {
+                    return PredicateResult::False;
+                }
+            }
+            Comparison::LessThan => {
+                if self.dag_path(rhs, lhs) == Some(true) {
+                    return PredicateResult::True;
+                }
+                if self.dag_path(lhs, rhs).is_some() {
+                    return PredicateResult::False;
+                }
+            }
+            Comparison::LessThanOrEqual => {
+                if self.dag_path(rhs, lhs).is_some() {
+                    return PredicateResult::True;
+                }
+                if self.dag_path(lhs, rhs) == Some(true) {
+                    return PredicateResult::False;
+                }
+            }
+            Comparison::Equal => {
+                if self.dag_path(lhs, rhs) == Some(false) && self.dag_path(rhs, lhs) == Some(false)
+                {
+                    return PredicateResult::True;
+                }
+                if self.dag_path(lhs, rhs) == Some(true)
+                    || self.dag_path(rhs, lhs) == Some(true)
+                    || self.has_not_equal(lhs, rhs)
+                {
+                    return PredicateResult::False;
+                }
+            }
+            Comparison::NotEqual => {
+                if self.dag_path(lhs, rhs) == Some(true)
+                    || self.dag_path(rhs, lhs) == Some(true)
+                    || self.has_not_equal(lhs, rhs)
+                {
+                    return PredicateResult::True;
+                }
+                if self.dag_path(lhs, rhs) == Some(false) && self.dag_path(rhs, lhs) == Some(false)
+                {
+                    return PredicateResult::False;
+                }
+            }
         }
 
         // Check difference sign: (lhs - rhs)
@@ -541,6 +599,8 @@ impl Assumptions {
                     (Sign::Neg, Sign::NonPos) | (Sign::NonPos, Sign::Neg) => Sign::NonNeg,
                     (Sign::NonNeg, Sign::NonNeg) | (Sign::NonPos, Sign::NonPos) => Sign::NonNeg,
                     (Sign::NonNeg, Sign::NonPos) | (Sign::NonPos, Sign::NonNeg) => Sign::NonPos,
+                    (Sign::Complex, Sign::Pos | Sign::Neg)
+                    | (Sign::Pos | Sign::Neg, Sign::Complex) => Sign::Complex,
                     _ => Sign::Unknown,
                 }
             }
@@ -564,28 +624,68 @@ impl Assumptions {
                 }
             }
             Expr::Pow(base, exp) => {
-                let sb = self.csign(base);
-                // Even integer power of real expression is non-negative
-                if let Expr::Const(r) = exp.as_ref()
+                #[cfg(feature = "complex")]
+                if matches!(base.as_ref(), Expr::I)
+                    && let Expr::Const(r) = exp.as_ref()
                     && Rat::is_integer(r)
                 {
-                    let int_val = r.to_integer();
-                    if &int_val % 2 == 0.into() {
-                        return match sb {
-                            Sign::Pos | Sign::Neg => Sign::Pos,
-                            Sign::Zero => Sign::Zero,
-                            _ => Sign::NonNeg,
-                        };
+                    let (u, v) = crate::complex::rectform(expr);
+                    return if v.is_zero() {
+                        self.csign(&u)
                     } else {
-                        return sb;
+                        Sign::Complex
+                    };
+                }
+                let sb = self.csign(base);
+                let se = self.csign(exp);
+                #[cfg(feature = "complex")]
+                if sb == Sign::Complex || se == Sign::Complex {
+                    return Sign::Complex;
+                }
+                if sb == Sign::Zero {
+                    return match se {
+                        Sign::Pos => Sign::Zero,
+                        _ => Sign::Unknown,
+                    };
+                }
+                if let Expr::Const(r) = exp.as_ref() {
+                    if Rat::is_integer(r) {
+                        let int_val = r.to_integer();
+                        if &int_val % 2 == 0.into() {
+                            return match sb {
+                                Sign::Pos | Sign::Neg => Sign::Pos,
+                                Sign::Zero => Sign::Zero,
+                                _ => Sign::NonNeg,
+                            };
+                        } else {
+                            return sb;
+                        }
+                    } else if sb == Sign::Neg {
+                        return Sign::Complex;
                     }
                 }
-                if sb == Sign::Pos {
+                if sb == Sign::Pos && se != Sign::Complex {
                     return Sign::Pos;
                 }
                 Sign::Unknown
             }
-            Expr::Exp(_) => Sign::Pos,
+            Expr::Exp(inner) => {
+                #[cfg(feature = "complex")]
+                {
+                    let (u, v) = crate::complex::rectform(expr);
+                    if !v.is_zero() {
+                        return Sign::Complex;
+                    }
+                    if u != *expr {
+                        return self.csign(&u);
+                    }
+                }
+                match self.csign(inner) {
+                    Sign::Pos | Sign::Neg | Sign::Zero | Sign::NonNeg | Sign::NonPos => Sign::Pos,
+                    Sign::Complex => Sign::Complex,
+                    Sign::Unknown => Sign::Pos,
+                }
+            }
             Expr::Sqrt(inner) => match self.csign(inner) {
                 Sign::Pos => Sign::Pos,
                 Sign::Zero => Sign::Zero,
@@ -682,6 +782,55 @@ impl Assumptions {
 
     // Helper: apply relation internally
     fn apply_relation(&mut self, lhs: &Expr, op: Comparison, rhs: &Expr) -> Result<(), String> {
+        if lhs == rhs {
+            return match op {
+                Comparison::Equal
+                | Comparison::GreaterThanOrEqual
+                | Comparison::LessThanOrEqual => Ok(()),
+                Comparison::GreaterThan | Comparison::LessThan | Comparison::NotEqual => {
+                    Err(format!("Contradictory self-relation: {lhs} {op} {rhs}"))
+                }
+            };
+        }
+
+        // Check DAG contradictions before mutating
+        match op {
+            Comparison::GreaterThan => {
+                if self.dag_path(rhs, lhs).is_some() {
+                    return Err(format!("Contradictory inequality: {lhs} > {rhs}"));
+                }
+            }
+            Comparison::GreaterThanOrEqual => {
+                if self.dag_path(rhs, lhs) == Some(true) {
+                    return Err(format!("Contradictory inequality: {lhs} >= {rhs}"));
+                }
+            }
+            Comparison::LessThan => {
+                if self.dag_path(lhs, rhs).is_some() {
+                    return Err(format!("Contradictory inequality: {lhs} < {rhs}"));
+                }
+            }
+            Comparison::LessThanOrEqual => {
+                if self.dag_path(lhs, rhs) == Some(true) {
+                    return Err(format!("Contradictory inequality: {lhs} <= {rhs}"));
+                }
+            }
+            Comparison::Equal => {
+                if self.dag_path(lhs, rhs) == Some(true)
+                    || self.dag_path(rhs, lhs) == Some(true)
+                    || self.has_not_equal(lhs, rhs)
+                {
+                    return Err(format!("Contradictory equality: {lhs} = {rhs}"));
+                }
+            }
+            Comparison::NotEqual => {
+                if self.dag_path(lhs, rhs) == Some(false) && self.dag_path(rhs, lhs) == Some(false)
+                {
+                    return Err(format!("Contradictory disequality: {lhs} != {rhs}"));
+                }
+            }
+        }
+
         // Var op Const
         if let (Expr::Var(v), Expr::Const(r)) = (lhs, rhs) {
             let b = self.var_bounds.entry(v.clone()).or_default();
@@ -713,7 +862,20 @@ impl Assumptions {
             }
         }
 
-        self.edges.push((lhs.clone(), op, rhs.clone()));
+        match op {
+            Comparison::GreaterThan => self.edges.push((lhs.clone(), true, rhs.clone())),
+            Comparison::GreaterThanOrEqual => self.edges.push((lhs.clone(), false, rhs.clone())),
+            Comparison::LessThan => self.edges.push((rhs.clone(), true, lhs.clone())),
+            Comparison::LessThanOrEqual => self.edges.push((rhs.clone(), false, lhs.clone())),
+            Comparison::Equal => {
+                self.edges.push((lhs.clone(), false, rhs.clone()));
+                self.edges.push((rhs.clone(), false, lhs.clone()));
+            }
+            Comparison::NotEqual => {
+                self.not_equals.insert((lhs.clone(), rhs.clone()));
+                self.not_equals.insert((rhs.clone(), lhs.clone()));
+            }
+        }
         Ok(())
     }
 
@@ -721,58 +883,58 @@ impl Assumptions {
     fn apply_property(&mut self, expr: &Expr, prop: PropertyKind) -> Result<(), String> {
         if let Expr::Var(v) = expr {
             let props = self.var_props.entry(v.clone()).or_default();
-            // Contradiction checks
-            if prop == PropertyKind::Integer && props.contains(&PropertyKind::NonInteger) {
-                return Err(format!(
-                    "Contradiction: {} cannot be both integer and non-integer",
-                    v
-                ));
-            }
-            if prop == PropertyKind::NonInteger && props.contains(&PropertyKind::Integer) {
-                return Err(format!(
-                    "Contradiction: {} cannot be both integer and non-integer",
-                    v
-                ));
-            }
-            if prop == PropertyKind::Even && props.contains(&PropertyKind::Odd) {
-                return Err(format!("Contradiction: {} cannot be both even and odd", v));
-            }
-            if prop == PropertyKind::Odd && props.contains(&PropertyKind::Even) {
-                return Err(format!("Contradiction: {} cannot be both even and odd", v));
+            let incompatible = [
+                (PropertyKind::Integer, PropertyKind::NonInteger),
+                (PropertyKind::Even, PropertyKind::Odd),
+                (PropertyKind::Rational, PropertyKind::Irrational),
+                (PropertyKind::Real, PropertyKind::Complex),
+                (PropertyKind::Pos, PropertyKind::Neg),
+                (PropertyKind::Pos, PropertyKind::Zero),
+                (PropertyKind::Neg, PropertyKind::Zero),
+                (PropertyKind::Zero, PropertyKind::NonZero),
+            ];
+            for (a, b) in incompatible {
+                if (prop == a && props.contains(&b)) || (prop == b && props.contains(&a)) {
+                    return Err(format!("Contradiction: {v} cannot be both {a} and {b}"));
+                }
             }
             props.insert(prop);
         }
         Ok(())
     }
 
-    // Helper: check DAG reachability
-    fn dag_reachable(&self, start: &Expr, op: Comparison, target: &Expr) -> bool {
-        if op != Comparison::GreaterThan && op != Comparison::GreaterThanOrEqual {
-            return false;
+    fn has_not_equal(&self, a: &Expr, b: &Expr) -> bool {
+        self.not_equals.contains(&(a.clone(), b.clone()))
+    }
+
+    /// Returns `Some(true)` if `start > target` is derivable (path with >=1 strict edge),
+    /// `Some(false)` if `start >= target` is derivable (non-strict path), or `None` if unreachable.
+    fn dag_path(&self, start: &Expr, target: &Expr) -> Option<bool> {
+        if start == target {
+            return Some(false);
         }
-        let mut visited = HashSet::new();
-        let mut queue = vec![start.clone()];
-        while let Some(curr) = queue.pop() {
-            if curr == *target {
-                return true;
-            }
-            if visited.contains(&curr) {
-                continue;
-            }
-            visited.insert(curr.clone());
-            for (u, edge_op, v) in &self.edges {
+        // BFS tracking best (strict=true > strict=false)
+        let mut best: HashMap<Expr, bool> = HashMap::new();
+        let mut queue = std::collections::VecDeque::new();
+        best.insert(start.clone(), false);
+        queue.push_back((start.clone(), false));
+
+        while let Some((curr, curr_strict)) = queue.pop_front() {
+            for (u, edge_strict, v) in &self.edges {
                 if *u == curr {
-                    let can_traverse = (op == Comparison::GreaterThanOrEqual
-                        && (*edge_op == Comparison::GreaterThan
-                            || *edge_op == Comparison::GreaterThanOrEqual))
-                        || (op == Comparison::GreaterThan && *edge_op == Comparison::GreaterThan);
-                    if can_traverse {
-                        queue.push(v.clone());
+                    let next_strict = curr_strict || *edge_strict;
+                    let should_visit = match best.get(v) {
+                        None => true,
+                        Some(&prev) => next_strict && !prev,
+                    };
+                    if should_visit {
+                        best.insert(v.clone(), next_strict);
+                        queue.push_back((v.clone(), next_strict));
                     }
                 }
             }
         }
-        false
+        best.get(target).copied()
     }
 }
 

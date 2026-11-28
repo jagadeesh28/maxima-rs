@@ -203,6 +203,26 @@ pub fn differentiate(expr: &Expr, var: &str) -> Expr {
             let denom = smart_add(Expr::int(1), a_sq);
             smart_div(da, denom)
         }
+        Expr::Abs(a) => {
+            let da = differentiate(a, var);
+            if da.is_zero() {
+                return Expr::int(0);
+            }
+            smart_mul(smart_div(*a.clone(), Expr::abs(*a.clone())), da)
+        }
+        Expr::Atan2(y, x) => {
+            let dy = differentiate(y, var);
+            let dx = differentiate(x, var);
+            if dy.is_zero() && dx.is_zero() {
+                return Expr::int(0);
+            }
+            let num = smart_sub(smart_mul(*x.clone(), dy), smart_mul(*y.clone(), dx));
+            let den = smart_add(
+                smart_pow(*x.clone(), Expr::int(2)),
+                smart_pow(*y.clone(), Expr::int(2)),
+            );
+            smart_div(num, den)
+        }
         // π, e, and i are constants with respect to any variable.
         Expr::Pi | Expr::E => Expr::int(0),
         #[cfg(feature = "complex")]

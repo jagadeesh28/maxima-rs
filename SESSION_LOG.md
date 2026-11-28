@@ -1149,6 +1149,25 @@ When starting a new session, instruct the AI:
 - `cargo test --workspace --all-features` (exit 0)
 - `docs/audits/PHASE47_REPORT.md` compiled.
 
+---
+
+## Session 48 — Assumptions, Complex Analysis & Multivariate Polynomial/Rational Engine Parity (Phase 48)
+
+**Date**: 2026-11-28  
+**Scope**: Completed Phase 48 parity and soundness upgrades across `sym-core/src/assume`, `sym-core/src/complex`, `sym-core/src/expr.rs` (+ cross-crate AST wiring), `sym-core/src/poly/*`, and `tests/integration/{assume_deduction,complex_analysis,poly_expand,poly_rat}.rs`.
+
+### Deliverables Built
+1. **Assumptions Engine (`sym-core/src/assume/mod.rs`)**: Replaced raw `edges` with normalized `(Expr, bool, Expr)` strict/non-strict inequality DAG + `not_equals`, rewrote `is()`, `apply_relation()`, `apply_property()`, and `dag_path()` BFS strictness tracking, and fixed `csign()` for `Exp`/`Pow`/complex `Mul` (`exp(%i*%pi) -> Neg`, `0^(-1) -> Unknown`).
+2. **Complex Analysis & AST (`sym-core/src/{expr,complex/*}.rs`)**: Added `Expr::Abs` and `Expr::Atan2` across `sym-core`, guarded `smart_div`/`smart_pow` and `pow_pairs`, rewrote 4-quadrant `carg_pair` with `Assumptions::csign` + `Expr::atan2`, preserved `Expr::abs(x)` in `cabs`, added `logarc` `rectform` for `Atan`/`Asin`/`Acos`, and upgraded `residue` to dynamic orders `[6, 12, 24]`.
+3. **Multivariate Polynomial & Rational Engine (`sym-core/src/poly/*`)**: Fixed `Poly::scale(0)` to return `Poly::zero`, added saturating/checked monomial ops, distributed negation and recursed into function args in `structural_expand`, implemented multivariate primitive recursive PRS `poly_gcd` + `poly_derivative_var`, made `Fraction::div` return `Err(PolyError::DivisionByZero)`, added kernel mapping to `ratsimp`, implemented Cantor-Zassenhaus + linear Hensel `factor`, and implemented Bezout + repeated/improper `partfrac`.
+
+### Passing Gate Verification
+- `cargo fmt --all -- --check` (exit 0)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo test -p maxima-tests --test assume_deduction --test complex_analysis --test poly_expand --test poly_rat` (exit 0: 9, 11, 7, 5 passed)
+- `cargo test --workspace --all-features` (exit 0: 159 `sym-core` unit + all integration/proptest/doctests)
+- `docs/audits/PHASE48_REPORT.md` compiled.
+
 
 
 

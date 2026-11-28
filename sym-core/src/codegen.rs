@@ -228,6 +228,15 @@ pub fn emit_expr(expr: &Expr, config: &CodegenConfig) -> TokenStream {
             let ea = emit_expr(a, config);
             quote!(#ea.atan())
         }
+        Expr::Abs(a) => {
+            let ea = emit_expr(a, config);
+            quote!(#ea.abs())
+        }
+        Expr::Atan2(y, x) => {
+            let ey = emit_expr(y, config);
+            let ex = emit_expr(x, config);
+            quote!(#ey.atan2(#ex))
+        }
         Expr::Pi => {
             let ty = config.float_type.type_tokens();
             quote!(#ty::consts::PI)
