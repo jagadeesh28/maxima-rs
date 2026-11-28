@@ -123,8 +123,31 @@ impl Pipeline {
         let fn_ident = quote::format_ident!("{}", fn_name);
         let ty_tokens = float_type.type_tokens();
 
+        let mut free_vars = std::collections::BTreeSet::new();
+        for e in &self.exprs {
+            for v in e.variables() {
+                free_vars.insert(v);
+            }
+        }
+        let params: Vec<TokenStream> = free_vars
+            .iter()
+            .map(|v| {
+                let ident = quote::format_ident!("{}", v);
+                quote!(#ident: #ty_tokens)
+            })
+            .collect();
+
+        let ret_ty = match cse_res.outputs.len() {
+            0 => quote!(()),
+            1 => quote!(#ty_tokens),
+            n => {
+                let tys = std::iter::repeat_n(&ty_tokens, n);
+                quote!((#(#tys),*))
+            }
+        };
+
         quote! {
-            pub fn #fn_ident() -> #ty_tokens {
+            pub fn #fn_ident(#(#params),*) -> #ret_ty {
                 #body
             }
         }

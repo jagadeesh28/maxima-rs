@@ -69,21 +69,10 @@ impl Rat {
     /// assert_eq!(Rat::to_f64(&Rat::from_f64(0.25)), 0.25);
     /// ```
     pub fn from_f64(v: f64) -> BigRational {
-        if v.is_nan() || v.is_infinite() {
+        if !v.is_finite() || v == 0.0 {
             return BigRational::zero();
         }
-        if v == 0.0 {
-            return BigRational::zero();
-        }
-
-        // Use continued fraction expansion for a clean rational approximation.
-        // This gives exact results for simple fractions and terminates quickly.
-        let negative = v < 0.0;
-        let v_abs = v.abs();
-
-        let result = continued_fraction_approx(v_abs);
-
-        if negative { -result } else { result }
+        BigRational::from_float(v).unwrap_or_else(BigRational::zero)
     }
 
     // ── Predicates ─────────────────────────────────────────────────
@@ -119,6 +108,13 @@ impl Rat {
     /// assert!((v - 1.0 / 3.0).abs() < 1e-15);
     /// ```
     pub fn to_f64(r: &BigRational) -> f64 {
+        let max_bits = r.numer().bits().max(r.denom().bits());
+        if max_bits > 1000 {
+            let shift = max_bits - 1000;
+            let n_scaled = r.numer() >> shift;
+            let d_scaled = r.denom() >> shift;
+            return n_scaled.to_f64().unwrap_or(f64::NAN) / d_scaled.to_f64().unwrap_or(1.0);
+        }
         r.numer().to_f64().unwrap_or(f64::NAN) / r.denom().to_f64().unwrap_or(1.0)
     }
 
@@ -181,16 +177,25 @@ impl Rat {
             return None;
         }
         let n = exp.numer().to_i64()?;
+        let abs_n = n.unsigned_abs();
+        if abs_n > 10_000 {
+            return None;
+        }
+        if n == 0 {
+            if base.is_zero() {
+                return None; // 0^0 is undefined
+            }
+            return Some(BigRational::one());
+        }
         if n < 0 {
             if base.is_zero() {
                 return None; // 0^(-n) is undefined
             }
             // base^(-n) = (1/base)^n
             let inv = BigRational::new(base.denom().clone(), base.numer().clone());
-            let n_abs = (-n) as u32;
-            Some(num_traits::pow(inv, n_abs as usize))
+            Some(num_traits::pow(inv, abs_n as usize))
         } else {
-            Some(num_traits::pow(base.clone(), n as usize))
+            Some(num_traits::pow(base.clone(), abs_n as usize))
         }
     }
 
@@ -221,53 +226,47 @@ impl Rat {
     pub fn negate(r: &BigRational) -> BigRational {
         -r
     }
-}
 
-/// Continued fraction expansion to approximate an `f64` as a `BigRational`.
-///
-/// Terminates when the approximation is within `f64` machine epsilon
-/// or after a maximum number of iterations.
-fn continued_fraction_approx(v: f64) -> BigRational {
-    // Maximum iterations to prevent infinite loops on irrational-like values
-    const MAX_ITER: usize = 50;
-    // Tolerance: once |approx - v| < eps, stop
-    const EPSILON: f64 = 1e-15;
+    /// Parse an integer, decimal, or scientific notation string into an exact [`BigRational`].
+    pub fn parse_exact_rational(s: &str) -> Option<BigRational> {
+        use num_traits::Pow;
 
-    let mut a = v.floor() as i64;
-    let mut remainder = v - a as f64;
-
-    // Start with just the integer part
-    let mut p_prev = BigInt::from(1_i64);
-    let mut q_prev = BigInt::from(0_i64);
-    let mut p_curr = BigInt::from(a);
-    let mut q_curr = BigInt::from(1_i64);
-
-    for _ in 0..MAX_ITER {
-        if remainder.abs() < EPSILON {
-            break;
+        let s = s.trim();
+        if s.is_empty() {
+            return None;
         }
+        let (mantissa, exp_val): (&str, i32) = if let Some(pos) = s.find(['e', 'E']) {
+            let (m, e) = s.split_at(pos);
+            let e_str = &e[1..];
+            let exp = e_str.parse::<i32>().ok()?;
+            (m, exp)
+        } else {
+            (s, 0)
+        };
 
-        let inv = 1.0 / remainder;
-        a = inv.floor() as i64;
-        remainder = inv - a as f64;
+        let (digits_big, frac_len): (BigInt, i32) =
+            if let Some((int_part, frac_part)) = mantissa.split_once('.') {
+                let combined = format!("{}{}", int_part, frac_part);
+                let digits = combined.parse::<BigInt>().ok()?;
+                (digits, frac_part.len() as i32)
+            } else {
+                let digits = mantissa.parse::<BigInt>().ok()?;
+                (digits, 0)
+            };
 
-        let big_a = BigInt::from(a);
-        let p_next = &big_a * &p_curr + &p_prev;
-        let q_next = &big_a * &q_curr + &q_prev;
-
-        p_prev = p_curr;
-        q_prev = q_curr;
-        p_curr = p_next;
-        q_curr = q_next;
-
-        // Check if close enough
-        let approx = p_curr.to_f64().unwrap_or(f64::NAN) / q_curr.to_f64().unwrap_or(1.0);
-        if (approx - v).abs() < EPSILON {
-            break;
+        let net_exp = exp_val.checked_sub(frac_len)?;
+        if net_exp.unsigned_abs() > 10_000 {
+            return None;
+        }
+        let ten = BigInt::from(10);
+        if net_exp >= 0 {
+            let factor = ten.pow(net_exp as u32);
+            Some(BigRational::from_integer(digits_big * factor))
+        } else {
+            let divisor = ten.pow((-net_exp) as u32);
+            Some(BigRational::new(digits_big, divisor))
         }
     }
-
-    BigRational::new(p_curr, q_curr)
 }
 
 // ── Tests ──────────────────────────────────────────────────────────
@@ -452,5 +451,20 @@ mod tests {
         let exp = Rat::from_pair(1, 2);
         // 4^(1/2) can't be computed exactly as rational
         assert!(Rat::pow_int(&base, &exp).is_none());
+    }
+
+    #[test]
+    fn test_phase47_rat_edge_cases() {
+        // 0^0 -> None
+        assert!(Rat::pow_int(&Rat::from_int(0), &Rat::from_int(0)).is_none());
+        // i64::MIN -> None (no panic/overflow)
+        assert!(Rat::pow_int(&Rat::from_int(2), &Rat::from_int(i64::MIN)).is_none());
+        // 10^400 / (10^400 + 1) -> 1.0 (not NaN from inf/inf)
+        let ten_400 = Rat::pow_int(&Rat::from_int(10), &Rat::from_int(400)).unwrap();
+        let ratio = &ten_400 / (&ten_400 + Rat::from_int(1));
+        let f = Rat::to_f64(&ratio);
+        assert!((f - 1.0).abs() < 1e-12, "got {f}");
+        // 1e1000000000 rejected
+        assert!(Rat::parse_exact_rational("1e1000000000").is_none());
     }
 }

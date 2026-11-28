@@ -34,7 +34,7 @@ impl Parse for SymFnDef {
             content.parse::<Token![:]>()?;
             let param_ty: Type = content.parse()?;
             params.push((param_name, param_ty));
-            if content.peek(Token![,]) {
+            if !content.is_empty() {
                 content.parse::<Token![,]>()?;
             }
         }
@@ -53,20 +53,45 @@ impl Parse for SymFnDef {
 
         let mut expr_opt = None;
         let mut gradient_vars = Vec::new();
+        let mut gradient_seen = false;
 
         while !body_content.is_empty() {
             let key: Ident = body_content.parse()?;
             body_content.parse::<Token![:]>()?;
 
             if key == "expr" {
+                if expr_opt.is_some() {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "Duplicate 'expr' field in sym_fn body",
+                    ));
+                }
                 let syn_expr: syn::Expr = body_content.parse()?;
                 expr_opt = Some(convert_syn_expr(&syn_expr)?);
             } else if key == "gradient" {
+                if gradient_seen {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "Duplicate 'gradient' field in sym_fn body",
+                    ));
+                }
+                gradient_seen = true;
                 let grad_content;
                 bracketed!(grad_content in body_content);
                 let idents: Punctuated<Ident, Token![,]> =
                     grad_content.parse_terminated(Ident::parse, Token![,])?;
-                gradient_vars = idents.into_iter().map(|id| id.to_string()).collect();
+                for id in idents {
+                    let s = id.to_string();
+                    if !params.iter().any(|(p, _)| *p == s) {
+                        return Err(syn::Error::new(
+                            id.span(),
+                            format!(
+                                "Gradient variable '{s}' is not declared in function parameters"
+                            ),
+                        ));
+                    }
+                    gradient_vars.push(s);
+                }
             } else {
                 return Err(syn::Error::new(
                     key.span(),
@@ -74,7 +99,7 @@ impl Parse for SymFnDef {
                 ));
             }
 
-            if body_content.peek(Token![,]) {
+            if !body_content.is_empty() {
                 body_content.parse::<Token![,]>()?;
             }
         }
@@ -110,8 +135,12 @@ pub fn convert_syn_expr(e: &syn::Expr) -> syn::Result<Expr> {
         }
         syn::Expr::Lit(lit) => match &lit.lit {
             syn::Lit::Float(f) => {
-                let val: f64 = f.base10_parse()?;
-                Ok(Expr::from_f64(val))
+                if let Some(r) = sym_core::rational::Rat::parse_exact_rational(f.base10_digits()) {
+                    Ok(Expr::Const(r))
+                } else {
+                    let val: f64 = f.base10_parse()?;
+                    Ok(Expr::from_f64(val))
+                }
             }
             syn::Lit::Int(i) => {
                 let val: i64 = i.base10_parse()?;
@@ -142,23 +171,38 @@ pub fn convert_syn_expr(e: &syn::Expr) -> syn::Result<Expr> {
             let receiver = convert_syn_expr(&mc.receiver)?;
             let method = mc.method.to_string();
             match method.as_str() {
-                "sin" => Ok(Expr::sin(receiver)),
-                "cos" => Ok(Expr::cos(receiver)),
-                "tan" => Ok(Expr::tan(receiver)),
-                "exp" => Ok(Expr::exp(receiver)),
-                "ln" => Ok(Expr::ln(receiver)),
-                "sqrt" => Ok(Expr::sqrt(receiver)),
-                "sinh" => Ok(Expr::sinh(receiver)),
-                "cosh" => Ok(Expr::cosh(receiver)),
-                "tanh" => Ok(Expr::tanh(receiver)),
-                "asin" => Ok(Expr::asin(receiver)),
-                "acos" => Ok(Expr::acos(receiver)),
-                "atan" => Ok(Expr::atan(receiver)),
+                "sin" | "cos" | "tan" | "exp" | "ln" | "sqrt" | "sinh" | "cosh" | "tanh"
+                | "asin" | "acos" | "atan" => {
+                    if !mc.args.is_empty() {
+                        return Err(syn::Error::new_spanned(
+                            mc,
+                            format!("{method}() takes 0 arguments"),
+                        ));
+                    }
+                    match method.as_str() {
+                        "sin" => Ok(Expr::sin(receiver)),
+                        "cos" => Ok(Expr::cos(receiver)),
+                        "tan" => Ok(Expr::tan(receiver)),
+                        "exp" => Ok(Expr::exp(receiver)),
+                        "ln" => Ok(Expr::ln(receiver)),
+                        "sqrt" => Ok(Expr::sqrt(receiver)),
+                        "sinh" => Ok(Expr::sinh(receiver)),
+                        "cosh" => Ok(Expr::cosh(receiver)),
+                        "tanh" => Ok(Expr::tanh(receiver)),
+                        "asin" => Ok(Expr::asin(receiver)),
+                        "acos" => Ok(Expr::acos(receiver)),
+                        "atan" => Ok(Expr::atan(receiver)),
+                        _ => unreachable!(),
+                    }
+                }
                 "powi" | "powf" => {
-                    let arg = mc.args.first().ok_or_else(|| {
-                        syn::Error::new_spanned(mc, "pow method requires an exponent argument")
-                    })?;
-                    let exp = convert_syn_expr(arg)?;
+                    if mc.args.len() != 1 {
+                        return Err(syn::Error::new_spanned(
+                            mc,
+                            format!("{method} requires exactly 1 exponent argument"),
+                        ));
+                    }
+                    let exp = convert_syn_expr(&mc.args[0])?;
                     Ok(Expr::pow(receiver, exp))
                 }
                 _ => Err(syn::Error::new_spanned(
@@ -171,88 +215,42 @@ pub fn convert_syn_expr(e: &syn::Expr) -> syn::Result<Expr> {
             if let syn::Expr::Path(p) = &*call.func {
                 if let Some(ident) = p.path.get_ident() {
                     let func_name = ident.to_string();
-                    let mut args = call.args.iter();
                     match func_name.as_str() {
-                        "sin" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "sin requires 1 argument")
-                            })?;
-                            Ok(Expr::sin(convert_syn_expr(arg)?))
-                        }
-                        "cos" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "cos requires 1 argument")
-                            })?;
-                            Ok(Expr::cos(convert_syn_expr(arg)?))
-                        }
-                        "tan" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "tan requires 1 argument")
-                            })?;
-                            Ok(Expr::tan(convert_syn_expr(arg)?))
-                        }
-                        "exp" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "exp requires 1 argument")
-                            })?;
-                            Ok(Expr::exp(convert_syn_expr(arg)?))
-                        }
-                        "ln" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "ln requires 1 argument")
-                            })?;
-                            Ok(Expr::ln(convert_syn_expr(arg)?))
-                        }
-                        "sqrt" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "sqrt requires 1 argument")
-                            })?;
-                            Ok(Expr::sqrt(convert_syn_expr(arg)?))
-                        }
-                        "sinh" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "sinh requires 1 argument")
-                            })?;
-                            Ok(Expr::sinh(convert_syn_expr(arg)?))
-                        }
-                        "cosh" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "cosh requires 1 argument")
-                            })?;
-                            Ok(Expr::cosh(convert_syn_expr(arg)?))
-                        }
-                        "tanh" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "tanh requires 1 argument")
-                            })?;
-                            Ok(Expr::tanh(convert_syn_expr(arg)?))
-                        }
-                        "asin" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "asin requires 1 argument")
-                            })?;
-                            Ok(Expr::asin(convert_syn_expr(arg)?))
-                        }
-                        "acos" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "acos requires 1 argument")
-                            })?;
-                            Ok(Expr::acos(convert_syn_expr(arg)?))
-                        }
-                        "atan" => {
-                            let arg = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "atan requires 1 argument")
-                            })?;
-                            Ok(Expr::atan(convert_syn_expr(arg)?))
+                        "sin" | "cos" | "tan" | "exp" | "ln" | "sqrt" | "sinh" | "cosh"
+                        | "tanh" | "asin" | "acos" | "atan" => {
+                            if call.args.len() != 1 {
+                                return Err(syn::Error::new_spanned(
+                                    call,
+                                    format!("{func_name} requires exactly 1 argument"),
+                                ));
+                            }
+                            let arg = convert_syn_expr(&call.args[0])?;
+                            match func_name.as_str() {
+                                "sin" => Ok(Expr::sin(arg)),
+                                "cos" => Ok(Expr::cos(arg)),
+                                "tan" => Ok(Expr::tan(arg)),
+                                "exp" => Ok(Expr::exp(arg)),
+                                "ln" => Ok(Expr::ln(arg)),
+                                "sqrt" => Ok(Expr::sqrt(arg)),
+                                "sinh" => Ok(Expr::sinh(arg)),
+                                "cosh" => Ok(Expr::cosh(arg)),
+                                "tanh" => Ok(Expr::tanh(arg)),
+                                "asin" => Ok(Expr::asin(arg)),
+                                "acos" => Ok(Expr::acos(arg)),
+                                "atan" => Ok(Expr::atan(arg)),
+                                _ => unreachable!(),
+                            }
                         }
                         "pow" => {
-                            let base = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "pow requires 2 arguments")
-                            })?;
-                            let exp = args.next().ok_or_else(|| {
-                                syn::Error::new_spanned(call, "pow requires 2 arguments")
-                            })?;
-                            Ok(Expr::pow(convert_syn_expr(base)?, convert_syn_expr(exp)?))
+                            if call.args.len() != 2 {
+                                return Err(syn::Error::new_spanned(
+                                    call,
+                                    "pow requires exactly 2 arguments",
+                                ));
+                            }
+                            let base = convert_syn_expr(&call.args[0])?;
+                            let exp = convert_syn_expr(&call.args[1])?;
+                            Ok(Expr::pow(base, exp))
                         }
                         _ => Err(syn::Error::new_spanned(
                             call,

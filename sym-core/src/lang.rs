@@ -37,6 +37,9 @@ define_language! {
 
         // Leaf nodes
         Const(BigRational),
+        "pi" = Pi,
+        "e" = E,
+        "i" = I,
         Var(Symbol),
         Tensor(Symbol),
         NamedConst(Symbol),
@@ -52,8 +55,8 @@ define_language! {
         // Bfloat arbitrary precision float
         Bfloat(Symbol),
 
-        // Special functions (gamma, erf, bessel, airy, orthopoly)
-        SpecialFn(Symbol),
+        // Special functions (gamma, erf, bessel, airy, orthopoly): child[0] = kind, child[1..] = args
+        "specfn" = SpecialFn(Box<[Id]>),
     }
 }
 
@@ -67,7 +70,22 @@ impl Analysis<MathLang> for MathAnalysis {
     type Data = Option<BigRational>;
 
     fn merge(&mut self, to: &mut Self::Data, from: Self::Data) -> egg::DidMerge {
-        egg::merge_max(to, from)
+        match (to.as_ref(), from.as_ref()) {
+            (None, None) => egg::DidMerge(false, false),
+            (None, Some(c)) => {
+                *to = Some(c.clone());
+                egg::DidMerge(true, false)
+            }
+            (Some(_), None) => egg::DidMerge(false, true),
+            (Some(a), Some(b)) => {
+                if a == b {
+                    egg::DidMerge(false, false)
+                } else {
+                    *to = None;
+                    egg::DidMerge(true, true)
+                }
+            }
+        }
     }
 
     fn make(egraph: &egg::EGraph<MathLang, Self>, enode: &MathLang) -> Self::Data {
@@ -75,7 +93,10 @@ impl Analysis<MathLang> for MathAnalysis {
 
         match enode {
             MathLang::Const(c) => Some(c.clone()),
-            MathLang::Var(_)
+            MathLang::Pi
+            | MathLang::E
+            | MathLang::I
+            | MathLang::Var(_)
             | MathLang::Tensor(_)
             | MathLang::NamedConst(_)
             | MathLang::Bfloat(_)
@@ -230,10 +251,10 @@ impl Expr {
                 let id_a = a.build_recexpr(recexpr);
                 recexpr.add(MathLang::Atan([id_a]))
             }
-            Expr::Pi => recexpr.add(MathLang::NamedConst(Symbol::from("pi"))),
-            Expr::E => recexpr.add(MathLang::NamedConst(Symbol::from("e"))),
+            Expr::Pi => recexpr.add(MathLang::Pi),
+            Expr::E => recexpr.add(MathLang::E),
             #[cfg(feature = "complex")]
-            Expr::I => recexpr.add(MathLang::NamedConst(Symbol::from("i"))),
+            Expr::I => recexpr.add(MathLang::I),
             Expr::Factorial(a) => {
                 let id_a = a.build_recexpr(recexpr);
                 recexpr.add(MathLang::Factorial([id_a]))
@@ -270,15 +291,12 @@ impl Expr {
             }
             #[cfg(feature = "specfn")]
             Expr::SpecialFn(kind, args) => {
-                let encoded = format!(
-                    "{}:{}",
-                    kind.as_str(),
-                    args.iter()
-                        .map(|a| format!("{a}"))
-                        .collect::<Vec<_>>()
-                        .join(",")
-                );
-                recexpr.add(MathLang::SpecialFn(Symbol::from(encoded.as_str())))
+                let mut ids = Vec::with_capacity(1 + args.len());
+                ids.push(recexpr.add(MathLang::NamedConst(Symbol::from(kind.as_str()))));
+                for a in args {
+                    ids.push(a.build_recexpr(recexpr));
+                }
+                recexpr.add(MathLang::SpecialFn(ids.into_boxed_slice()))
             }
         }
     }
@@ -331,6 +349,18 @@ impl Expr {
             MathLang::Acos([a]) => Expr::acos(Self::from_recexpr_id(nodes, *a)),
             MathLang::Atan([a]) => Expr::atan(Self::from_recexpr_id(nodes, *a)),
             MathLang::Factorial([a]) => Expr::factorial(Self::from_recexpr_id(nodes, *a)),
+            MathLang::Pi => Expr::Pi,
+            MathLang::E => Expr::E,
+            MathLang::I => {
+                #[cfg(feature = "complex")]
+                {
+                    Expr::I
+                }
+                #[cfg(not(feature = "complex"))]
+                {
+                    Expr::var("i")
+                }
+            }
             MathLang::NamedConst(s) => match s.as_str() {
                 "pi" => Expr::Pi,
                 "e" => Expr::E,
@@ -380,14 +410,22 @@ impl Expr {
                 }
                 Expr::var(s.as_str())
             }
-            MathLang::SpecialFn(s) => {
+            MathLang::SpecialFn(ids) => {
                 #[cfg(feature = "specfn")]
                 {
-                    if let Some(e) = crate::specfn::decode_special_fn(s.as_str()) {
-                        return e;
+                    if let Some((&kind_id, arg_ids)) = ids.split_first()
+                        && let MathLang::NamedConst(sym) = &nodes[usize::from(kind_id)]
+                        && let Some(kind) = crate::specfn::SpecialFnKind::from_name(sym.as_str())
+                    {
+                        let args = arg_ids
+                            .iter()
+                            .map(|id| Self::from_recexpr_id(nodes, *id))
+                            .collect();
+                        return Expr::SpecialFn(kind, args);
                     }
                 }
-                Expr::var(s.as_str())
+                let _ = ids;
+                Expr::int(0)
             }
         }
     }

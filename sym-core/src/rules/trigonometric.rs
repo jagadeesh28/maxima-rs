@@ -29,6 +29,48 @@ pub fn trigonometric_rules() -> Vec<SourcedRule<MathLang, MathAnalysis>> {
             RuleProvenance::new("trigi.lisp", "simp-%tan", "tan(0) -> 0", false),
             rewrite!("tan-zero"; "(tan 0)" => "0"),
         ),
+        // Maxima: trigi.lisp:simp-%sin — sin(%pi) -> 0
+        SourcedRule::new(
+            "sin-pi",
+            RuleProvenance::new("trigi.lisp", "simp-%sin", "sin(%pi) -> 0", false),
+            rewrite!("sin-pi"; "(sin pi)" => "0"),
+        ),
+        // Maxima: trigi.lisp:simp-%cos — cos(%pi) -> -1
+        SourcedRule::new(
+            "cos-pi",
+            RuleProvenance::new("trigi.lisp", "simp-%cos", "cos(%pi) -> -1", false),
+            rewrite!("cos-pi"; "(cos pi)" => "-1"),
+        ),
+        // Maxima: trigi.lisp:simp-%tan — tan(%pi) -> 0
+        SourcedRule::new(
+            "tan-pi",
+            RuleProvenance::new("trigi.lisp", "simp-%tan", "tan(%pi) -> 0", false),
+            rewrite!("tan-pi"; "(tan pi)" => "0"),
+        ),
+        // Maxima: trigi.lisp:simp-%sin — sin(%pi/2) -> 1
+        SourcedRule::new(
+            "sin-pi-half",
+            RuleProvenance::new("trigi.lisp", "simp-%sin", "sin(%pi/2) -> 1", false),
+            rewrite!("sin-pi-half"; "(sin (/ pi 2))" => "1"),
+        ),
+        // Maxima: trigi.lisp:simp-%cos — cos(%pi/2) -> 0
+        SourcedRule::new(
+            "cos-pi-half",
+            RuleProvenance::new("trigi.lisp", "simp-%cos", "cos(%pi/2) -> 0", false),
+            rewrite!("cos-pi-half"; "(cos (/ pi 2))" => "0"),
+        ),
+        // Maxima: trigi.lisp:simp-%sin — sin(2*%pi) -> 0
+        SourcedRule::new(
+            "sin-two-pi",
+            RuleProvenance::new("trigi.lisp", "simp-%sin", "sin(2*%pi) -> 0", false),
+            rewrite!("sin-two-pi"; "(sin (* 2 pi))" => "0"),
+        ),
+        // Maxima: trigi.lisp:simp-%cos — cos(2*%pi) -> 1
+        SourcedRule::new(
+            "cos-two-pi",
+            RuleProvenance::new("trigi.lisp", "simp-%cos", "cos(2*%pi) -> 1", false),
+            rewrite!("cos-two-pi"; "(cos (* 2 pi))" => "1"),
+        ),
         // ── Parity / Symmetry (trigi.lisp) ──────────────────────────────
         // Maxima: trigi.lisp:simp-%sin — sin(-x) -> -sin(x)
         SourcedRule::new(

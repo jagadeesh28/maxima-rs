@@ -40,7 +40,7 @@ fn expr_strategy() -> impl Strategy<Value = Expr> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(256))]
+    #![proptest_config(ProptestConfig::with_cases(500))]
 
     #[test]
     fn prop_maxima_print_parse_roundtrip(orig in expr_strategy()) {

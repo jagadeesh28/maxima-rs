@@ -484,7 +484,7 @@ impl Expr {
     /// Returns `true` if this expression is a constant (any value).
     pub fn is_const(&self) -> bool {
         match self {
-            Expr::Const(_) => true,
+            Expr::Const(_) | Expr::Pi | Expr::E => true,
             #[cfg(feature = "bfloat")]
             Expr::Bfloat(_) => true,
             #[cfg(feature = "complex")]
@@ -609,7 +609,15 @@ impl Expr {
                     Some(a.eval(env)? / denom)
                 }
             }
-            Expr::Pow(base, exp) => Some(base.eval(env)?.powf(exp.eval(env)?)),
+            Expr::Pow(base, exp) => {
+                let b = base.eval(env)?;
+                let e = exp.eval(env)?;
+                if b == 0.0 && e <= 0.0 {
+                    return None;
+                }
+                let res = b.powf(e);
+                if res.is_finite() { Some(res) } else { None }
+            }
             Expr::Neg(a) => Some(-a.eval(env)?),
             Expr::Sin(a) => Some(a.eval(env)?.sin()),
             Expr::Cos(a) => Some(a.eval(env)?.cos()),
@@ -626,8 +634,22 @@ impl Expr {
             Expr::Sinh(a) => Some(a.eval(env)?.sinh()),
             Expr::Cosh(a) => Some(a.eval(env)?.cosh()),
             Expr::Tanh(a) => Some(a.eval(env)?.tanh()),
-            Expr::Asin(a) => Some(a.eval(env)?.asin()),
-            Expr::Acos(a) => Some(a.eval(env)?.acos()),
+            Expr::Asin(a) => {
+                let v = a.eval(env)?;
+                if (-1.0..=1.0).contains(&v) {
+                    Some(v.asin())
+                } else {
+                    None
+                }
+            }
+            Expr::Acos(a) => {
+                let v = a.eval(env)?;
+                if (-1.0..=1.0).contains(&v) {
+                    Some(v.acos())
+                } else {
+                    None
+                }
+            }
             Expr::Atan(a) => Some(a.eval(env)?.atan()),
             Expr::Pi => Some(std::f64::consts::PI),
             Expr::E => Some(std::f64::consts::E),
@@ -635,7 +657,7 @@ impl Expr {
             Expr::I => None,
             Expr::Factorial(a) => {
                 let v = a.eval(env)?;
-                if v < 0.0 || v.fract() != 0.0 || v > 170.0 {
+                if !v.is_finite() || v < 0.0 || v.fract() != 0.0 || v > 170.0 {
                     None
                 } else {
                     let n = v as u32;
@@ -767,13 +789,13 @@ impl fmt::Display for Expr {
                 }
                 Ok(())
             }
-            Expr::Derivative(expr, var) => write!(f, "d({})/d({})", expr, var),
-            Expr::Integral(expr, var) => write!(f, "int({} d{})", expr, var),
+            Expr::Derivative(expr, var) => write!(f, "diff({}, {})", expr, var),
+            Expr::Integral(expr, var) => write!(f, "integrate({}, {})", expr, var),
             Expr::Sum(expr, var, lower, upper) => {
-                write!(f, "sum({}={}, {}, {})", var, lower, upper, expr)
+                write!(f, "sum({}, {}, {}, {})", expr, var, lower, upper)
             }
             Expr::Matrix(mat) => {
-                write!(f, "[")?;
+                write!(f, "matrix(")?;
                 for (i, row) in mat.iter().enumerate() {
                     write!(f, "[")?;
                     for (j, elem) in row.iter().enumerate() {
@@ -787,7 +809,7 @@ impl fmt::Display for Expr {
                         write!(f, ", ")?;
                     }
                 }
-                write!(f, "]")
+                write!(f, ")")
             }
             #[cfg(feature = "specfn")]
             Expr::SpecialFn(kind, args) => {

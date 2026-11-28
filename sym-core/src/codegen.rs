@@ -38,11 +38,91 @@ pub struct CodegenConfig {
     pub float_type: FloatType,
 }
 
+fn safe_ident(name: &str) -> proc_macro2::Ident {
+    let clean = name.trim_start_matches('%');
+    let sanitized: String = clean
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let base = if sanitized.is_empty() || sanitized.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("_v_{sanitized}")
+    } else {
+        sanitized
+    };
+    if matches!(
+        base.as_str(),
+        "as" | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "try"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+    ) {
+        if matches!(base.as_str(), "self" | "Self" | "super" | "crate") {
+            format_ident!("_kw_{base}")
+        } else {
+            proc_macro2::Ident::new_raw(&base, proc_macro2::Span::call_site())
+        }
+    } else {
+        format_ident!("{base}")
+    }
+}
+
 /// Convert a single [`Expr`] directly into an inline expression [`TokenStream`].
 pub fn emit_expr(expr: &Expr, config: &CodegenConfig) -> TokenStream {
     match expr {
         Expr::Var(name) => {
-            let ident = format_ident!("{}", name);
+            let ident = safe_ident(name);
             quote!(#ident)
         }
         Expr::Const(r) => {
@@ -56,6 +136,14 @@ pub fn emit_expr(expr: &Expr, config: &CodegenConfig) -> TokenStream {
         #[cfg(feature = "bfloat")]
         Expr::Bfloat(b) => {
             let v = b.to_f64();
+            let ty = config.float_type.type_tokens();
+            if v.is_nan() {
+                return quote!(#ty::NAN);
+            } else if v == f64::INFINITY {
+                return quote!(#ty::INFINITY);
+            } else if v == f64::NEG_INFINITY {
+                return quote!(#ty::NEG_INFINITY);
+            }
             let lit_str = match config.float_type {
                 FloatType::F64 => format!("{v:?}"),
                 FloatType::F32 => format!("{:?}f32", v as f32),
@@ -90,7 +178,7 @@ pub fn emit_expr(expr: &Expr, config: &CodegenConfig) -> TokenStream {
         }
         Expr::Neg(a) => {
             let ea = emit_expr(a, config);
-            quote!(-#ea)
+            quote!((-#ea))
         }
         Expr::Sin(a) => {
             let ea = emit_expr(a, config);

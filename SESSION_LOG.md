@@ -85,7 +85,7 @@ When starting a new session, instruct the AI:
 | `cas` | Phases 22–32 | Yes | Meta-feature bundling all CAS modules `["poly", "integrate", "series", "limit", "solve", "diff", "egraph"]` |
 | `full` | All | Yes | Bundle enabling all features |
 
-### Current Phase: **Phase 46 Complete ✅ (Next: Phase 47)**
+### Current Phase: **Phase 47 Complete ✅ (Next: Phase 48)**
 
 ### Phase Completion Tracker
 
@@ -140,6 +140,7 @@ When starting a new session, instruct the AI:
 | 44. Scoped Deductive Inference & Assumptions Context | `assume` | ✅ Completed | Thread-safe `Assumptions` context, inequality DAG inference, interval bound propagation, sign deduction (`csign`, `asksign`), predicate evaluation (`is`), domain properties (`PropertyKind`), and reversibility (`forget`) |
 | 45. Maxima 5.50 Parity Test Suite & Golden Verification | `tests` | ✅ Completed | Full upstream golden test suite ported from Maxima 5.50 (`rtest_integrate`, `rtest_limit`, `rtest_taylor`, `rtest_solve`, `rtest_laplace`, `rtest_bessel`), 100% test pass rate across workspace |
 | 46. Security, Build/CI Integrity & WebUI Contract Hotfixes | `maxima-web`/`ci`/`cargo` | ✅ Completed | Eliminated DOM XSS sinks, added CSP/nosniff/DENY headers, isolated `/api/parse`, fixed `Cli` TOML precedence, wired `fast_math`/`float_type`/bounds/Rust ident checks, fixed CI/Docker (`rust:1.88-bookworm` + `--locked`), centralized `[workspace.dependencies]`, added `tensor` to `maxima-rs`, fixed WebUI param wipe/`env`/`enum`/Rules/`{}`/CSS |
+| 47. E-Graph Soundness, Core Numbers, Parsers, Codegen & Macros | `sym-core`/`sym-macros` | ✅ Completed | Added `egg::Condition` singularity guards & Maxima `SimpFlags`, fixed `MathAnalysis::merge` & `Box<[Id]>` `SpecialFn`, hardened `Rat`/`bfloat`/`Expr::eval`, fixed UTF-8/depth/precedence in `parser/{latex,maxima}`, fixed `latex.rs`/`cse.rs`/`codegen.rs`/`pipeline.rs`, wired `#[fast_math]`/`f32`/arity/decimal precision in `sym-macros` |
 
 
 ---
@@ -1129,6 +1130,24 @@ When starting a new session, instruct the AI:
 - `E:\Anaconda\python.exe scripts/verify_css_classes.py` (exit 0; 107 used, 114 defined, 0 missing)
 - `node --check` on `maxima-web/static/js/*.js` (exit 0)
 - `docs/audits/PHASE46_REPORT.md` compiled.
+
+---
+
+## Session 47 — E-Graph Soundness, Core Numbers, Parsers, Codegen & Macros Hardening (Phase 47)
+
+**Date**: 2026-11-28  
+**Scope**: Completed Phase 47 remediation across `sym-core` (e-graph soundness, `SimpFlags`, `Rat`/`bfloat`/`Expr`, `parser/{latex,maxima}`, `latex`, `cse`, `codegen`, `pipeline`) and `sym-macros`.
+
+### Deliverables Built
+1. **E-Graph Soundness & `SimpFlags`**: Attached `egg::Condition` guards (`is_not_zero`, `is_positive`, `is_nonneg_int`, `is_sym_or_positive_int`, `is_sym_or_nonneg_int`), added Maxima-aligned `SimpFlags`, added `(^ e ?x) <=> (exp ?x)` / `(* i i) => -1` / `(^ i 2) => -1` / `%pi`-trig rules, fixed `MathAnalysis::merge`, and switched `MathLang::SpecialFn` to `Box<[Id]>`.
+2. **Numbers & `bfloat`**: Fixed `Rat::to_f64` overflow, `Rat::pow_int` (`0^0`, `i64::MIN`, cap `10_000`), `Rat::from_f64`, `BfloatWrapper` `Result` returns + `fpprec >= 1` + extended-precision `sinh`/`cosh`/`tanh`, and `Expr::eval` domain/NaN checks + `Expr::is_const()`.
+3. **Parsers, Printers, CSE, Codegen & Macros**: Hardened `parser/latex.rs` (UTF-8 `\sum`, `\pi`, `\sinc` boundary, `x_{0}`, `power()` depth), `parser/maxima.rs` (`power()` depth, `!!`, trailing tokens, multi-root `Solve`), `latex.rs` (`escape_latex`, `Neg(Add/Sub)`, `Factorial` cfg), `cse.rs` (shadowing, bound vars, `BTreeMap`), `codegen.rs`/`pipeline.rs` (`(-#ea)`, `NaN`/`Inf`/keywords, free-var params), and `sym-macros` (`#[fast_math = false]`, `f32`, arity, commas, duplicates, exact decimals).
+
+### Passing Gate Verification
+- `cargo fmt --all -- --check` (exit 0)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo test --workspace --all-features` (exit 0)
+- `docs/audits/PHASE47_REPORT.md` compiled.
 
 
 

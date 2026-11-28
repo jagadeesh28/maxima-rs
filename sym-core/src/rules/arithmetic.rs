@@ -6,6 +6,7 @@
 
 use crate::lang::{MathAnalysis, MathLang};
 use crate::provenance::{RuleProvenance, SourcedRule};
+use crate::rules::{is_not_zero, is_positive};
 use egg::rewrite;
 
 /// Generate all arithmetic rewrite rules with 1:1 Maxima citations.
@@ -162,17 +163,17 @@ pub fn arithmetic_rules() -> Vec<SourcedRule<MathLang, MathAnalysis>> {
             RuleProvenance::new("simp.lisp", "simptimes", "(/ x 1) -> x", false),
             rewrite!("div-one"; "(/ ?a 1)" => "?a"),
         ),
-        // Maxima: simp.lisp:simptimes — (/ 0 x) -> 0
+        // Maxima: simp.lisp:simptimes — (/ 0 x) -> 0 (when x != 0)
         SourcedRule::new(
             "div-zero",
             RuleProvenance::new("simp.lisp", "simptimes", "(/ 0 x) -> 0", true),
-            rewrite!("div-zero"; "(/ 0 ?a)" => "0"),
+            rewrite!("div-zero"; "(/ 0 ?a)" => "0" if is_not_zero("?a")),
         ),
-        // Maxima: simp.lisp:simptimes — (/ x x) -> 1
+        // Maxima: simp.lisp:simptimes — (/ x x) -> 1 (when x != 0)
         SourcedRule::new(
             "div-self",
             RuleProvenance::new("simp.lisp", "simptimes", "(/ x x) -> 1", true),
-            rewrite!("div-self"; "(/ ?a ?a)" => "1"),
+            rewrite!("div-self"; "(/ ?a ?a)" => "1" if is_not_zero("?a")),
         ),
         // ── Exponentiation Identities (simp.lisp: simpexpt) ─────────────
         // Maxima: simp.lisp:simpexpt — (^ x 1) -> x
@@ -181,11 +182,11 @@ pub fn arithmetic_rules() -> Vec<SourcedRule<MathLang, MathAnalysis>> {
             RuleProvenance::new("simp.lisp", "simpexpt", "(^ x 1) -> x", false),
             rewrite!("pow-one"; "(^ ?a 1)" => "?a"),
         ),
-        // Maxima: simp.lisp:simpexpt — (^ x 0) -> 1
+        // Maxima: simp.lisp:simpexpt — (^ x 0) -> 1 (when x != 0)
         SourcedRule::new(
             "pow-zero",
             RuleProvenance::new("simp.lisp", "simpexpt", "(^ x 0) -> 1", true),
-            rewrite!("pow-zero"; "(^ ?a 0)" => "1"),
+            rewrite!("pow-zero"; "(^ ?a 0)" => "1" if is_not_zero("?a")),
         ),
         // Maxima: simp.lisp:simpexpt — (^ 1 x) -> 1
         SourcedRule::new(
@@ -193,11 +194,11 @@ pub fn arithmetic_rules() -> Vec<SourcedRule<MathLang, MathAnalysis>> {
             RuleProvenance::new("simp.lisp", "simpexpt", "(^ 1 x) -> 1", false),
             rewrite!("pow-one-base"; "(^ 1 ?a)" => "1"),
         ),
-        // Maxima: simp.lisp:simpexpt — (^ 0 x) -> 0
+        // Maxima: simp.lisp:simpexpt — (^ 0 x) -> 0 (when x > 0)
         SourcedRule::new(
             "pow-zero-base",
             RuleProvenance::new("simp.lisp", "simpexpt", "(^ 0 x) -> 0", true),
-            rewrite!("pow-zero-base"; "(^ 0 ?a)" => "0"),
+            rewrite!("pow-zero-base"; "(^ 0 ?a)" => "0" if is_positive("?a")),
         ),
         // Maxima: simp.lisp:simpexpt — (* x x) -> (^ x 2)
         SourcedRule::new(
@@ -205,7 +206,7 @@ pub fn arithmetic_rules() -> Vec<SourcedRule<MathLang, MathAnalysis>> {
             RuleProvenance::new("simp.lisp", "simpexpt", "(* x x) -> (^ x 2)", false),
             rewrite!("mul-self-pow"; "(* ?a ?a)" => "(^ ?a 2)"),
         ),
-        // Maxima: simp.lisp:simpexpt — (* (^ x a) (^ x b)) -> (^ x (+ a b))
+        // Maxima: simp.lisp:simpexpt — (* (^ x a) (^ x b)) -> (^ x (+ a b)) (when x != 0)
         SourcedRule::new(
             "pow-add-exp",
             RuleProvenance::new(
@@ -214,7 +215,7 @@ pub fn arithmetic_rules() -> Vec<SourcedRule<MathLang, MathAnalysis>> {
                 "(* (^ x a) (^ x b)) -> (^ x (+ a b))",
                 true,
             ),
-            rewrite!("pow-add-exp"; "(* (^ ?x ?a) (^ ?x ?b))" => "(^ ?x (+ ?a ?b))"),
+            rewrite!("pow-add-exp"; "(* (^ ?x ?a) (^ ?x ?b))" => "(^ ?x (+ ?a ?b))" if is_not_zero("?x")),
         ),
         // Maxima: simp.lisp:simpexpt — (^ (^ x a) b) -> (^ x (* a b))
         SourcedRule::new(
@@ -226,6 +227,19 @@ pub fn arithmetic_rules() -> Vec<SourcedRule<MathLang, MathAnalysis>> {
                 true,
             ),
             rewrite!("pow-mul-exp"; "(^ (^ ?x ?a) ?b)" => "(^ ?x (* ?a ?b))"),
+        ),
+        // ── Imaginary Unit Identities (simp.lisp: simpexpt) ────────────
+        // Maxima: simp.lisp:simpexpt — %i * %i -> -1
+        SourcedRule::new(
+            "i-mul-i",
+            RuleProvenance::new("simp.lisp", "simptimes", "(* i i) -> -1", false),
+            rewrite!("i-mul-i"; "(* i i)" => "-1"),
+        ),
+        // Maxima: simp.lisp:simpexpt — %i^2 -> -1
+        SourcedRule::new(
+            "i-pow-two",
+            RuleProvenance::new("simp.lisp", "simpexpt", "(^ i 2) -> -1", false),
+            rewrite!("i-pow-two"; "(^ i 2)" => "-1"),
         ),
     ]
 }

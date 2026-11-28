@@ -63,5 +63,17 @@ pub fn exponential_rules() -> Vec<SourcedRule<MathLang, MathAnalysis>> {
             RuleProvenance::new("simp.lisp", "simpexpt", "(^ (sqrt x) 2) -> x", true),
             rewrite!("sqrt-square"; "(^ (sqrt ?x) 2)" => "?x"),
         ),
+        // Maxima: simp.lisp:simpexpt — %e^x -> exp(x)
+        SourcedRule::new(
+            "e-pow-to-exp",
+            RuleProvenance::new("simp.lisp", "simpexpt", "(^ e x) -> (exp x)", false),
+            rewrite!("e-pow-to-exp"; "(^ e ?x)" => "(exp ?x)"),
+        ),
+        // Maxima: simp.lisp:simpexpt — exp(x) -> %e^x
+        SourcedRule::new(
+            "exp-to-e-pow",
+            RuleProvenance::new("simp.lisp", "simpexpt", "(exp x) -> (^ e x)", false),
+            rewrite!("exp-to-e-pow"; "(exp ?x)" => "(^ e ?x)"),
+        ),
     ]
 }

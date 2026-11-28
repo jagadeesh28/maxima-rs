@@ -83,9 +83,9 @@ fn test_bfloat_arithmetic() {
 #[test]
 fn test_bfloat_transcendentals() {
     let zero = BfloatWrapper::parse("0.0", 25).unwrap();
-    assert_eq!(zero.sin().to_f64(), 0.0);
-    assert_eq!(zero.cos().to_f64(), 1.0);
-    assert_eq!(zero.tan().to_f64(), 0.0);
+    assert_eq!(zero.sin().unwrap().to_f64(), 0.0);
+    assert_eq!(zero.cos().unwrap().to_f64(), 1.0);
+    assert_eq!(zero.tan().unwrap().to_f64(), 0.0);
     assert_eq!(zero.exp().to_f64(), 1.0);
     assert_eq!(zero.sinh().to_f64(), 0.0);
     assert_eq!(zero.cosh().to_f64(), 1.0);
@@ -149,4 +149,27 @@ fn test_bfloat_from_str_helper() {
     } else {
         panic!("expected Expr::Bfloat");
     }
+}
+
+#[test]
+fn test_phase47_bfloat_edge_cases() {
+    // BfloatContext::new(0) must clamp to >= 1 without panicking
+    let ctx0 = BfloatContext::new(0);
+    assert_eq!(ctx0.fpprec, 1);
+
+    // sinh(1b-10) must not suffer catastrophic cancellation
+    let small = BfloatWrapper::parse("1b-10", 20).unwrap();
+    let s = small.sinh();
+    let diff = (s.to_f64() - 1e-10).abs();
+    assert!(
+        diff < 1e-20,
+        "sinh(1b-10) cancellation: got {}, diff={diff}",
+        s.to_f64()
+    );
+
+    // 0^0 and 0^(-1) return Err
+    let zero = BfloatWrapper::parse("0", 16).unwrap();
+    let neg1 = BfloatWrapper::parse("-1", 16).unwrap();
+    assert!(zero.pow(&zero).is_err());
+    assert!(zero.pow(&neg1).is_err());
 }

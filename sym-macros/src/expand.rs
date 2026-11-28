@@ -27,14 +27,18 @@ pub fn expand_sym_fn(input: TokenStream) -> TokenStream {
         Err(err) => return err.to_compile_error().into(),
     };
 
-    let config = MacroConfig::default();
+    let (config, attrs) =
+        match MacroConfig::from_attrs(&def.attrs, &def.params, def.ret_type.as_ref()) {
+            Ok(res) => res,
+            Err(err) => return err.to_compile_error().into(),
+        };
     let mut sat_config = config.saturation.clone();
     sat_config.rule_config.fast_math = config.fast_math;
+    sat_config.rule_config.simp_flags.fast_math = config.fast_math;
     let codegen_config = CodegenConfig {
         float_type: config.float_type,
     };
 
-    let attrs = &def.attrs;
     let vis = &def.vis;
     let fn_name = &def.name;
     let params: Vec<_> = def.params.iter().map(|(p, ty)| quote!(#p: #ty)).collect();

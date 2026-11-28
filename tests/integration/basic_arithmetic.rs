@@ -72,9 +72,18 @@ fn test_power_identities() {
     let e3 = Expr::pow(Expr::int(1), x.clone());
     assert_eq!(optimize(&e3, &config), Expr::int(1));
 
-    // 0^x -> 0
-    let e4 = Expr::pow(Expr::int(0), x.clone());
+    // 0^2 -> 0 (positive exponent)
+    let e4 = Expr::pow(Expr::int(0), Expr::int(2));
     assert_eq!(optimize(&e4, &config), Expr::int(0));
+
+    // 0/0 and 0^0 must NOT collapse to 0 or 1
+    let zero_div_zero = Expr::div(Expr::int(0), Expr::int(0));
+    assert_ne!(optimize(&zero_div_zero, &config), Expr::int(1));
+    assert_ne!(optimize(&zero_div_zero, &config), Expr::int(0));
+
+    let zero_pow_zero = Expr::pow(Expr::int(0), Expr::int(0));
+    assert_ne!(optimize(&zero_pow_zero, &config), Expr::int(1));
+    assert_ne!(optimize(&zero_pow_zero, &config), Expr::int(0));
 }
 
 #[test]

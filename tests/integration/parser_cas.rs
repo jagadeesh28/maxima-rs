@@ -63,10 +63,21 @@ fn test_parse_and_execute_defint() {
 
 #[test]
 fn test_parse_and_execute_solve() {
-    let root = run("solve(x^2 - 1, x)");
-    let rv = eval_x(&root, 0.0);
+    let out = run("solve(x^2 - 1, x)");
     let e = Expr::sub(Expr::pow(Expr::var("x"), Expr::int(2)), Expr::int(1));
-    assert!(eval_x(&e, rv).abs() < 1e-6);
+    match out {
+        Expr::Matrix(rows) => {
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].len(), 2, "expected both roots of x^2 - 1");
+            for r in &rows[0] {
+                let rv = eval_x(r, 0.0);
+                assert!(eval_x(&e, rv).abs() < 1e-6);
+            }
+        }
+        other => panic!("expected Expr::Matrix of roots, got {other:?}"),
+    }
+    // Trailing tokens after ')' must be rejected
+    assert!(parse_maxima_cas("expand(x) + 1").is_err());
 }
 
 #[test]

@@ -44,7 +44,19 @@ fn format_expr(expr: &Expr, parent_prec: u8, is_right: bool) -> String {
         Expr::Var(name) => format_var_name(name),
 
         #[cfg(feature = "bfloat")]
-        Expr::Bfloat(b) => b.to_latex(),
+        Expr::Bfloat(b) => {
+            let s = b.to_latex();
+            let needs_parens = (s.starts_with('-')
+                && (parent_prec >= PREC_POW
+                    || parent_prec == PREC_NEG
+                    || (parent_prec == PREC_MUL && is_right)))
+                || (s.contains("\\times") && parent_prec >= PREC_POW);
+            if needs_parens {
+                format!("\\left( {s} \\right)")
+            } else {
+                s
+            }
+        }
 
         Expr::Const(r) => {
             if r.denom().is_one() {
@@ -167,7 +179,7 @@ fn format_expr(expr: &Expr, parent_prec: u8, is_right: bool) -> String {
 
         Expr::Neg(a) => match a.as_ref() {
             Expr::Add(_, _) | Expr::Sub(_, _) | Expr::Neg(_) => {
-                let inner = format_expr(a, PREC_NEG, false);
+                let inner = format_expr(a, PREC_NONE, false);
                 format!("-\\left( {inner} \\right)")
             }
             Expr::Div(n, d) => {
@@ -226,7 +238,8 @@ fn format_expr(expr: &Expr, parent_prec: u8, is_right: bool) -> String {
         Expr::Factorial(a) => {
             let inner = match a.as_ref() {
                 #[cfg(feature = "complex")]
-                Expr::I | Expr::Var(_) | Expr::Pi | Expr::E => format_expr(a, PREC_ATOM, false),
+                Expr::I => format_expr(a, PREC_ATOM, false),
+                Expr::Var(_) | Expr::Pi | Expr::E => format_expr(a, PREC_ATOM, false),
                 Expr::Const(r) if r.denom().is_one() && !r.is_negative() => {
                     format_expr(a, PREC_ATOM, false)
                 }
@@ -389,6 +402,11 @@ pub fn format_var_name(name: &str) -> String {
 /// Escapes LaTeX special characters if needed.
 fn escape_latex(s: &str) -> String {
     s.replace('\\', "\\backslash ")
+        .replace('#', "\\#")
+        .replace('$', "\\$")
+        .replace('%', "\\%")
+        .replace('&', "\\&")
+        .replace('_', "\\_")
         .replace('^', "\\^{}")
         .replace('{', "\\{")
         .replace('}', "\\}")

@@ -51,5 +51,5 @@ fn test_pipeline_to_rust_fn_codegen() {
 
     let ts = pipeline.to_rust_fn("eval_x", FloatType::F64);
     let s = ts.to_string();
-    assert!(s.contains("pub fn eval_x () -> f64"));
+    assert!(s.contains("pub fn eval_x (x : f64) -> f64"), "got: {s}");
 }

@@ -122,24 +122,59 @@ fn unary(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
 }
 
 fn power(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
-    let left = postfix(i, guard)?;
+    guard
+        .enter()
+        .map_err(|_| winnow::error::ErrMode::Cut(ContextError::default()))?;
+    let res = (|| {
+        let left = postfix(i, guard)?;
 
-    let _ = multispace0(i)?;
-    if i.starts_with('^') {
-        *i = &i[1..];
-        let right = unary(i, guard)?; // right-associative, allows 2^-1 or x^-2
-        Ok(Expr::pow(left, right))
-    } else {
-        Ok(left)
-    }
+        let _ = multispace0(i)?;
+        if i.starts_with('^') {
+            *i = &i[1..];
+            let right = unary(i, guard)?; // right-associative, allows 2^-1 or x^-2
+            Ok(Expr::pow(left, right))
+        } else {
+            Ok(left)
+        }
+    })();
+    guard.leave();
+    res
 }
 
-/// Postfix factorial `!` — binds tighter than `*`, `/`, and `^`.
+fn double_factorial(r: &num_rational::BigRational) -> Option<num_rational::BigRational> {
+    use num_bigint::BigInt;
+    use num_traits::{One, ToPrimitive};
+    if !crate::rational::Rat::is_integer(r) {
+        return None;
+    }
+    let n = r.numer().to_u32()?;
+    if n > 200 {
+        return None;
+    }
+    let mut acc = BigInt::one();
+    let mut k = n;
+    while k > 1 {
+        acc *= BigInt::from(k);
+        k -= 2;
+    }
+    Some(num_rational::BigRational::from_integer(acc))
+}
+
+/// Postfix factorial `!` and double factorial `!!` — binds tighter than `*`, `/`, and `^`.
 fn postfix(i: &mut &str, guard: &mut RecursionDepthGuard) -> PResult<Expr> {
     let mut base = primary(i, guard)?;
     loop {
         let _ = multispace0(i)?;
-        if i.starts_with('!') {
+        if i.starts_with("!!") {
+            *i = &i[2..];
+            if let Expr::Const(ref r) = base
+                && let Some(df) = double_factorial(r)
+            {
+                base = Expr::Const(df);
+                continue;
+            }
+            base = Expr::factorial(Expr::factorial(base));
+        } else if i.starts_with('!') {
             *i = &i[1..];
             base = Expr::factorial(base);
         } else {
@@ -696,6 +731,18 @@ mod tests {
         let deep_expr = format!("{}x{}", "(".repeat(300), ")".repeat(300));
         let res = parse_maxima(&deep_expr);
         assert_eq!(res, Err(ParseError::RecursionLimitExceeded));
+
+        // Power chain depth 1000 must return RecursionLimitExceeded instead of stack overflow
+        let deep_pow = vec!["2"; 1000].join("^");
+        let res_pow = parse_maxima(&deep_pow);
+        assert_eq!(res_pow, Err(ParseError::RecursionLimitExceeded));
+
+        // Double factorial 5!! == 15
+        let df = parse_maxima("5!!").unwrap();
+        assert_eq!(df.eval(&Default::default()), Some(15.0));
+
+        // Huge exponent rejected
+        assert!(parse_maxima("1e1000000000").is_err());
     }
 }
 #[cfg(feature = "cas")]
@@ -759,6 +806,9 @@ mod cas_commands {
         let close = s.rfind(')').ok_or_else(|| err("missing ')'"))?;
         if close < open {
             return Err(err("malformed command"));
+        }
+        if !s[close + 1..].trim().is_empty() {
+            return Err(err("unexpected trailing tokens after ')'"));
         }
         let name = &s[..open];
         let args = split_top_level(&s[open + 1..close]);
@@ -828,7 +878,16 @@ mod cas_commands {
             CasCommand::Ratsimp(e) => crate::poly::ratsimp(e).ok(),
             CasCommand::Partfrac(e, v) => crate::poly::partfrac(e, v).ok(),
             CasCommand::Limit(e, v, p) => crate::limit::limit(e, v, p),
-            CasCommand::Solve(e, v) => crate::solve::solve(e, v).0.into_iter().next(),
+            CasCommand::Solve(e, v) => {
+                let roots = crate::solve::solve(e, v).0;
+                if roots.is_empty() {
+                    None
+                } else if roots.len() == 1 {
+                    roots.into_iter().next()
+                } else {
+                    Some(Expr::matrix(vec![roots]))
+                }
+            }
             CasCommand::Ode2(e, y, x) => crate::solve::ode2(e, y, x).map(|s| s.solution),
             CasCommand::Integrate(e, v) => Some(crate::integrate::integrate(e, v)),
             CasCommand::Defint(e, v, a, b) => match defint(e, v, a, b) {

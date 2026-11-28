@@ -35,11 +35,13 @@ impl Default for BfloatContext {
 
 impl BfloatContext {
     pub fn new(fpprec: usize) -> Self {
-        Self { fpprec }
+        Self {
+            fpprec: fpprec.max(1),
+        }
     }
 
     pub fn dashu_context(&self) -> DecContext {
-        DecContext::new(self.fpprec)
+        DecContext::new(self.fpprec.max(1))
     }
 
     pub fn pi(&self) -> DBig {
@@ -67,8 +69,9 @@ impl Hash for BfloatWrapper {
 }
 
 impl BfloatWrapper {
-    /// Create a new `BfloatWrapper` rounding to `prec` decimal digits.
+    /// Create a new `BfloatWrapper` rounding to `prec` decimal digits (clamped to `>= 1`).
     pub fn new(value: DBig, prec: usize) -> Self {
+        let prec = prec.max(1);
         let ctx = DecContext::new(prec);
         let rounded = ctx.add(value.repr(), DBig::ZERO.repr()).value();
         Self {
@@ -79,12 +82,18 @@ impl BfloatWrapper {
 
     /// Construct from an `f64`.
     pub fn from_f64(val: f64, prec: usize) -> Result<Self, String> {
+        if !val.is_finite() {
+            return Err(format!(
+                "non-finite f64 cannot be converted to bfloat: {val}"
+            ));
+        }
         let s = val.to_string();
         Self::parse(&s, prec)
     }
 
     /// Construct from an exact rational constant `BigRational`.
     pub fn from_rational(r: &BigRational, prec: usize) -> Result<Self, String> {
+        let prec = prec.max(1);
         let num_str = r.numer().to_string();
         let den_str = r.denom().to_string();
         let num = DBig::from_str(&num_str)
@@ -101,6 +110,7 @@ impl BfloatWrapper {
 
     /// Parse a bigfloat from string (supporting Maxima's `b` / `B` exponent notation).
     pub fn parse(s: &str, prec: usize) -> Result<Self, String> {
+        let prec = prec.max(1);
         let cleaned = s.trim().replace(['b', 'B'], "e");
         let d =
             DBig::from_str(&cleaned).map_err(|e| format!("invalid bfloat string '{s}': {e}"))?;
@@ -190,7 +200,13 @@ impl BfloatWrapper {
     }
 
     pub fn pow(&self, other: &Self) -> Result<Self, String> {
-        let prec = self.prec.max(other.prec);
+        if self.value == DBig::ZERO && other.value <= DBig::ZERO {
+            return Err("0^p is undefined for non-positive exponent p".into());
+        }
+        if self.value < DBig::ZERO && other.value.fract() != DBig::ZERO {
+            return Err("negative base with non-integer exponent in bfloat".into());
+        }
+        let prec = self.prec.max(other.prec).max(1);
         let ctx = DecContext::new(prec);
         let res = ctx.powf(self.value.repr(), other.value.repr()).value();
         Ok(Self { value: res, prec })
@@ -229,82 +245,89 @@ impl BfloatWrapper {
         })
     }
 
-    pub fn sin(&self) -> Self {
+    pub fn sin(&self) -> Result<Self, String> {
         let ctx = DecContext::new(self.prec);
-        let res = ctx
-            .sin(self.value.repr())
-            .ok(&ctx)
-            .map(|r| r.value())
-            .unwrap_or_else(|| self.value.clone());
-        Self {
-            value: res,
-            prec: self.prec,
+        match ctx.sin(self.value.repr()).ok(&ctx) {
+            Some(r) => Ok(Self {
+                value: r.value(),
+                prec: self.prec,
+            }),
+            None => Err(format!(
+                "sin({}) precision loss or domain error",
+                self.to_maxima_string()
+            )),
         }
     }
 
-    pub fn cos(&self) -> Self {
+    pub fn cos(&self) -> Result<Self, String> {
         let ctx = DecContext::new(self.prec);
-        let res = ctx
-            .cos(self.value.repr())
-            .ok(&ctx)
-            .map(|r| r.value())
-            .unwrap_or_else(|| self.value.clone());
-        Self {
-            value: res,
-            prec: self.prec,
+        match ctx.cos(self.value.repr()).ok(&ctx) {
+            Some(r) => Ok(Self {
+                value: r.value(),
+                prec: self.prec,
+            }),
+            None => Err(format!(
+                "cos({}) precision loss or domain error",
+                self.to_maxima_string()
+            )),
         }
     }
 
-    pub fn tan(&self) -> Self {
+    pub fn tan(&self) -> Result<Self, String> {
         let ctx = DecContext::new(self.prec);
-        let res = ctx
-            .tan(self.value.repr())
-            .ok(&ctx)
-            .map(|r| r.value())
-            .unwrap_or_else(|| self.value.clone());
-        Self {
-            value: res,
-            prec: self.prec,
+        match ctx.tan(self.value.repr()).ok(&ctx) {
+            Some(r) => Ok(Self {
+                value: r.value(),
+                prec: self.prec,
+            }),
+            None => Err(format!(
+                "tan({}) precision loss or domain error",
+                self.to_maxima_string()
+            )),
         }
     }
 
     pub fn sinh(&self) -> Self {
-        let ctx = DecContext::new(self.prec);
-        let ep = ctx.exp(self.value.repr()).value();
-        let neg_val = ctx.sub(DBig::ZERO.repr(), self.value.repr()).value();
-        let em = ctx.exp(neg_val.repr()).value();
-        let diff = ctx.sub(ep.repr(), em.repr()).value();
-        let two = DBig::from(2u8);
-        let res = ctx.div(diff.repr(), two.repr()).value();
-        Self {
-            value: res,
-            prec: self.prec,
+        if self.is_zero() {
+            return self.clone();
         }
+        // Use extended working precision to avoid catastrophic cancellation near 0 (e.g. 1b-10)
+        let work_prec = self.prec.saturating_mul(2).saturating_add(32);
+        let work_ctx = DecContext::new(work_prec);
+        let ep = work_ctx.exp(self.value.repr()).value();
+        let neg_val = work_ctx.sub(DBig::ZERO.repr(), self.value.repr()).value();
+        let em = work_ctx.exp(neg_val.repr()).value();
+        let diff = work_ctx.sub(ep.repr(), em.repr()).value();
+        let two = DBig::from(2u8);
+        let raw = work_ctx.div(diff.repr(), two.repr()).value();
+        Self::new(raw, self.prec)
     }
 
     pub fn cosh(&self) -> Self {
-        let ctx = DecContext::new(self.prec);
-        let ep = ctx.exp(self.value.repr()).value();
-        let neg_val = ctx.sub(DBig::ZERO.repr(), self.value.repr()).value();
-        let em = ctx.exp(neg_val.repr()).value();
-        let sum = ctx.add(ep.repr(), em.repr()).value();
+        let work_prec = self.prec.saturating_mul(2).saturating_add(16);
+        let work_ctx = DecContext::new(work_prec);
+        let ep = work_ctx.exp(self.value.repr()).value();
+        let neg_val = work_ctx.sub(DBig::ZERO.repr(), self.value.repr()).value();
+        let em = work_ctx.exp(neg_val.repr()).value();
+        let sum = work_ctx.add(ep.repr(), em.repr()).value();
         let two = DBig::from(2u8);
-        let res = ctx.div(sum.repr(), two.repr()).value();
-        Self {
-            value: res,
-            prec: self.prec,
-        }
+        let raw = work_ctx.div(sum.repr(), two.repr()).value();
+        Self::new(raw, self.prec)
     }
 
     pub fn tanh(&self) -> Self {
-        let s = self.sinh();
-        let c = self.cosh();
-        let ctx = DecContext::new(self.prec);
-        let res = ctx.div(s.value.repr(), c.value.repr()).value();
-        Self {
-            value: res,
-            prec: self.prec,
+        if self.is_zero() {
+            return self.clone();
         }
+        let work_prec = self.prec.saturating_mul(2).saturating_add(32);
+        let work_ctx = DecContext::new(work_prec);
+        let ep = work_ctx.exp(self.value.repr()).value();
+        let neg_val = work_ctx.sub(DBig::ZERO.repr(), self.value.repr()).value();
+        let em = work_ctx.exp(neg_val.repr()).value();
+        let diff = work_ctx.sub(ep.repr(), em.repr()).value();
+        let sum = work_ctx.add(ep.repr(), em.repr()).value();
+        let raw = work_ctx.div(diff.repr(), sum.repr()).value();
+        Self::new(raw, self.prec)
     }
 
     pub fn asin(&self) -> Result<Self, String> {
@@ -329,16 +352,17 @@ impl BfloatWrapper {
         }
     }
 
-    pub fn atan(&self) -> Self {
+    pub fn atan(&self) -> Result<Self, String> {
         let ctx = DecContext::new(self.prec);
-        let res = ctx
-            .atan(self.value.repr())
-            .ok(&ctx)
-            .map(|r| r.value())
-            .unwrap_or_else(|| self.value.clone());
-        Self {
-            value: res,
-            prec: self.prec,
+        match ctx.atan(self.value.repr()).ok(&ctx) {
+            Some(r) => Ok(Self {
+                value: r.value(),
+                prec: self.prec,
+            }),
+            None => Err(format!(
+                "atan({}) precision loss or domain error",
+                self.to_maxima_string()
+            )),
         }
     }
 }
@@ -467,7 +491,11 @@ fn bfloat_eval(expr: &Expr, p: usize) -> Expr {
         Expr::Sin(a) => {
             let ea = bfloat_eval(a, p);
             if let Expr::Bfloat(ba) = ea {
-                Expr::Bfloat(ba.sin())
+                if let Ok(res) = ba.sin() {
+                    Expr::Bfloat(res)
+                } else {
+                    Expr::Sin(Box::new(Expr::Bfloat(ba)))
+                }
             } else {
                 Expr::Sin(Box::new(ea))
             }
@@ -475,7 +503,11 @@ fn bfloat_eval(expr: &Expr, p: usize) -> Expr {
         Expr::Cos(a) => {
             let ea = bfloat_eval(a, p);
             if let Expr::Bfloat(ba) = ea {
-                Expr::Bfloat(ba.cos())
+                if let Ok(res) = ba.cos() {
+                    Expr::Bfloat(res)
+                } else {
+                    Expr::Cos(Box::new(Expr::Bfloat(ba)))
+                }
             } else {
                 Expr::Cos(Box::new(ea))
             }
@@ -483,7 +515,11 @@ fn bfloat_eval(expr: &Expr, p: usize) -> Expr {
         Expr::Tan(a) => {
             let ea = bfloat_eval(a, p);
             if let Expr::Bfloat(ba) = ea {
-                Expr::Bfloat(ba.tan())
+                if let Ok(res) = ba.tan() {
+                    Expr::Bfloat(res)
+                } else {
+                    Expr::Tan(Box::new(Expr::Bfloat(ba)))
+                }
             } else {
                 Expr::Tan(Box::new(ea))
             }
@@ -571,7 +607,11 @@ fn bfloat_eval(expr: &Expr, p: usize) -> Expr {
         Expr::Atan(a) => {
             let ea = bfloat_eval(a, p);
             if let Expr::Bfloat(ba) = ea {
-                Expr::Bfloat(ba.atan())
+                if let Ok(res) = ba.atan() {
+                    Expr::Bfloat(res)
+                } else {
+                    Expr::Atan(Box::new(Expr::Bfloat(ba)))
+                }
             } else {
                 Expr::Atan(Box::new(ea))
             }

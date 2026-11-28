@@ -28,6 +28,34 @@ fn test_sym_fn_rosenbrock() {
     assert_eq!(grad, [0.0, 0.0]);
 }
 
+sym_fn! {
+    #[fast_math = false]
+    #[node_limit = 5000]
+    #[time_limit_ms = 2000]
+    pub fn strict_f32_neg_pow(x: f32) -> f32 {
+        expr: (-x).powi(2) + (-x).cos(),
+    }
+}
+
+sym_fn! {
+    pub fn f32_grad_test(x: f32, y: f32) -> (f32, [f32; 2]) {
+        expr: x.powi(2) + 2.0 * y,
+        gradient: [x, y],
+    }
+}
+
+#[test]
+fn test_sym_fn_f32_strict_and_neg_precedence() {
+    let v = strict_f32_neg_pow(3.0_f32);
+    let expected = 9.0_f32 + (-3.0_f32).cos();
+    assert!((v - expected).abs() < 1e-5, "got {v}, expected {expected}");
+
+    let (val, grad) = f32_grad_test(3.0_f32, 4.0_f32);
+    assert!((val - 17.0_f32).abs() < 1e-5);
+    assert!((grad[0] - 6.0_f32).abs() < 1e-5);
+    assert!((grad[1] - 2.0_f32).abs() < 1e-5);
+}
+
 #[test]
 fn test_sym_eval_inline() {
     let x = 42.0f64;
